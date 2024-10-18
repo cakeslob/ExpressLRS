@@ -123,13 +123,6 @@ void func_echo()
     Serial.println("echo");
 }
 
-void func_reboot()
-{
-    Serial.println("rebooting...");
-    delay(1000);
-    ESP.restart();
-}
-
 void func_radioconfig()
 {
     int rate_idx = inp_ints[0];
@@ -264,12 +257,28 @@ void func_radiotone()
     Serial.printf("Radio starting tone test at %d KHz\r\n", freq);
 }
 
+void func_testtone()
+{
+    func_radiobegin();
+    func_radioconfig();
+    inp_ints[0] = inp_ints[1];
+    func_radiotone();
+}
+
 void func_radiostop()
 {
     wait_for_send();
     tx_continuous_mode = 0;
     SetRFLinkRate(last_cfg_idx, false);
     Serial.printf("Radio stopping\r\n");
+}
+
+void func_reboot()
+{
+    func_radioend();
+    Serial.printf("ESP32 rebooting...\r\n");
+    delay(500);
+    ESP.restart();
 }
 
 bool split_and_parse(const char *input, char *first_part, long *integers, int *num_integers)
@@ -377,6 +386,7 @@ void execute_cmd(char* s)
     suc |= match_and_execute("radiostartsingle", inp_cmd, 0, func_radiostartsingle);
     suc |= match_and_execute("radiostarttwin", inp_cmd, 0, func_radiostarttwin);
     suc |= match_and_execute("radiotone", inp_cmd, 1, func_radiotone);
+    suc |= match_and_execute("testtone", inp_cmd, 2, func_testtone);
 
     if (suc == false) {
         Serial.printf("ERROR: command '%s' is unknown\r\n", inp_cmd);
@@ -399,7 +409,6 @@ bool match_and_execute(const char* cmd, char* inp, int param_cnt, func_ptr_t fun
     }
     return true;
 }
-
 
 bool ICACHE_RAM_ATTR testbench_RXdoneISR(SX12xxDriverCommon::rx_status const status)
 {
