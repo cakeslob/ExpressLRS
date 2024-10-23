@@ -28,6 +28,7 @@ void phy_calib_and_save();
 bool split_and_parse(const char *input, char *first_part, long *integers, int *num_integers);
 bool match_and_execute(const char* cmd, char* inp, int param_cnt, func_ptr_t func);
 void wait_for_send();
+uint32_t calc_hop_delay(uint32_t x);
 
 bool ICACHE_RAM_ATTR testbench_RXdoneISR(SX12xxDriverCommon::rx_status const status);
 void ICACHE_RAM_ATTR testbench_TXdoneISR();
@@ -43,8 +44,9 @@ static uint32_t cur_freq;
 static uint32_t freq_space;
 static uint32_t freq_lim_max;
 static uint32_t freq_lim_min;
-
-#define TWIN_HOP_FREQ 2440400
+static uint32_t freq_twin;
+static uint32_t hop_delay;
+static uint32_t hop_last_time = 0;
 
 static uint32_t tx_cnt = 0;
 
@@ -80,7 +82,21 @@ void shrew_testbench()
         }
 
         if (tx_continuous_mode != 0) {
-            if (tx_is_done) {
+            bool time_passed = false;
+            uint32_t now;
+            if (hop_delay >= 50000) {
+                if (((now = millis()) - hop_last_time) >= (hop_delay / 1000) && tx_is_done) {
+                    hop_last_time = now;
+                    time_passed = true;
+                }
+            }
+            else {
+                if (((now = micros()) - hop_last_time) >= hop_delay && tx_is_done) {
+                    hop_last_time = now;
+                    time_passed = true;
+                }
+            }
+            if (tx_is_done && time_passed) {
                 tx_is_done = false;
                 if (tx_continuous_mode == 1) {
                     int f;
@@ -96,11 +112,11 @@ void shrew_testbench()
                     }
                 }
                 else if (tx_continuous_mode == 3) {
-                    if (cur_freq == TWIN_HOP_FREQ) {
-                        cur_freq = TWIN_HOP_FREQ + freq_space;
+                    if (cur_freq == freq_twin) {
+                        cur_freq = freq_twin + freq_space;
                     }
                     else {
-                        cur_freq = TWIN_HOP_FREQ;
+                        cur_freq = freq_twin;
                     }
                     Radio.SetFrequencyHz(cur_freq * 1000, SX12XX_Radio_1);
                     //Serial.printf("s %d KHz\r\n", cur_freq);
@@ -108,7 +124,7 @@ void shrew_testbench()
                 Radio.TXnb((uint8_t*)inp_line, ELRS8_TELEMETRY_BYTES_PER_CALL, SX12XX_Radio_1);
                 tx_cnt++;
                 if ((tx_cnt % 100) == 0) {
-                    //Serial.printf("tx count: %u\r\n", tx_cnt);
+                    //Serial.printf("tx: %u / %u\r\n", tx_cnt, millis());
                 }
             }
         }
@@ -214,7 +230,8 @@ void func_radiostartsweep()
 void func_radiostarttwin()
 {
     tx_continuous_mode = 3;
-    cur_freq = TWIN_HOP_FREQ;
+    freq_twin = inp_ints[1];
+    cur_freq = freq_twin;
     Serial.printf("Radio starting to freq twin hopping and continuously transmitting packets\r\n");
 }
 
@@ -226,12 +243,6 @@ void func_radiostartsingle()
     }
     tx_continuous_mode = 4;
     Serial.printf("Radio starting to continuously transmit packets\r\n");
-}
-
-void func_radiohop()
-{
-    tx_continuous_mode = 1;
-    Serial.printf("Radio starting to freq hop and continuously transmitting packets\r\n");
 }
 
 void func_radiotone()
@@ -257,12 +268,36 @@ void func_radiotone()
     Serial.printf("Radio starting tone test at %d KHz\r\n", freq);
 }
 
-void func_testtone()
+void func_teststart()
 {
     func_radiobegin();
     func_radioconfig();
     inp_ints[0] = inp_ints[1];
-    func_radiotone();
+    func_radiopower();
+    if (inp_ints[2] == 0)
+    {
+        inp_ints[0] = inp_ints[3];
+        func_radiotone();
+    }
+    else
+    {
+        inp_ints[0] = inp_ints[4];
+        hop_delay = calc_hop_delay(inp_ints[0]);
+        switch (inp_ints[2])
+        {
+            case 1:
+                func_radiostarthop();
+                break;
+            case 2:
+                func_radiostartsweep();
+                break;
+            case 3:
+                inp_ints[1] = inp_ints[3];
+                func_radiostarttwin();
+                break;
+        }
+    }
+    Serial.printf("\r\nteststart command success\r\n");
 }
 
 void func_radiostop()
@@ -276,9 +311,16 @@ void func_radiostop()
 void func_reboot()
 {
     func_radioend();
-    Serial.printf("ESP32 rebooting...\r\n");
+    Serial.printf("\r\nESP32 rebooting...\r\n");
     delay(500);
     ESP.restart();
+}
+
+uint32_t calc_hop_delay(uint32_t x)
+{
+    double xd = x;
+    double p = 1000000 / xd;
+    return (uint32_t)lround(p);
 }
 
 bool split_and_parse(const char *input, char *first_part, long *integers, int *num_integers)
@@ -386,7 +428,7 @@ void execute_cmd(char* s)
     suc |= match_and_execute("radiostartsingle", inp_cmd, 0, func_radiostartsingle);
     suc |= match_and_execute("radiostarttwin", inp_cmd, 0, func_radiostarttwin);
     suc |= match_and_execute("radiotone", inp_cmd, 1, func_radiotone);
-    suc |= match_and_execute("testtone", inp_cmd, 2, func_testtone);
+    suc |= match_and_execute("teststart", inp_cmd, 2, func_teststart);
 
     if (suc == false) {
         Serial.printf("ERROR: command '%s' is unknown\r\n", inp_cmd);
