@@ -168,6 +168,12 @@ void func_radiobegin()
         Serial.printf("f_max = %u KHz\r\n", freq_lim_max);
         Serial.printf("channels = %u\r\n", FHSSconfig->freq_count);
         Serial.printf("f_spacing = %u KHz (%u)\r\n", freq_space, freq_spread);
+        /*
+        f_min = 2400400 KHz
+        f_max = 2479400 KHz
+        channels = 80
+        f_spacing = 1000 KHz (1290554)
+        */
     }
     else {
         Serial.printf("ERROR: Radio FAILED!!!\r\n");
@@ -192,7 +198,7 @@ void func_radiopower()
 void func_radiofreq()
 {
     wait_for_send();
-    unsigned long freq = (unsigned long)inp_ints[0] * 1000;
+    unsigned long freq = (unsigned long)inp_ints[0] * 100;
     if (inp_ints[0] == 0) {
         Radio.SetFrequencyReg(freq = FHSSgetInitialFreq(), SX12XX_Radio_1);
         DBGLN("init freq %d", freq);
@@ -230,7 +236,7 @@ void func_radiostartsweep()
 void func_radiostarttwin()
 {
     tx_continuous_mode = 3;
-    freq_twin = inp_ints[1];
+    freq_twin = inp_ints[1] * 100;
     cur_freq = freq_twin;
     Serial.printf("Radio starting to freq twin hopping and continuously transmitting packets\r\n");
 }
@@ -248,7 +254,7 @@ void func_radiostartsingle()
 void func_radiotone()
 {
     wait_for_send();
-    unsigned long freq = (unsigned long)inp_ints[0] * 1000;
+    unsigned long freq = (unsigned long)inp_ints[0] * 100;
     if (inp_ints[0] == 0) {
         freq = FHSSgetInitialFreq();
         DBGLN("init freq %d", freq);
@@ -282,7 +288,13 @@ void func_teststart()
     else
     {
         inp_ints[0] = inp_ints[4];
-        hop_delay = calc_hop_delay(inp_ints[0]);
+        if (inp_ints[0] > 0) {
+            hop_delay = calc_hop_delay(inp_ints[0]);
+            Serial.printf("hop delay %u\r\n", hop_delay);
+        }
+        else {
+            hop_delay = 0;
+        }
         switch (inp_ints[2])
         {
             case 1:
@@ -428,7 +440,7 @@ void execute_cmd(char* s)
     suc |= match_and_execute("radiostartsingle", inp_cmd, 0, func_radiostartsingle);
     suc |= match_and_execute("radiostarttwin", inp_cmd, 0, func_radiostarttwin);
     suc |= match_and_execute("radiotone", inp_cmd, 1, func_radiotone);
-    suc |= match_and_execute("teststart", inp_cmd, 2, func_teststart);
+    suc |= match_and_execute("teststart", inp_cmd, 5, func_teststart);
 
     if (suc == false) {
         Serial.printf("ERROR: command '%s' is unknown\r\n", inp_cmd);
