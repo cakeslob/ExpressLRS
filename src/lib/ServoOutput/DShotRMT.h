@@ -80,8 +80,8 @@ typedef struct dshot_packet_s {
 
 // ...set bitcount for eRPM packet
 typedef struct eRPM_packet_s {
-    uint16_t eRPM_data : 12;
-    uint8_t checksum : 4;
+	uint16_t eRPM_data : 12;
+	uint8_t checksum : 4;
 } eRPM_packet_t;
 
 // ...all settings for the dshot mode

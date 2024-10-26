@@ -67,7 +67,7 @@ bool DShotRMT::begin(dshot_mode_t dshot_mode, bool is_bidirectional) {
 		.clk_div = DSHOT_CLK_DIVIDER,
 		.mem_block_num = uint8_t(RMT_CHANNEL_MAX - uint8_t(rmt_channel)),
 		.tx_config = {
-        	.idle_level = bidirectional ? RMT_IDLE_LEVEL_HIGH : RMT_IDLE_LEVEL_LOW,
+			.idle_level = bidirectional ? RMT_IDLE_LEVEL_HIGH : RMT_IDLE_LEVEL_LOW,
 			.carrier_en = false,
 			.loop_en = true,
 			.idle_output_en = true,
@@ -75,13 +75,13 @@ bool DShotRMT::begin(dshot_mode_t dshot_mode, bool is_bidirectional) {
 	};
 
 	// ...pause "bit" added to each frame
-    if (bidirectional) {
-        dshot_tx_rmt_item[DSHOT_PAUSE_BIT].level0 = HIGH;
-        dshot_tx_rmt_item[DSHOT_PAUSE_BIT].level1 = HIGH;
-    } else {
-        dshot_tx_rmt_item[DSHOT_PAUSE_BIT].level0 = LOW;
-        dshot_tx_rmt_item[DSHOT_PAUSE_BIT].level1 = LOW;
-    }
+	if (bidirectional) {
+		dshot_tx_rmt_item[DSHOT_PAUSE_BIT].level0 = HIGH;
+		dshot_tx_rmt_item[DSHOT_PAUSE_BIT].level1 = HIGH;
+	} else {
+		dshot_tx_rmt_item[DSHOT_PAUSE_BIT].level0 = LOW;
+		dshot_tx_rmt_item[DSHOT_PAUSE_BIT].level1 = LOW;
+	}
 
 	dshot_tx_rmt_item[DSHOT_PAUSE_BIT].duration1 = 0;
 	dshot_tx_rmt_item[DSHOT_PAUSE_BIT].duration0 = 10000 - (16*ticks_per_bit) - 1;
@@ -120,44 +120,44 @@ void DShotRMT::send_dshot_value(uint16_t throttle_value, telemetric_request_t te
 }
 
 rmt_item32_t* DShotRMT::encode_dshot_to_rmt(uint16_t parsed_packet) {
-    // ...is bidirecional mode activated
-    if (bidirectional) {
-        // ..."invert" the signal duration
-        for (int i = 0; i < DSHOT_PAUSE_BIT; i++, parsed_packet <<= 1) 	{
-		    if (parsed_packet & 0b1000000000000000) {
-			    // set one
-			    dshot_tx_rmt_item[i].duration0 = ticks_one_low;
-			    dshot_tx_rmt_item[i].duration1 = ticks_one_high;
-		    }
-		    else {
-			    // set zero
-			    dshot_tx_rmt_item[i].duration0 = ticks_zero_low;
-			    dshot_tx_rmt_item[i].duration1 = ticks_zero_high;
-		    }
+	// ...is bidirecional mode activated
+	if (bidirectional) {
+		// ..."invert" the signal duration
+		for (int i = 0; i < DSHOT_PAUSE_BIT; i++, parsed_packet <<= 1) 	{
+			if (parsed_packet & 0b1000000000000000) {
+				// set one
+				dshot_tx_rmt_item[i].duration0 = ticks_one_low;
+				dshot_tx_rmt_item[i].duration1 = ticks_one_high;
+			}
+			else {
+				// set zero
+				dshot_tx_rmt_item[i].duration0 = ticks_zero_low;
+				dshot_tx_rmt_item[i].duration1 = ticks_zero_high;
+			}
 
 			dshot_tx_rmt_item[i].level0 = LOW;
 			dshot_tx_rmt_item[i].level1 = HIGH;
-        }
-    }
+		}
+	}
 
-    // ..."normal" DShot mode / "bidirectional" mode OFF
-    else {
-        for (int i = 0; i < DSHOT_PAUSE_BIT; i++, parsed_packet <<= 1) 	{
-		    if (parsed_packet & 0b1000000000000000) {
-			    // set one
-			    dshot_tx_rmt_item[i].duration0 = ticks_one_high;
-			    dshot_tx_rmt_item[i].duration1 = ticks_one_low;
-		    }
-		    else {
-			    // set zero
-			    dshot_tx_rmt_item[i].duration0 = ticks_zero_high;
-			    dshot_tx_rmt_item[i].duration1 = ticks_zero_low;
-		    }
+	// ..."normal" DShot mode / "bidirectional" mode OFF
+	else {
+		for (int i = 0; i < DSHOT_PAUSE_BIT; i++, parsed_packet <<= 1) 	{
+			if (parsed_packet & 0b1000000000000000) {
+				// set one
+				dshot_tx_rmt_item[i].duration0 = ticks_one_high;
+				dshot_tx_rmt_item[i].duration1 = ticks_one_low;
+			}
+			else {
+				// set zero
+				dshot_tx_rmt_item[i].duration0 = ticks_zero_high;
+				dshot_tx_rmt_item[i].duration1 = ticks_zero_low;
+			}
 
 			dshot_tx_rmt_item[i].level0 = HIGH;
 			dshot_tx_rmt_item[i].level1 = LOW;
-        }
-    }
+		}
+	}
 
 	return dshot_tx_rmt_item;
 }
@@ -180,7 +180,7 @@ uint16_t DShotRMT::calc_dshot_chksum(const dshot_packet_t& dshot_packet) {
 uint16_t DShotRMT::prepare_rmt_data(const dshot_packet_t& dshot_packet) {
 	auto chksum = calc_dshot_chksum(dshot_packet);
 
-    // ..."construct" the packet
+	// ..."construct" the packet
 	uint16_t prepared_to_encode = (dshot_packet.throttle_value << 1) | dshot_packet.telemetric_request;
 	prepared_to_encode = (prepared_to_encode << 4) | chksum;
 
