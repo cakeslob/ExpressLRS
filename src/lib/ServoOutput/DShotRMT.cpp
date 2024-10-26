@@ -69,7 +69,7 @@ bool DShotRMT::begin(dshot_mode_t dshot_mode, bool is_bidirectional) {
 		.tx_config = {
 			.idle_level = bidirectional ? RMT_IDLE_LEVEL_HIGH : RMT_IDLE_LEVEL_LOW,
 			.carrier_en = false,
-			.loop_en = true,
+			.loop_en = false,
 			.idle_output_en = true,
 		},
 	};
