@@ -37,6 +37,15 @@ void hbridge_init(void)
     #ifdef BUILD_SHREW_HBRIDGE_LITE
     firmwareOptions.shrew = 1;
     #endif
+    #ifdef BUILD_SHREW_HBRIDGE_MINI
+    firmwareOptions.shrew = 3;
+    #endif
+    #ifdef BUILD_SHREW_HBRIDGE_MEGA
+    firmwareOptions.shrew = 4;
+    digitalWrite(4, LOW);
+    delayMicroseconds(6);
+    digitalWrite(4, HIGH);
+    #endif
 
     if (firmwareOptions.shrew <= 0) {
         DBGLN("hbridge not shrew");

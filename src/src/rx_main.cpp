@@ -2059,6 +2059,11 @@ void resetConfigAndReboot()
 
 void setup()
 {
+    #ifdef BUILD_SHREW_HBRIDGE_MEGA
+    pinMode(4, OUTPUT);
+    digitalWrite(4, HIGH);
+    #endif
+
     #if defined(TARGET_UNIFIED_RX)
     hardwareConfigured = options_init();
     if (!hardwareConfigured)
