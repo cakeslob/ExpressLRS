@@ -17,6 +17,17 @@ static uint16_t pwmChannelValues[PWM_MAX_CHANNELS];
 #if (defined(PLATFORM_ESP32))
 static DShotRMT *dshotInstances[PWM_MAX_CHANNELS] = {nullptr};
 const uint8_t RMT_MAX_CHANNELS = 8;
+
+#define DSHOT_ENABLE_AUTO_ARM     0
+
+#if DSHOT_ENABLE_AUTO_ARM
+static int8_t dshotArmingNeeded = 0;       // when non-zero, send dshot packet with 0 (arming command) instead of actual control (us) value, then decrement this counter until 0
+#define DSHOT_ARMING_PKT_NEEDED   50       // number of zeros to send to the ESC via dshot for arming
+
+static bool dshotCh5Assigned = false;      // if channel 5, the arming channel, is not assigned as a output, then if the user toggles it, it forces all dshot outputs to issue an arm signal
+static bool dshotCh5State = false;
+#endif // DSHOT_ENABLE_AUTO_ARM
+
 #endif
 
 // true when the RX has a new channels packet
@@ -60,16 +71,42 @@ static void servoWrite(uint8_t ch, uint16_t us)
 {
     const rx_config_pwm_t *chConfig = config.GetPwmChannel(ch);
 #if defined(PLATFORM_ESP32)
-    if ((eServoOutputMode)chConfig->val.mode == somDShot)
+    if ((eServoOutputMode)chConfig->val.mode == somDShot || (eServoOutputMode)chConfig->val.mode == somDShot3D)
     {
         // DBGLN("Writing DShot output: us: %u, ch: %d", us, ch);
         if (dshotInstances[ch])
         {
             if (us != 0) {
-                dshotInstances[ch]->send_dshot_value(((us - 1000) * 2) + 47); // Convert PWM signal in us to DShot value
+                if ((us & 0x4000) != 0) {
+                    dshotInstances[ch]->send_dshot_value(us & 0x3FFF); // send raw dshot, use for commands and such
+                    // note: 6 consecutive commands are needed for the command to be effective
+                }
+                #if DSHOT_ENABLE_AUTO_ARM
+                else if (dshotArmingNeeded != 0) {
+                    dshotInstances[ch]->send_dshot_value(0); // send arming pulse
+                }
+                #endif
+                else if ((eServoOutputMode)chConfig->val.mode == somDShot3D) {
+                    uint16_t x;
+                    if (us == 1500) { // stopped
+                        x = 0;
+                    }
+                    else if (us > 1500) { // forward
+                        x = fmap(us, 1501, 2012, 1048, 2047);
+                    }
+                    else { // reverse
+                        x = fmap(us, 1499, 988, 48, 1047);
+                    }
+                    dshotInstances[ch]->send_dshot_value(x);
+                }
+                else {
+                    uint16_t x = ((us - 1000) * 2) + (DSHOT_THROTTLE_MIN - 1); // Convert PWM signal in us to DShot value
+                    x = x <= DSHOT_THROTTLE_MIN ? 0 : (x > DSHOT_THROTTLE_MAX ? DSHOT_THROTTLE_MAX : x); // limit within range, and send special 0 for stop
+                    dshotInstances[ch]->send_dshot_value(x);
+                }
             }
             else {
-                
+                // no pulse
             }
         }
     }
@@ -116,6 +153,10 @@ static void servosFailsafe()
             // do nothing
         }
     }
+    #if defined(PLATFORM_ESP32) && DSHOT_ENABLE_AUTO_ARM
+    dshotArmingNeeded = DSHOT_ARMING_PKT_NEEDED;
+    dshotCh5State = false;
+    #endif
     #if defined(BUILD_SHREW_HBRIDGE) && defined(PLATFORM_ESP32)
     hbridge_failsafe();
     #endif
@@ -163,6 +204,24 @@ static void servosUpdate(unsigned long now)
             }
             servoWrite(ch, us);
         } /* for each servo */
+        #if defined(PLATFORM_ESP32) && DSHOT_ENABLE_AUTO_ARM
+        dshotArmingNeeded = dshotArmingNeeded > 0 ? (dshotArmingNeeded - 1) : 0; // decrement the counter if dshot is sending zeros
+
+        // if channel 5, the arming channel, is not assigned as a output, then if the user toggles it, it forces all dshot outputs to issue an arm signal
+        if (dshotCh5State == false) {
+            if (ChannelData[4] > (CRSF_CHANNEL_VALUE_MID + 100)) {
+                dshotCh5State = true;
+                if (dshotArmingNeeded <= 0 && dshotCh5Assigned == false) {
+                    dshotArmingNeeded = DSHOT_ARMING_PKT_NEEDED;
+                }
+            }
+        }
+        else {
+            if (ChannelData[4] < CRSF_CHANNEL_VALUE_MID) {
+                dshotCh5State = false;
+            }
+        }
+        #endif
     }     /* if newChannelsAvailable */
 
     // LQ goes to 0 (100 packets missed in a row)
@@ -208,7 +267,7 @@ static void initialize()
             pin = UNDEF_PIN;
         }
 #if defined(PLATFORM_ESP32)
-        else if (mode == somDShot)
+        else if (mode == somDShot || mode == somDShot3D)
         {
             if (rmtCH < RMT_MAX_CHANNELS)
             {
@@ -235,6 +294,12 @@ static void initialize()
                 DBGLN("Initializing PWM output: ch: %d, pin: %d", ch, pin);
             }
 
+            #if defined(PLATFORM_ESP32) && DSHOT_ENABLE_AUTO_ARM
+            if (config.GetPwmChannel(ch)->val.inputChannel == 4) {
+                dshotCh5Assigned = true;
+            }
+            #endif
+
             pinMode(pin, OUTPUT);
             digitalWrite(pin, LOW);
         }
@@ -243,6 +308,10 @@ static void initialize()
 
 static int start()
 {
+    #if defined(PLATFORM_ESP32) && DSHOT_ENABLE_AUTO_ARM
+    dshotArmingNeeded = DSHOT_ARMING_PKT_NEEDED;
+    #endif
+
     for (int ch = 0; ch < GPIO_PIN_PWM_OUTPUTS_COUNT; ++ch)
     {
         const rx_config_pwm_t *chConfig = config.GetPwmChannel(ch);
@@ -252,10 +321,10 @@ static int start()
             pwmChannels[ch] = PWM.allocate(servoPins[ch], frequency);
         }
 #if defined(PLATFORM_ESP32)
-        else if (((eServoOutputMode)chConfig->val.mode) == somDShot)
+        else if (((eServoOutputMode)chConfig->val.mode) == somDShot || ((eServoOutputMode)chConfig->val.mode) == somDShot3D)
         {
             dshotInstances[ch]->begin(DSHOT300, false); // Set DShot protocol and bidirectional dshot bool
-            dshotInstances[ch]->send_dshot_value(0);         // Set throttle low so the ESC can continue initialsation
+            dshotInstances[ch]->send_dshot_value(0);    // Set throttle low so the ESC can continue initialsation
         }
 #endif
     }
@@ -349,6 +418,9 @@ bool servos_singleInit(int selected_pin)
     bool res = false;
 #if defined(PLATFORM_ESP32)
     uint8_t rmtCH = 0;
+    #if DSHOT_ENABLE_AUTO_ARM
+    dshotArmingNeeded = DSHOT_ARMING_PKT_NEEDED;
+    #endif
 #endif
     for (int ch = 0; ch < GPIO_PIN_PWM_OUTPUTS_COUNT; ++ch)
     {
@@ -373,7 +445,7 @@ bool servos_singleInit(int selected_pin)
             pin = UNDEF_PIN;
         }
 #if defined(PLATFORM_ESP32)
-        else if (mode == somDShot)
+        else if (mode == somDShot || mode == somDShot3D)
         {
             if (rmtCH < RMT_MAX_CHANNELS)
             {
@@ -383,6 +455,7 @@ bool servos_singleInit(int selected_pin)
                 pinMode(pin, OUTPUT);
                 dshotInstances[ch] = new DShotRMT(gpio, rmtChannel); // Initialize the DShotRMT instance
                 dshotInstances[ch]->begin(DSHOT300, false);
+                dshotInstances[ch]->set_looping(true);
                 servoWrite(ch, 0);
                 res = true;
                 rmtCH++;
@@ -421,6 +494,9 @@ void servos_singleWrite(int selected_pin, int us)
         servoWrite(ch, us);
         break;
     }
+    #if defined(PLATFORM_ESP32) && DSHOT_ENABLE_AUTO_ARM
+    dshotArmingNeeded = dshotArmingNeeded > 0 ? (dshotArmingNeeded - 1) : 0; // decrement the counter if dshot is sending zeros
+    #endif
 }
 
 #endif // BUILD_SHREW_AM32CONFIG

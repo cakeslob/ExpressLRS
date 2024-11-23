@@ -96,11 +96,13 @@ public:
 	// ...safety first ...no parameters, no DShot
 	bool begin(dshot_mode_t dshot_mode = DSHOT_OFF, bool is_bidirectional = false);
 	void send_dshot_value(uint16_t throttle_value, telemetric_request_t telemetric_request = NO_TELEMETRIC);
+	void set_looping(bool x);
 
 private:
 	gpio_num_t gpio_num;
 	rmt_channel_t rmt_channel;
 	rmt_item32_t dshot_tx_rmt_item[DSHOT_PACKET_LENGTH + 1];
+	rmt_config_t rmt_cfg_cache;
 
 	dshot_mode_t mode = DSHOT_OFF;
 	bool bidirectional = false;

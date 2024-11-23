@@ -73,6 +73,7 @@ bool DShotRMT::begin(dshot_mode_t dshot_mode, bool is_bidirectional) {
 			.idle_output_en = true,
 		},
 	};
+	memcpy(&rmt_cfg_cache, &dshot_tx_rmt_config, sizeof(rmt_config_t));
 
 	// ...pause "bit" added to each frame
 	if (bidirectional) {
@@ -99,17 +100,14 @@ bool DShotRMT::begin(dshot_mode_t dshot_mode, bool is_bidirectional) {
 	return rmt_driver_install(dshot_tx_rmt_config.channel, 0, 0);
 }
 
+void DShotRMT::set_looping(bool x) {
+	rmt_cfg_cache.tx_config.loop_en = x;
+	rmt_config(&rmt_cfg_cache);
+}
+
 // ...the config part is done, now the calculating and sending part
 void DShotRMT::send_dshot_value(uint16_t throttle_value, telemetric_request_t telemetric_request) {
 	dshot_packet_t dshot_rmt_packet = { };
-
-	if (throttle_value < DSHOT_THROTTLE_MIN) {
-		throttle_value = DSHOT_THROTTLE_MIN;
-	}
-
-	if (throttle_value > DSHOT_THROTTLE_MAX) {
-		throttle_value = DSHOT_THROTTLE_MAX;
-	}
 
 	// ...packets are the same for bidirectional mode
 	dshot_rmt_packet.throttle_value = throttle_value;

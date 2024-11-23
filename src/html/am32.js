@@ -78,7 +78,7 @@ async function am32_init2()
             let opt = document.createElement('option');
             let pin_parts = pin_str.split(' ');
             let pin_num;
-            if (pin_parts[0] == "PWM" || pin_parts[0] == "DSHOT") {
+            if (pin_parts[0] == "PWM" || pin_parts[0] == "DSHOT" || pin_parts[0] == "DSHOT3D") {
                 pin_num = parseInt(pin_parts[2]);
                 let ch_num = parseInt(pin_parts[1]);
                 opt.value = pin_num;

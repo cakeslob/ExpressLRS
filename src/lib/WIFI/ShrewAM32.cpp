@@ -151,6 +151,10 @@ void am32_handleIo(AsyncWebServerRequest *request)
                             snprintf(pin_str, 62, "DSHOT %d %d,", ch, pwm_pin);
                             response->print(pin_str);
                         }
+                        else if (mode == somDShot3D) {
+                            snprintf(pin_str, 62, "DSHOT3D %d %d,", ch, pwm_pin);
+                            response->print(pin_str);
+                        }
                     }
                 }
                 if (GPIO_PIN_RCSIGNAL_TX >= 0)
