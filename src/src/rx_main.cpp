@@ -394,11 +394,13 @@ void SetRFLinkRate(uint8_t index, bool bindMode) // Set speed of RF link
 
     Radio.FuzzySNRThreshold = (RFperf->DynpowerSnrThreshUp == DYNPOWER_SNR_THRESH_NONE) ? 0 : (RFperf->DynpowerSnrThreshDn - RFperf->DynpowerSnrThreshUp);
 
+#ifndef BUILD_SHREW_GENERAL
     checkGeminiMode();
     if (geminiMode)
     {
         Radio.SetFrequencyReg(FHSSgetInitialGeminiFreq(), SX12XX_Radio_2);
     }
+#endif
 
     OtaUpdateSerializers(smWideOr8ch, ModParams->PayloadLength);
     MspReceiver.setMaxPackageIndex(ELRS_MSP_MAX_PACKAGES);
@@ -424,6 +426,7 @@ bool ICACHE_RAM_ATTR HandleFHSS()
 
     alreadyFHSS = true;
 
+#ifndef BUILD_SHREW_GENERAL
     if (geminiMode)
     {
         if ((((OtaNonce + 1)/ExpressLRS_currAirRate_Modparams->FHSShopInterval) % 2 == 0) || FHSSuseDualBand) // When in DualBand do not switch between radios.  The OTA modulation paramters and HighFreq/LowFreq Tx amps are set during Config.
@@ -440,6 +443,7 @@ bool ICACHE_RAM_ATTR HandleFHSS()
         }
     }
     else
+#endif
     {
         Radio.SetFrequencyReg(FHSSgetNextFreq());
     }
@@ -1609,6 +1613,10 @@ static void setupConfigAndPocCheck()
     eeprom.Begin();
     config.SetStorageProvider(&eeprom); // Pass pointer to the Config class for access to storage
     config.Load();
+
+    if (config.GetBindStorage() == BINDSTORAGE_PERMANENT) {
+        return;
+    }
 
     // If bound, track number of plug/unplug cycles to go to binding mode in eeprom
     if (config.GetIsBound() && config.GetPowerOnCounter() < 3)
