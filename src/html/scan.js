@@ -431,7 +431,21 @@ function updateConfig(data, options) {
   }
   _('vbind').onchange();
 
-  _('lockeddatarate').value = data["lockeddatarate"];
+  _('fixed-packet-rate').value = data["fixed-packet-rate"];
+
+  let mixer_setting = data["shrew-mixer"];
+  let ch_thr   = (mixer_setting & 0x000F);
+  let ch_str   = (mixer_setting & 0x00F0) >> 4;
+  let ch_left  = (mixer_setting & 0x0F00) >> 8;
+  let ch_right = (mixer_setting & 0xF000) >> 12;
+  let rev_left  = (mixer_setting & 0x10000);
+  let rev_right = (mixer_setting & 0x20000);
+  _('shrew-mixer-thr'  ).value = ch_thr;
+  _('shrew-mixer-str'  ).value = ch_str;
+  _('shrew-mixer-left' ).value = ch_left;
+  _('shrew-mixer-right').value = ch_right;
+  _('shrew-mixer-left-rev' ).checked = (rev_left  != 0);
+  _('shrew-mixer-right-rev').checked = (rev_right != 0);
 
   // set initial visibility status of Serial2 protocol selection
   _('serial1-config').style.display = 'none';
@@ -769,7 +783,15 @@ if (_('config')) {
           "modelid": +_('modelid').value,
           "force-tlm": +_('force-tlm').checked,
           "vbind": +_('vbind').value,
-          "lockeddatarate": +_('lockeddatarate').value,
+          "fixed-packet-rate": +_('fixed-packet-rate').value,
+          "shrew-mixer":
+                parseInt(+_('shrew-mixer-thr').value)
+                | (parseInt(+_('shrew-mixer-str').value) << 4)
+                | (parseInt(+_('shrew-mixer-left').value) << 8)
+                | (parseInt(+_('shrew-mixer-right').value) << 12)
+                | (+_('shrew-mixer-left-rev').checked ? 0x10000 : 0)
+                | (+_('shrew-mixer-right-rev').checked ? 0x20000 : 0)
+                ,
           "uid": _('uid').value.split(',').map(Number),
         });
       }, () => {

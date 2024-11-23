@@ -39,6 +39,8 @@ static constexpr uint32_t FAILSAFE_ABS_TIMEOUT_MS = 1000U;
 extern void shrew_updateRgbLed();
 #endif
 
+extern void shrew_mix();
+
 void ICACHE_RAM_ATTR servoNewChannelsAvailable()
 {
     newChannelsAvailable = true;
@@ -169,6 +171,8 @@ static void servosUpdate(unsigned long now)
     {
         newChannelsAvailable = false;
         lastUpdate = now;
+
+        shrew_mix();
 
         #if defined(BUILD_SHREW_RGBLED) && defined(PLATFORM_ESP32)
         shrew_updateRgbLed();

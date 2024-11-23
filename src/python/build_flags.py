@@ -69,6 +69,9 @@ def process_json_flag(define):
         if parts.group(1) == "FIXED_PACKET_RATE":
             parts = re.search(r"-D(.*)\s*=\s*\"?([0-9]+).*\"?$", define)
             json_flags['fixed-packet-rate'] = int(dequote(parts.group(2)))
+        if parts.group(1) == "SHREW_MIXER":
+            parts = re.search(r"-D(.*)\s*=\s*\"?([0-9]+).*\"?$", define)
+            json_flags['shrew-mixer'] = int(dequote(parts.group(2)))
     if define == "-DUNLOCK_HIGHER_POWER"  and not isRX:
         json_flags['unlock-higher-power'] = True
     if define == "-DLOCK_ON_FIRST_CONNECTION" and isRX:

@@ -255,7 +255,9 @@ def patch_unified(args, options):
     if args.shrewesc is not None:
         json_flags['shrew'] = args.shrewesc
     if args.shrewdshot is not None:
-        json_flags['shrew-dshot'] = args.shrewdshot
+        json_flags['shrew-dshot'] = args.shrew_dshot
+    if args.shrewmixer is not None:
+        json_flags['shrew-mixer'] = args.shrew_mixer
     if args.fixed_packet_rate is not None:
         json_flags['fixed-packet-rate'] = args.fixed_packet_rate
     if args.perm_binding is not None:
@@ -355,7 +357,8 @@ def main():
     # Shrew Params
     parser.add_argument('--permanent-binding', dest='permanent_binding', action='store_true', help='Sets permanent binding mode by default')
     parser.add_argument('--shrew', type=int, const=None, nargs='?', action='store', help='Which Shrew variant')
-    parser.add_argument('--shrewdshot', dest='shrewdshot', action='store_true', help='Prefers DSHOT for PWM pins by default')
+    parser.add_argument('--shrew-dshot', dest='shrew_dshot', action='store_true', help='Prefers DSHOT for PWM pins by default')
+    parser.add_argument('--shrew-mixer', dest='shrew_mixer', type=int, const=None, nargs='?', action='store', help='Shrew\'s mixer setting')
     parser.add_argument('--fixed-packet-rate', dest='fixed_packet_rate', type=int, const=None, nargs='?', action='store', help='Fixed packet rate')
     # TX Params
     parser.add_argument('--tlm-report', type=int, const=240, nargs='?', action='store', help='The interval (in milliseconds) between telemetry packets')

@@ -1263,6 +1263,15 @@ void RxConfig::SetLockedDatarate(int8_t value)
     }
 }
 
+void RxConfig::SetShrewMixer(uint32_t value)
+{
+    if (m_config.shrew_mixer != value)
+    {
+        m_config.shrew_mixer = value;
+        m_modified = true;
+    }
+}
+
 void RxConfig::SetTargetSysId(uint8_t value)
 {
     if (m_config.targetSysId != value)

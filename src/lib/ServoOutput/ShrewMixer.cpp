@@ -1,0 +1,36 @@
+#include "common.h"
+#include "options.h"
+#include "config.h"
+#include "crsf_protocol.h"
+
+void shrew_mix()
+{
+    uint32_t mixer_settings = config.GetShrewMixer();
+    uint32_t ch_thr   = (mixer_settings & 0x000F);
+    uint32_t ch_str   = (mixer_settings & 0x00F0) >> 4;
+    uint32_t ch_left  = (mixer_settings & 0x0F00) >> 8;
+    uint32_t ch_right = (mixer_settings & 0xF000) >> 12;
+    uint32_t rev_left  = (mixer_settings & 0x10000);
+    uint32_t rev_right = (mixer_settings & 0x20000);
+    if ((ch_thr == 0 && ch_str == 0) || (ch_left == 0 && ch_right == 0)) {
+        return;
+    }
+    int32_t val_y = ch_thr == 0 ? CRSF_CHANNEL_VALUE_MID : ChannelData[ch_thr - 1];
+    int32_t val_x = ch_str == 0 ? CRSF_CHANNEL_VALUE_MID : ChannelData[ch_str - 1];
+    val_y -= CRSF_CHANNEL_VALUE_MID;
+    val_x -= CRSF_CHANNEL_VALUE_MID;
+    int32_t val_left  = val_y + val_x;
+    int32_t val_right = val_y - val_x;
+    val_left  += CRSF_CHANNEL_VALUE_MID;
+    val_right += CRSF_CHANNEL_VALUE_MID;
+    val_left   = (rev_left  == 0) ? val_left  : ((CRSF_CHANNEL_VALUE_MID * 2) - val_left );
+    val_right  = (rev_right == 0) ? val_right : ((CRSF_CHANNEL_VALUE_MID * 2) - val_right);
+    val_left   = val_left  > CRSF_CHANNEL_VALUE_MAX ? CRSF_CHANNEL_VALUE_MAX : (val_left  < CRSF_CHANNEL_VALUE_MIN ? CRSF_CHANNEL_VALUE_MIN : val_left);
+    val_right  = val_right > CRSF_CHANNEL_VALUE_MAX ? CRSF_CHANNEL_VALUE_MAX : (val_right < CRSF_CHANNEL_VALUE_MIN ? CRSF_CHANNEL_VALUE_MIN : val_right);
+    if (ch_left != 0) {
+        ChannelData[ch_left  - 1] = val_left;
+    }
+    if (ch_right != 0) {
+        ChannelData[ch_right - 1] = val_right;
+    }
+}

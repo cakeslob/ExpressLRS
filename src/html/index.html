@@ -257,7 +257,7 @@ function inline_loader_ondone() {
 						</div>
 						<h2>Packet Rate</h2>
 						<div class="mui-select">
-							<select id="lockeddatarate" name="lockeddatarate">
+							<select id="fixed-packet-rate" name="fixed-packet-rate">
 								<option value="-1">Automatic (Default)</option>
 @@if hasSubGHz:
 								<option value="1">Locked to LORA_25HZ</option>
@@ -305,7 +305,71 @@ function inline_loader_ondone() {
 								<option value="19">Locked to FSK_900_1000HZ_8CH</option>
 							-->
 							</select>
-							<label for="lockeddatarate">Packet Rate</label>
+							<label for="fixed-packet-rate">Packet Rate</label>
+						</div>
+						<h2>Arcade Tank Drive Mixer</h2>
+						<div>
+							<table class="mui-table">
+								<tr><th colspan="4" class="mui--text-center mui--text-title">Channel Select</td></tr>
+								<tr>
+									<th><label for="shrew-mixer-thr"  >Throttle</label></th>
+									<th><label for="shrew-mixer-str"  >Steering</label></th>
+									<th><label for="shrew-mixer-left">Left </label><label for="shrew-mixer-left-rev"> [rev?]</label></th>
+									<th><label for="shrew-mixer-right">Right </label><label for="shrew-mixer-right-rev"> [rev?]</label></th>
+								</tr>
+								<tr>
+									<td>
+										<select id="shrew-mixer-thr" name="shrew-mixer-thr">
+											<option value="0">None</option>
+											<option value="1">CH1</option>
+											<option value="2">CH2</option>
+											<option value="3">CH3</option>
+											<option value="4">CH4</option>
+											<option value="5">CH5</option>
+											<option value="6">CH6</option>
+											<option value="7">CH7</option>
+										</select>
+									</td>
+									<td>
+										<select id="shrew-mixer-str" name="shrew-mixer-str">
+											<option value="0">None</option>
+											<option value="1">CH1</option>
+											<option value="2">CH2</option>
+											<option value="3">CH3</option>
+											<option value="4">CH4</option>
+											<option value="5">CH5</option>
+											<option value="6">CH6</option>
+											<option value="7">CH7</option>
+										</select>
+									</td>
+									<td>
+										<select id="shrew-mixer-left" name="shrew-mixer-left">
+											<option value="0">None</option>
+											<option value="1">CH1</option>
+											<option value="2">CH2</option>
+											<option value="3">CH3</option>
+											<option value="4">CH4</option>
+											<option value="5">CH5</option>
+											<option value="6">CH6</option>
+											<option value="7">CH7</option>
+										</select>
+										<input type="checkbox" id="shrew-mixer-left-rev" name="shrew-mixer-left-rev" />
+									</td>
+									<td>
+										<select id="shrew-mixer-right" name="shrew-mixer-right">
+											<option value="0">None</option>
+											<option value="1">CH1</option>
+											<option value="2">CH2</option>
+											<option value="3">CH3</option>
+											<option value="4">CH4</option>
+											<option value="5">CH5</option>
+											<option value="6">CH6</option>
+											<option value="7">CH7</option>
+										</select>
+										<input type="checkbox" id="shrew-mixer-right-rev" name="shrew-mixer-right-rev" />
+									</td>
+								</tr>
+							</table>
 						</div>
 						<div id="serial-config">
 							<h2>Serial Protocol</h2>

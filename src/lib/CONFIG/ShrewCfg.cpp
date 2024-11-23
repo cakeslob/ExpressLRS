@@ -33,6 +33,7 @@ void shrew_appendDefaults(RxConfig* cfg, rx_config_t* rxcfg)
     #endif
 
     rxcfg->locked_datarate = firmwareOptions.locked_datarate;
+    rxcfg->shrew_mixer = firmwareOptions.shrew_mixer;
     if (firmwareOptions.permanent_binding) {
         rxcfg->bindStorage = BINDSTORAGE_PERMANENT;
     }

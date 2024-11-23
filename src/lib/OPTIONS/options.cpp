@@ -354,6 +354,7 @@ static void options_LoadFromFlashOrFile(EspFlashStream &strmFlash)
     firmwareOptions.locked_datarate = doc["fixed-packet-rate"] | -1;
     firmwareOptions.shrew = doc["shrew"] | 0;
     firmwareOptions.shrew_dshot = doc["shrew-dshot"] | false;
+    firmwareOptions.shrew_mixer = doc["shrew-mixer"] | 0;
 
     builtinOptions.clear();
     saveOptions(builtinOptions, doc["customised"] | false);

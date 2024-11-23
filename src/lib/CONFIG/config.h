@@ -238,6 +238,7 @@ typedef struct __attribute__((packed)) {
                 teamracePitMode:1;  // FUTURE: Enable pit mode when disabling model
 
     int8_t      locked_datarate;
+    uint32_t    shrew_mixer;
 
     uint8_t     targetSysId;
     uint8_t     sourceSysId;
@@ -280,6 +281,7 @@ public:
     rx_config_bindstorage_t GetBindStorage() const { return (rx_config_bindstorage_t)m_config.bindStorage; }
     bool IsOnLoan() const;
     int8_t GetLockedDatarate() const { return m_config.locked_datarate; };
+    uint32_t GetShrewMixer() const { return m_config.shrew_mixer; };
 
     // Setters
     void SetUID(uint8_t* uid);
@@ -306,6 +308,7 @@ public:
     void SetSourceSysId(uint8_t sysID);
     void SetBindStorage(rx_config_bindstorage_t value);
     void SetLockedDatarate(int8_t value);
+    void SetShrewMixer(uint32_t value);
     void ReturnLoan();
 
 private:
