@@ -31,6 +31,7 @@ enum
     AM32_ACTION_WRITE,
     AM32_ACTION_TEST_START,
     AM32_ACTION_TEST_SIGNAL,
+    AM32_ACTION_CHANGE_DSHOT_MODE,
 };
 
 static int pin_num = -1;
@@ -265,6 +266,26 @@ void am32_handleIo(AsyncWebServerRequest *request)
                 last_test_time = millis();
                 servos_singleWrite(req_data.pin, req_data.delay);
                 default_response = true;
+            }
+            break;
+        case AM32_ACTION_CHANGE_DSHOT_MODE:
+            {
+                for (int ch = 0 ; ch < GPIO_PIN_PWM_OUTPUTS_COUNT ; ++ch)
+                {
+                    int8_t pwm_pin = GPIO_PIN_PWM_OUTPUTS[ch];
+                    if (pwm_pin == req_data.pin)
+                    {
+                        rx_config_pwm_t *chConfig = (rx_config_pwm_t *)config.GetPwmChannel(ch);
+                        rx_config_pwm_t ncfg;
+                        memcpy(&ncfg, chConfig, sizeof(rx_config_pwm_t));
+                        config.SetPwmChannel(ch, chConfig->val.failsafe, chConfig->val.inputChannel, chConfig->val.inverted, req_data.delay == 0 ? somDShot : somDShot3D, false);
+                        ncfg.val.mode = req_data.delay == 0 ? somDShot : somDShot3D;
+                        memcpy(chConfig, &ncfg, sizeof(rx_config_pwm_t));
+                        config.Commit();
+                        default_response = true;
+                        break;
+                    }
+                }
             }
             break;
     }

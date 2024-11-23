@@ -58,6 +58,31 @@ function am32_init()
 
 async function am32_init2()
 {
+    await fill_rcinputs();
+    getEleById("div_loading").style.display = "none";
+    getEleById("div_maincontent").style.display = "block";
+    getEleById("div_testesc").style.display = "block";
+    getEleById("div_escconnect").style.display = "block";
+    if (!isRunningLocally())
+    {
+        //getEleById("btn_serwrite").style.display = "none";
+        getEleById("btn_serwrite").disabled = true;
+        getEleById("div_maincontent").style.display = "none";
+        getEleById("div_testesc").style.display = "none";
+        getEleById("fld_crsfchannels").style.display = "none";
+        getEleById("fld_crsf2channels").style.display = "none";
+        getEleById("div_experimentalextras").style.display = "none";
+    }
+    getEleById("chk_drivebyrpm").dispatchEvent(new Event('change'));
+    getEleById("chk_variablepwm").dispatchEvent(new Event('change'));
+    getEleById("chk_lowvoltagecutoff").dispatchEvent(new Event('change'));
+    getEleById("chk_brushedmode").dispatchEvent(new Event('change'));
+    getEleById("chk_dualbrushedmode").dispatchEvent(new Event('change'));
+    drop_rcinput_onchange();
+}
+
+async function fill_rcinputs()
+{
     let data;
     if (!isRunningLocally()) {
         let formData = new FormData();
@@ -69,10 +94,17 @@ async function am32_init2()
         data = await response.text();
     }
     else {
-        data = "PWM 1 2,PWM 3 4,SERRX 5, SERTX 6";
+        data = "PWM 1 2,DSHOT 3 4,DSHOT3D 5 6,SERRX 7, SERTX 8";
     }
     let pin_strs = data.split(',');
     let select = getEleById('drop_selpin');
+
+    let prev_idx = null;
+    if (select.options.length > 0) {
+        prev_idx = select.selectedIndex; // remember so we can reselect
+        select.options.length = 0; // clears the list
+    }
+
     for (let pin_str of pin_strs) {
         try {
             let opt = document.createElement('option');
@@ -102,26 +134,10 @@ async function am32_init2()
         catch (e) {
         }
     }
-    getEleById("div_loading").style.display = "none";
-    getEleById("div_maincontent").style.display = "block";
-    getEleById("div_testesc").style.display = "block";
-    getEleById("div_escconnect").style.display = "block";
-    if (!isRunningLocally())
-    {
-        //getEleById("btn_serwrite").style.display = "none";
-        getEleById("btn_serwrite").disabled = true;
-        getEleById("div_maincontent").style.display = "none";
-        getEleById("div_testesc").style.display = "none";
-        getEleById("fld_crsfchannels").style.display = "none";
-        getEleById("fld_crsf2channels").style.display = "none";
-        getEleById("div_experimentalextras").style.display = "none";
+
+    if (prev_idx != null) {
+        select.selectedIndex = prev_idx;
     }
-    getEleById("chk_drivebyrpm").dispatchEvent(new Event('change'));
-    getEleById("chk_variablepwm").dispatchEvent(new Event('change'));
-    getEleById("chk_lowvoltagecutoff").dispatchEvent(new Event('change'));
-    getEleById("chk_brushedmode").dispatchEvent(new Event('change'));
-    getEleById("chk_dualbrushedmode").dispatchEvent(new Event('change'));
-    drop_rcinput_onchange();
 }
 
 function getEleById(i) {
@@ -162,6 +178,7 @@ const srvaction_ser_read = 4;
 const srvaction_ser_write = 5;
 const srvaction_test_start = 6;
 const srvaction_test_pulse = 7;
+const srvaction_change_dshot_mode = 8;
 
 let current_chip = null;
 
@@ -264,7 +281,7 @@ function make_checkbox(x)
 {
     let t;
     t = "<div style=\"display: table-cell; text-align: right;\"><label for=\"chk_" + text_to_id(x[0]) + "\">" + x[0] + "</label></div>\r\n";
-    t += "<div style=\"display: table-cell; text-align: left\"><input id=\"chk_" + text_to_id(x[0]) + "\" type=\"checkbox\"";
+    t += "<div style=\"display: table-cell; text-align: left\"><input id=\"chk_" + text_to_id(x[0]) + "\" type=\"checkbox\" onchange=\"chkbox_onchange('" + text_to_id(x[0]) + "')\"";
     if (x[1])
     {
         t += " checked=\"checked\"";
@@ -354,6 +371,60 @@ function sld_onchange(i)
         }
     }
     ui_locked = false;
+}
+
+function chkbox_onchange(i)
+{
+    if (getEleById("chk_bidirectional").checked) {
+        getEleById("chk_complementarypwm").checked = true;
+    }
+    if (i == "bidirectional") {
+        const dropdown = getEleById("drop_selpin");
+        if (dropdown) {
+            const value = dropdown.value;
+            let pin_text = null;
+
+            const options = dropdown.options;
+            for (let i = 0; i < options.length; i++) {
+                if (options[i].value === value) {
+                    pin_text = options[i].text;
+                }
+            }
+
+            if (pin_text != null) {
+                if (pin_text.startsWith("DSHOT3D")) {
+                    if (getEleById("chk_bidirectional").checked == false) {
+                        cuteAlert({
+                            type: 'question',
+                            title: 'Change DShot Mode?',
+                            message: `Disabling bi-directional mode on AM32 requires the DSHOT mode to be non-3D, change the DSHOT mode to non-3D?`,
+                            confirmText: 'Yes',
+                            cancelText: 'No'
+                        }).then((e)=>{
+                            serport_ajax("send change dshot mode", srvaction_change_dshot_mode, serport_lastpin, null, 0).then(result=>{
+                                fill_rcinputs();
+                            });
+                        });
+                    }
+                }
+                else if (pin_text.startsWith("DSHOT")) {
+                    if (getEleById("chk_bidirectional").checked) {
+                        cuteAlert({
+                            type: 'question',
+                            title: 'Change DShot Mode?',
+                            message: `Bi-directional mode on AM32 requires the DSHOT mode to be DSHOT-3D, change the DSHOT mode?`,
+                            confirmText: 'Yes 3D',
+                            cancelText: 'No'
+                        }).then((e)=>{
+                            serport_ajax("send change dshot mode", srvaction_change_dshot_mode, serport_lastpin, null, 1).then(result=>{
+                                fill_rcinputs();
+                            });
+                        });
+                    }
+                }
+            }
+        }
+    }
 }
 
 function drop_rcinput_onchange()
