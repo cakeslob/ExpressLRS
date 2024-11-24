@@ -33,6 +33,7 @@ def build_html(mainfile, var, out, env, isTX=False):
         extensions=[CoreExtension("@@")]
     )
     template = engine.get_template(mainfile)
+    hasHbridge = '-DBUILD_SHREW_HBRIDGE_PRO' in env['BUILD_FLAGS'] or '-DBUILD_SHREW_HBRIDGE_LITE' in env['BUILD_FLAGS']
     has_sub_ghz = '-DRADIO_SX127X=1' in env['BUILD_FLAGS'] or '-DRADIO_LR1121=1' in env['BUILD_FLAGS']
     if '-DRADIO_SX128X=1' in env['BUILD_FLAGS']:
         chip = 'SX128X'
@@ -50,6 +51,7 @@ def build_html(mainfile, var, out, env, isTX=False):
             'isTX': isTX,
             'hasSubGHz': has_sub_ghz,
             'chip': chip,
+            'hasHbridge': hasHbridge,
             'is8285': is8285
         })
     if mainfile.endswith('.html'):

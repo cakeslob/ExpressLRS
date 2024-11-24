@@ -1,4 +1,4 @@
-@@require(PLATFORM, VERSION, isTX, hasSubGHz, is8285)
+@@require(PLATFORM, VERSION, isTX, hasSubGHz, hasHbridge, is8285)
 <!DOCTYPE HTML>
 <html lang="en">
 
@@ -371,6 +371,14 @@ function inline_loader_ondone() {
 								</tr>
 							</table>
 						</div>
+@@if hasHbridge:
+						<!-- <div>
+							<h2>Shrew H-Bridge Voltage</h2>
+							Limit the voltage to the brushed motor drivers (H-bridges) as a percent of the input voltage<br />
+							Use this if you want to run a 6S weapon motor but 3S drive motors so they don't burn<br />
+							<input type="number" id="shrew-hbridge-v" name="shrew-hbridge-v" min="1" max="100" value="100" />%
+						</div> -->
+@@end
 						<div id="serial-config">
 							<h2>Serial Protocol</h2>
 							Set the protocol used to communicate with the flight controller or other external devices.
