@@ -57,6 +57,8 @@ static NeoPixelBus<NeoRgbFeature, METHOD> *striprgb;
 
 #ifdef BUILD_SHREW_RGBLED
 void shrew_updateRgbLed();
+int shrew_bootStatus();
+extern bool shrew_allArmed();
 #endif
 
 void WS281Binit()
@@ -448,6 +450,9 @@ static int timeout()
     }
     if (blinkyState == STARTUP && connectionState < FAILURE_STATES)
     {
+        #ifdef BUILD_SHREW_RGBLED
+        return shrew_bootStatus();
+        #endif
         return blinkyUpdate();
     }
     #if defined(TARGET_RX)
@@ -548,6 +553,12 @@ void shrew_updateRgbLed()
         blinkyColor.v = 128;
         if (OPT_RGBLED_SHREWCYCLE) {
             blinkyColor.h = (accum / 32) & 0xFF;
+            if (shrew_allArmed() == false) {
+                if (((millis() / 200) % 2) == 0) {
+                    blinkyColor.s = 32;
+                    blinkyColor.v = 64;
+                }
+            }
         }
         else {
             blinkyColor.h = ExpressLRS_currAirRate_Modparams->index * 256 / RATE_MAX;
@@ -555,6 +566,65 @@ void shrew_updateRgbLed()
         }
         WS281BsetLED(HsvToRgb(blinkyColor));
     }
+}
+
+#define COLOUR8_RED   0xE0
+#define COLOUR8_GREEN 0x1C
+#define COLOUR8_BLUE  0x03
+#define COLOUR8_WHITE 0xFF
+
+static const uint8_t rst_ani_unknown[]   = {COLOUR8_WHITE, COLOUR8_RED, COLOUR8_WHITE, COLOUR8_BLUE, COLOUR8_WHITE, COLOUR8_GREEN};
+static const uint8_t rst_ani_unknown2[]  = {COLOUR8_WHITE, COLOUR8_RED, COLOUR8_BLUE, COLOUR8_WHITE, COLOUR8_RED, COLOUR8_BLUE};
+static const uint8_t rst_ani_brownout[]  = {COLOUR8_RED, COLOUR8_GREEN};
+static const uint8_t rst_ani_sdio[]      = {COLOUR8_WHITE, COLOUR8_GREEN};
+//static const uint8_t rst_ani_pwrglitch[] = {COLOUR8_RED, COLOUR8_BLUE};
+//static const uint8_t rst_ani_cpulockup[] = {COLOUR8_WHITE, COLOUR8_BLUE};
+static const uint8_t rst_ani_rst_sw[]    = {COLOUR8_WHITE, COLOUR8_RED};
+static const uint8_t rst_ani_wdt[]       = {COLOUR8_RED, COLOUR8_GREEN, COLOUR8_BLUE};
+static const uint8_t rst_ani_panic[]     = {COLOUR8_GREEN, COLOUR8_BLUE};
+static const uint8_t rst_ani_good[]      = {COLOUR8_GREEN, 0};
+
+int shrew_bootStatus()
+{
+    uint32_t now = millis();
+    uint32_t nowTick = now / 200; // this determines the duration of each time window
+    static uint8_t show_cnt = 0;
+    static uint8_t prev_idx = 0;
+    static auto reason = esp_reset_reason();
+
+    if (nowTick != prev_idx) {
+        prev_idx = nowTick;
+        show_cnt++;
+        if (show_cnt > 6 * 4) { // this controls how long the animation lasts
+            blinkyState = NORMAL;
+            return 50;
+        }
+        //if (reason == ESP_RST_POWERON && connectionState == connected) {
+        //    blinkyState = NORMAL;
+        //    return 50;
+        //}
+        uint8_t c = 0;
+
+        switch (reason)
+        {
+            case ESP_RST_UNKNOWN:    c = rst_ani_unknown  [nowTick % sizeof(rst_ani_unknown  )]; break;
+            case ESP_RST_PANIC:      c = rst_ani_panic    [nowTick % sizeof(rst_ani_panic    )]; break;
+            case ESP_RST_INT_WDT:
+            case ESP_RST_TASK_WDT:
+            case ESP_RST_WDT:
+                                     c = rst_ani_wdt      [nowTick % sizeof(rst_ani_wdt      )]; break;
+            case ESP_RST_BROWNOUT:   c = rst_ani_brownout [nowTick % sizeof(rst_ani_brownout )]; break;
+            case ESP_RST_SDIO:       c = rst_ani_sdio     [nowTick % sizeof(rst_ani_sdio     )]; break;
+            //case ESP_RST_PWR_GLITCH: c = rst_ani_pwrglitch[nowTick % sizeof(rst_ani_pwrglitch)]; break;
+            //case ESP_RST_CPU_LOCKUP: c = rst_ani_cpulockup[nowTick % sizeof(rst_ani_cpulockup)]; break;
+            case ESP_RST_POWERON:
+            case ESP_RST_SW:
+                                     c = rst_ani_good     [nowTick % sizeof(rst_ani_good     )]; break;
+            default:                 c = rst_ani_unknown2 [nowTick % sizeof(rst_ani_unknown2 )]; break;
+        }
+        WS281BsetLED(toRGB(c));
+    }
+    return 50;
 }
 
 #endif

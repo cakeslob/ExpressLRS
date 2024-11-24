@@ -24,6 +24,9 @@ static uint8_t hbridge_pin_b1;
 static uint8_t hbridge_pin_b2;
 static uint32_t hbridge_sleep_val;
 static uint32_t hbridge_full_val;
+static uint32_t hbridge_100_val;
+
+bool hbridge_armed = false;
 
 void hbridge_init(void)
 {
@@ -52,14 +55,16 @@ void hbridge_init(void)
         return;
     }
 
+    hbridge_100_val = 1000; // TODO: change me to limit voltage
+
     if (firmwareOptions.shrew == 2 || firmwareOptions.shrew == 4) { // mega/pro
-        hbridge_sleep_val = 1000;
+        hbridge_sleep_val = hbridge_100_val;
     }
     else { // mini/lite
         hbridge_sleep_val = 0;
     }
 
-    hbridge_full_val = 1000 - hbridge_sleep_val;
+    hbridge_full_val = hbridge_100_val - hbridge_sleep_val;
 
     esp_chip_info_t chip_info;
     esp_chip_info(&chip_info);
@@ -113,6 +118,7 @@ void hbridge_failsafe(void)
     PWM.setDuty(hbridge_channels[HBRIDGE_IDX_B1], hbridge_sleep_val);
     PWM.setDuty(hbridge_channels[HBRIDGE_IDX_B2], hbridge_sleep_val);
     move_time = 0;
+    hbridge_armed = false;
 }
 
 void hbridge_setDuty(pwm_channel_t ch, signed int data)
@@ -128,6 +134,15 @@ void hbridge_update(unsigned long now)
 
     unsigned ch1 = ChannelData[0];
     unsigned ch2 = ChannelData[1];
+
+    if (hbridge_armed == false && ch1 == CRSF_CHANNEL_VALUE_MID && ch2 == CRSF_CHANNEL_VALUE_MID) {
+        hbridge_armed = true;
+    }
+
+    if (hbridge_armed == false) {
+        ch1 = CRSF_CHANNEL_VALUE_MID;
+        ch2 = CRSF_CHANNEL_VALUE_MID;
+    }
 
     // note: setDuty expects duty 0-1000, internally it uses mcpwm_set_duty which accepts float 0-100, there's a divide by 10.0f internally
     // note: both pins H is means driver is in standby/hi-z
@@ -174,4 +189,15 @@ void hbridge_update(unsigned long now)
 }
 
 #endif
+#endif
+
+#if defined(PLATFORM_ESP32)
+extern bool dshotAllArmed;
+bool shrew_allArmed() {
+    return dshotAllArmed
+    #ifdef BUILD_SHREW_HBRIDGE
+     && hbridge_armed
+    #endif
+     ;
+}
 #endif

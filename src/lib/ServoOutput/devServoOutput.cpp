@@ -18,16 +18,16 @@ static uint16_t pwmChannelValues[PWM_MAX_CHANNELS];
 static DShotRMT *dshotInstances[PWM_MAX_CHANNELS] = {nullptr};
 const uint8_t RMT_MAX_CHANNELS = 8;
 
-#define DSHOT_ENABLE_AUTO_ARM     0
+#define DSHOT_ENABLE_AUTO_ARM     1
 
-#if DSHOT_ENABLE_AUTO_ARM
-static int8_t dshotArmingNeeded = 0;       // when non-zero, send dshot packet with 0 (arming command) instead of actual control (us) value, then decrement this counter until 0
-#define DSHOT_ARMING_PKT_NEEDED   50       // number of zeros to send to the ESC via dshot for arming
+static uint32_t dshotArmingTime = 0;       // time stamp of when arming sequence starts
+#define DSHOT_ARMING_TIME_NEEDED  1000
+static bool dshotAllZero, dshotWasFailsafe, dshotArmOnConnect = false;
 
 static bool dshotCh5Assigned = false;      // if channel 5, the arming channel, is not assigned as a output, then if the user toggles it, it forces all dshot outputs to issue an arm signal
 static bool dshotCh5State = false;
-#endif // DSHOT_ENABLE_AUTO_ARM
 
+bool dshotAllArmed = false;
 #endif
 
 // true when the RX has a new channels packet
@@ -37,6 +37,9 @@ static constexpr uint32_t FAILSAFE_ABS_TIMEOUT_MS = 1000U;
 
 #ifdef BUILD_SHREW_RGBLED
 extern void shrew_updateRgbLed();
+#endif
+#ifdef BUILD_SHREW_GENERAL
+extern void shrew_brownoutSetup();
 #endif
 
 extern void shrew_mix();
@@ -83,11 +86,9 @@ static void servoWrite(uint8_t ch, uint16_t us)
                     dshotInstances[ch]->send_dshot_value(us & 0x3FFF); // send raw dshot, use for commands and such
                     // note: 6 consecutive commands are needed for the command to be effective
                 }
-                #if DSHOT_ENABLE_AUTO_ARM
-                else if (dshotArmingNeeded != 0) {
+                else if (dshotArmingTime != 0) {
                     dshotInstances[ch]->send_dshot_value(0); // send arming pulse
                 }
-                #endif
                 else if ((eServoOutputMode)chConfig->val.mode == somDShot3D) {
                     uint16_t x;
                     if (us == 1500) { // stopped
@@ -100,11 +101,17 @@ static void servoWrite(uint8_t ch, uint16_t us)
                         x = fmap(us, 1499, 988, 48, 1047);
                     }
                     dshotInstances[ch]->send_dshot_value(x);
+                    if (x != 0) {
+                        dshotAllZero = false;
+                    }
                 }
                 else {
                     uint16_t x = ((us - 1000) * 2) + (DSHOT_THROTTLE_MIN - 1); // Convert PWM signal in us to DShot value
                     x = x <= DSHOT_THROTTLE_MIN ? 0 : (x > DSHOT_THROTTLE_MAX ? DSHOT_THROTTLE_MAX : x); // limit within range, and send special 0 for stop
                     dshotInstances[ch]->send_dshot_value(x);
+                    if (x != 0) {
+                        dshotAllZero = false;
+                    }
                 }
             }
             else {
@@ -155,9 +162,10 @@ static void servosFailsafe()
             // do nothing
         }
     }
-    #if defined(PLATFORM_ESP32) && DSHOT_ENABLE_AUTO_ARM
-    dshotArmingNeeded = DSHOT_ARMING_PKT_NEEDED;
+    #if defined(PLATFORM_ESP32)
+    dshotWasFailsafe = true;
     dshotCh5State = false;
+    dshotAllArmed = false;
     #endif
     #if defined(BUILD_SHREW_HBRIDGE) && defined(PLATFORM_ESP32)
     hbridge_failsafe();
@@ -172,6 +180,17 @@ static void servosUpdate(unsigned long now)
         newChannelsAvailable = false;
         lastUpdate = now;
 
+        #if DSHOT_ENABLE_AUTO_ARM
+        if (dshotWasFailsafe) {
+            dshotArmingTime = millis();
+        }
+        #endif
+        dshotWasFailsafe = false;
+        if (dshotArmOnConnect) {
+            dshotArmingTime = millis();
+            dshotArmOnConnect = false;
+        }
+
         shrew_mix();
 
         #if defined(BUILD_SHREW_RGBLED) && defined(PLATFORM_ESP32)
@@ -180,6 +199,9 @@ static void servosUpdate(unsigned long now)
 
         #if defined(BUILD_SHREW_HBRIDGE) && defined(PLATFORM_ESP32)
         hbridge_update(now);
+        #endif
+        #if defined(PLATFORM_ESP32)
+        dshotAllZero = true;
         #endif
 
         for (int ch = 0 ; ch < GPIO_PIN_PWM_OUTPUTS_COUNT ; ++ch)
@@ -208,15 +230,19 @@ static void servosUpdate(unsigned long now)
             }
             servoWrite(ch, us);
         } /* for each servo */
-        #if defined(PLATFORM_ESP32) && DSHOT_ENABLE_AUTO_ARM
-        dshotArmingNeeded = dshotArmingNeeded > 0 ? (dshotArmingNeeded - 1) : 0; // decrement the counter if dshot is sending zeros
+
+        #if defined(PLATFORM_ESP32)
+        if (dshotAllZero || (millis() - dshotArmingTime) >= DSHOT_ARMING_TIME_NEEDED) {
+            dshotArmingTime = 0;
+            dshotAllArmed = true;
+        }
 
         // if channel 5, the arming channel, is not assigned as a output, then if the user toggles it, it forces all dshot outputs to issue an arm signal
         if (dshotCh5State == false) {
             if (ChannelData[4] > (CRSF_CHANNEL_VALUE_MID + 100)) {
                 dshotCh5State = true;
-                if (dshotArmingNeeded <= 0 && dshotCh5Assigned == false) {
-                    dshotArmingNeeded = DSHOT_ARMING_PKT_NEEDED;
+                if (dshotArmingTime == 0 && dshotCh5Assigned == false) {
+                    dshotArmingTime = millis();
                 }
             }
         }
@@ -240,6 +266,9 @@ static void servosUpdate(unsigned long now)
 
 static void initialize()
 {
+    #if defined(BUILD_SHREW_GENERAL)
+    shrew_brownoutSetup();
+    #endif
     #if defined(BUILD_SHREW_HBRIDGE) && defined(PLATFORM_ESP32)
     hbridge_init();
     #endif
@@ -298,7 +327,7 @@ static void initialize()
                 DBGLN("Initializing PWM output: ch: %d, pin: %d", ch, pin);
             }
 
-            #if defined(PLATFORM_ESP32) && DSHOT_ENABLE_AUTO_ARM
+            #if defined(PLATFORM_ESP32)
             if (config.GetPwmChannel(ch)->val.inputChannel == 4) {
                 dshotCh5Assigned = true;
             }
@@ -312,8 +341,10 @@ static void initialize()
 
 static int start()
 {
-    #if defined(PLATFORM_ESP32) && DSHOT_ENABLE_AUTO_ARM
-    dshotArmingNeeded = DSHOT_ARMING_PKT_NEEDED;
+    #if defined(PLATFORM_ESP32)
+    if (esp_reset_reason() == ESP_RST_BROWNOUT) {
+        dshotArmOnConnect = true;
+    }
     #endif
 
     for (int ch = 0; ch < GPIO_PIN_PWM_OUTPUTS_COUNT; ++ch)
@@ -392,6 +423,18 @@ device_t ServoOut_device = {
     .timeout = timeout,
 };
 
+#ifdef BUILD_SHREW_GENERAL
+
+void shrew_forceAllFailsafe()
+{
+    servosFailsafe();
+    #ifdef BUILD_SHREW_HBRIDGE
+    hbridge_failsafe();
+    #endif
+}
+
+#endif
+
 #ifdef BUILD_SHREW_AM32CONFIG
 
 void servos_deinitAll()
@@ -422,9 +465,6 @@ bool servos_singleInit(int selected_pin)
     bool res = false;
 #if defined(PLATFORM_ESP32)
     uint8_t rmtCH = 0;
-    #if DSHOT_ENABLE_AUTO_ARM
-    dshotArmingNeeded = DSHOT_ARMING_PKT_NEEDED;
-    #endif
 #endif
     for (int ch = 0; ch < GPIO_PIN_PWM_OUTPUTS_COUNT; ++ch)
     {
@@ -498,9 +538,6 @@ void servos_singleWrite(int selected_pin, int us)
         servoWrite(ch, us);
         break;
     }
-    #if defined(PLATFORM_ESP32) && DSHOT_ENABLE_AUTO_ARM
-    dshotArmingNeeded = dshotArmingNeeded > 0 ? (dshotArmingNeeded - 1) : 0; // decrement the counter if dshot is sending zeros
-    #endif
 }
 
 #endif // BUILD_SHREW_AM32CONFIG
