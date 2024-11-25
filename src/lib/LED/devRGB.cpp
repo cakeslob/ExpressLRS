@@ -59,6 +59,7 @@ static NeoPixelBus<NeoRgbFeature, METHOD> *striprgb;
 void shrew_updateRgbLed();
 int shrew_bootStatus();
 extern bool shrew_allArmed();
+extern esp_reset_reason_t shrew_reset_get_reason();
 #endif
 
 void WS281Binit()
@@ -590,7 +591,7 @@ int shrew_bootStatus()
     uint32_t nowTick = now / 200; // this determines the duration of each time window
     static uint8_t show_cnt = 0;
     static uint8_t prev_idx = 0;
-    static auto reason = esp_reset_reason();
+    static auto reason = shrew_reset_get_reason();
 
     if (nowTick != prev_idx) {
         prev_idx = nowTick;

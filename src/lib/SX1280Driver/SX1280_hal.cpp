@@ -22,6 +22,10 @@ Modified and adapted by Alessandro Carcione for ELRS project
 #include <SPIEx.h>
 #include "logging.h"
 
+#ifdef BUILD_SHREW_GENERAL
+extern volatile uint32_t shrew_hasBrownedOut;
+#endif
+
 SX1280Hal *SX1280Hal::instance = NULL;
 
 SX1280Hal::SX1280Hal()
@@ -280,7 +284,14 @@ bool ICACHE_RAM_ATTR SX1280Hal::WaitOnBusy(SX12XX_Radio_Number_t radioNumber)
             // Use this time to call micros().
             uint32_t now = micros();
             if (startTime == 0) startTime = now;
-            if ((now - startTime) > wtimeoutUS) return false;
+            if ((now - startTime) > wtimeoutUS) {
+                #ifdef BUILD_SHREW_GENERAL
+                if (shrew_hasBrownedOut) {
+                    esp_restart();
+                }
+                #endif
+                return false;
+            }
         }
     }
     else

@@ -40,6 +40,10 @@ extern void shrew_updateRgbLed();
 #endif
 #ifdef BUILD_SHREW_GENERAL
 extern void shrew_brownoutSetup();
+extern esp_reset_reason_t shrew_reset_get_reason();
+extern void shrewbo_onDataHook();
+extern void shrewbo_onDisconnectHook();
+extern volatile uint32_t shrew_hasBrownedOut;
 #endif
 
 extern void shrew_mix();
@@ -47,6 +51,7 @@ extern void shrew_mix();
 void ICACHE_RAM_ATTR servoNewChannelsAvailable()
 {
     newChannelsAvailable = true;
+    shrewbo_onDataHook();
 }
 
 uint16_t servoOutputModeToFrequency(eServoOutputMode mode)
@@ -260,6 +265,7 @@ static void servosUpdate(unsigned long now)
     else if (lastUpdate && ((getLq() == 0) || (now - lastUpdate > FAILSAFE_ABS_TIMEOUT_MS)))
     {
         servosFailsafe();
+        shrewbo_onDisconnectHook();
         lastUpdate = 0;
     }
 }
@@ -342,7 +348,7 @@ static void initialize()
 static int start()
 {
     #if defined(PLATFORM_ESP32)
-    if (esp_reset_reason() == ESP_RST_BROWNOUT) {
+    if (shrew_reset_get_reason() == ESP_RST_BROWNOUT) {
         dshotArmOnConnect = true;
     }
     #endif
