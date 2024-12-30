@@ -50,10 +50,20 @@ static uint32_t hop_last_time = 0;
 
 static uint32_t tx_cnt = 0;
 
+extern void shrew_blinky_init(int gpio_pin, int num_leds);
+extern void shrew_blinky_once(uint8_t r, uint8_t g, uint8_t b, uint32_t delay);
+
 void shrew_testbench()
 {
     setCpuFrequencyMhz(80);
     Serial.begin(115200);
+
+    shrew_blinky_init(GPIO_PIN_LED_WS2812, 1);
+    while (1) {
+        shrew_blinky_once(0, 128, 128, 200);
+        shrew_blinky_once(0, 0, 0, 800);
+    }
+
     esp_sleep_enable_uart_wakeup(0);
     devicesRegister(NULL, 0);
     Serial.print("\r\nhello world shrew testbench");
