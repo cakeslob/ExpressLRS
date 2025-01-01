@@ -52,6 +52,7 @@ void hbridge_init(void)
 
     if (firmwareOptions.shrew <= 0) {
         DBGLN("hbridge not shrew");
+        hbridge_armed = true;
         return;
     }
 

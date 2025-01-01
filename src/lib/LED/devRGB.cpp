@@ -433,6 +433,7 @@ static int start()
     #ifdef PLATFORM_ESP32
     // Only do the blinkies if it was NOT a software reboot
     if (esp_reset_reason() == ESP_RST_SW) {
+        DBGLN("skipping startup LED");
         blinkyState = NORMAL;
         #if defined(TARGET_TX)
         setButtonColors(config.GetButtonActions(0)->val.color, config.GetButtonActions(1)->val.color);
@@ -537,6 +538,10 @@ void shrew_updateRgbLed()
     static uint32_t accum = 0;
     static uint16_t prev[CRSF_NUM_CHANNELS];
 
+    if (blinkyState == STARTUP && connectionState < FAILURE_STATES) {
+        return;
+    }
+
     for (int i = 0; i < CRSF_NUM_CHANNELS; i++) {
         uint32_t cd = ChannelData[i];
         uint32_t pd = prev[i];
@@ -587,15 +592,21 @@ static const uint8_t rst_ani_good[]      = {COLOUR8_GREEN, 0};
 
 int shrew_bootStatus()
 {
-    uint32_t now = millis();
+    static uint32_t first_call_time = millis();
+    uint32_t now = millis() - first_call_time;
     uint32_t nowTick = now / 200; // this determines the duration of each time window
     static uint8_t show_cnt = 0;
     static uint8_t prev_idx = 0;
     static auto reason = shrew_reset_get_reason();
 
+    if (now == 0) {
+        DBGLN("1st call of shrew_bootStatus, reason %d", reason);
+    }
+
     if (nowTick != prev_idx) {
         prev_idx = nowTick;
         show_cnt++;
+        DBGLN("shrew_bootStatus cnt %d", show_cnt);
         if (show_cnt > 6 * 4) { // this controls how long the animation lasts
             blinkyState = NORMAL;
             return 50;
