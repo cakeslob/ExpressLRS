@@ -7,6 +7,51 @@
 
 #include "DShotRMT.h"
 
+static bool has_configed_intr = false; // only need to attach the transmission-complete callback once
+
+extern "C" {
+
+// channel status
+enum {
+	CHSTS_IDLE,
+	CHSTS_TX,
+	CHSTS_RX,
+};
+
+static uint8_t ch_status[RMT_MAX_CHANNELS];
+static rmt_config_t* rmt_ch_cfg[RMT_MAX_CHANNELS]; // rmt_config_t contains both the channel number and the GPIO number, so it's nice to have a copy, these pointers point to the cached copy inside the class object
+static bool ch_is_bidir[RMT_MAX_CHANNELS];
+
+//ensures that the rx callback code is always in iram, which is essential for speed
+#define CONFIG_RMT_ISR_IRAM_SAFE 1
+#if CONFIG_RMT_ISR_IRAM_SAFE
+#define TEST_RMT_CALLBACK_ATTR IRAM_ATTR
+#else
+#define TEST_RMT_CALLBACK_ATTR
+#endif
+
+TEST_RMT_CALLBACK_ATTR static void tx_complete_cb(rmt_channel_t channel, void *arg)
+{
+	if (ch_is_bidir[channel] == false) {
+		ch_status[channel] = CHSTS_IDLE;
+		return; // not bidirectional, nothing to do
+	}
+
+	rmt_config_t* cfg = rmt_ch_cfg[channel];
+	cfg->rmt_mode = RMT_MODE_RX;
+	cfg->rx_config = {
+			.idle_threshold = 0,
+			.filter_ticks_thresh = 0,
+			.filter_en = 0,
+		};
+	gpio_ll_od_enable(GPIO_LL_GET_HW(GPIO_PORT_0), cfg->gpio_num);
+	rmt_config(cfg);
+	rmt_rx_start(channel, true);
+	ch_status[channel] = CHSTS_RX;
+}
+
+}
+
 DShotRMT::DShotRMT(gpio_num_t gpio, rmt_channel_t rmtChannel) : gpio_num(gpio), rmt_channel(rmtChannel) {
 	// ...create clean packet
 	encode_dshot_to_rmt(DSHOT_NULL_PACKET);
@@ -28,6 +73,7 @@ bool DShotRMT::begin(dshot_mode_t dshot_mode, bool is_bidirectional) {
 			ticks_per_bit = 64; // ...Bit Period Time 6.67 us
 			ticks_zero_high = 24; // ...zero time 2.50 us
 			ticks_one_high = 48; // ...one time 5.00 us
+			bidirectional = false;
 			break;
 
 		case DSHOT300:
@@ -74,6 +120,9 @@ bool DShotRMT::begin(dshot_mode_t dshot_mode, bool is_bidirectional) {
 		},
 	};
 	memcpy(&rmt_cfg_cache, &dshot_tx_rmt_config, sizeof(rmt_config_t));
+	rmt_ch_cfg[rmt_channel] = &rmt_cfg_cache;
+	ch_is_bidir[rmt_channel] = bidirectional;
+	ch_status[rmt_channel] = CHSTS_IDLE;
 
 	// ...pause "bit" added to each frame
 	if (bidirectional) {
@@ -96,12 +145,21 @@ bool DShotRMT::begin(dshot_mode_t dshot_mode, bool is_bidirectional) {
 	// ...setup selected dshot mode
 	rmt_config(&dshot_tx_rmt_config);
 
+	if (has_configed_intr == false) {
+		rmt_register_tx_end_callback(tx_complete_cb, NULL);
+		has_configed_intr = true;
+	}
+
 	// ...essential step, return the result
 	return rmt_driver_install(dshot_tx_rmt_config.channel, 0, 0);
 }
 
 void DShotRMT::set_looping(bool x) {
 	rmt_cfg_cache.tx_config.loop_en = x;
+	autolooping = x;
+	if (x) {
+		bidirectional = false;
+	}
 	rmt_config(&rmt_cfg_cache);
 }
 
@@ -189,8 +247,14 @@ uint16_t DShotRMT::prepare_rmt_data(const dshot_packet_t& dshot_packet) {
 void DShotRMT::output_rmt_data(const dshot_packet_t& dshot_packet) {
 	encode_dshot_to_rmt(prepare_rmt_data(dshot_packet));
 
+	if (ch_status[rmt_channel] == CHSTS_RX) {
+		gpio_ll_od_disable(GPIO_LL_GET_HW(GPIO_PORT_0), gpio_num);
+	}
+
 	rmt_tx_stop(rmt_channel);
 	rmt_fill_tx_items(rmt_channel, dshot_tx_rmt_item, DSHOT_PACKET_LENGTH, 0);
+
 	rmt_tx_start(rmt_channel, true);
+	ch_status[rmt_channel] = CHSTS_TX;
 }
 #endif

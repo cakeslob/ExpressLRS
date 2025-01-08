@@ -13,6 +13,9 @@
 
 // ...utilizing the IR Module library for generating the DShot signal
 #include <driver/rmt.h>
+#include <hal/gpio_hal.h>
+
+const uint8_t RMT_MAX_CHANNELS = 8;
 
 constexpr auto DSHOT_CLK_DIVIDER = 8; // ...slow down RMT clock to 0.1 microseconds / 100 nanoseconds per cycle
 constexpr auto DSHOT_PACKET_LENGTH = 18; // ...last packet is the pause followed by RMT end marker
@@ -106,6 +109,7 @@ private:
 
 	dshot_mode_t mode = DSHOT_OFF;
 	bool bidirectional = false;
+	bool autolooping = false;
 	uint16_t ticks_zero_high = 0;
 	uint16_t ticks_zero_low = 0;
 	uint16_t ticks_one_high = 0;

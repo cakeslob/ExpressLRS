@@ -16,7 +16,6 @@ static uint16_t pwmChannelValues[PWM_MAX_CHANNELS];
 
 #if (defined(PLATFORM_ESP32))
 static DShotRMT *dshotInstances[PWM_MAX_CHANNELS] = {nullptr};
-const uint8_t RMT_MAX_CHANNELS = 8;
 
 #define DSHOT_ENABLE_AUTO_ARM     1
 
@@ -504,7 +503,7 @@ bool servos_singleInit(int selected_pin)
                 DBGLN("Initializing DShot: gpio: %u, ch: %d, rmtChannel: %u", gpio, ch, rmtChannel);
                 pinMode(pin, OUTPUT);
                 dshotInstances[ch] = new DShotRMT(gpio, rmtChannel); // Initialize the DShotRMT instance
-                dshotInstances[ch]->begin(DSHOT300, false);
+                dshotInstances[ch]->begin(DSHOT300, true);
                 dshotInstances[ch]->set_looping(true);
                 servoWrite(ch, 0);
                 res = true;
