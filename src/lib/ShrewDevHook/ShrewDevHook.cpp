@@ -9,6 +9,8 @@
 // please do not modify "ShrewDevHook.h", if you need additional header files, use your own include statements
 // please do not modify the function signatures
 
+#include "Annihilation_LED.h"
+
 // this is called from the top of rx_main setup()
 // ONLY use this to initialize your own variables
 // no hardware/pins has been setup/initialized at this point
@@ -30,7 +32,7 @@ void shrewdevhook_postSetup()
 // return 0 if you are not using this functionality
 int16_t shrewdevhook_getPixelCount(void)
 {
-    return 0;
+    return LED_STRIP_LENGTH;
 }
 
 // called every X-ms from devRGB.cpp, return false to continue default animation, return true to write your own animation (not run the default animation)
@@ -38,7 +40,9 @@ int16_t shrewdevhook_getPixelCount(void)
 // return false if you are not using this functionality
 bool shrewdevhook_onLedTick(void)
 {
-    return false;
+    annihilation_led_tick();
+
+    return true;
 }
 
 // sets the repetition period, in milliseconds, that shrewdevhook_onLedTick is repeatedly called with
@@ -46,7 +50,7 @@ bool shrewdevhook_onLedTick(void)
 // this is only read once, it cannot be dynamically changing
 uint32_t shrewdevhook_getLedTickPeriod(void)
 {
-    return 0;
+    return 35;
 }
 
 // called from shrew_bootStatus inside devRGB.cpp
