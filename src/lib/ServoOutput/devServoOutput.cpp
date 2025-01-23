@@ -9,6 +9,7 @@
 #ifdef BUILD_SHREW_HBRIDGE
 #include "hbridge.h"
 #endif
+#include "ShrewDevHook.h"
 
 static int8_t servoPins[PWM_MAX_CHANNELS];
 static pwm_channel_t pwmChannels[PWM_MAX_CHANNELS];
@@ -52,6 +53,7 @@ void ICACHE_RAM_ATTR servoNewChannelsAvailable()
 {
     newChannelsAvailable = true;
     shrewbo_onDataHook();
+    shrewdevhook_onNewData();
 }
 
 uint16_t servoOutputModeToFrequency(eServoOutputMode mode)
@@ -175,11 +177,16 @@ static void servosFailsafe()
     #if defined(BUILD_SHREW_HBRIDGE) && defined(PLATFORM_ESP32)
     hbridge_failsafe();
     #endif
+
+    shrewdevhook_postServoFailsafe();
 }
 
 static void servosUpdate(unsigned long now)
 {
     static uint32_t lastUpdate;
+
+    shrewdevhook_tick(now, newChannelsAvailable);
+
     if (newChannelsAvailable)
     {
         newChannelsAvailable = false;
@@ -197,6 +204,7 @@ static void servosUpdate(unsigned long now)
         }
 
         shrew_mix();
+        shrewdevhook_preServoUpdate(now);
 
         #if defined(BUILD_SHREW_RGBLED) && defined(PLATFORM_ESP32)
         shrew_updateRgbLed();
@@ -257,6 +265,9 @@ static void servosUpdate(unsigned long now)
             }
         }
         #endif
+
+        shrewdevhook_postServoUpdate();
+
     }     /* if newChannelsAvailable */
 
     // LQ goes to 0 (100 packets missed in a row)
@@ -374,6 +385,9 @@ static int start()
     #endif
     // set servo outputs to failsafe position on start in case they want to play silly buggers!
     servosFailsafe();
+
+    shrewdevhook_postServoStart();
+
     return DURATION_NEVER;
 }
 

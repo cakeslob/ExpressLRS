@@ -40,6 +40,8 @@
 #include "devMSPVTX.h"
 #include "devThermal.h"
 
+#include "ShrewDevHook.h"
+
 #if defined(PLATFORM_ESP8266)
 #include <user_interface.h>
 #include <FS.h>
@@ -2067,6 +2069,8 @@ void resetConfigAndReboot()
 
 void setup()
 {
+    shrewdevhook_preSetup();
+
     #ifdef BUILD_SHREW_HBRIDGE_MEGA
     pinMode(4, OUTPUT);
     digitalWrite(4, HIGH);
@@ -2166,6 +2170,8 @@ void setup()
     // setup() eats up some of this time, which can cause the first mode connection to fail.
     // Resetting the time here give the first mode a better chance of connection.
     RFmodeLastCycled = millis();
+
+    shrewdevhook_postSetup();
 }
 
 #if defined(PLATFORM_ESP32_C3)

@@ -3,6 +3,8 @@
 #include "devLED.h"
 #include "config.h"
 
+#include "ShrewDevHook.h"
+
 #ifdef HAS_RGB
 
 #ifdef WS2812_IS_GRB
@@ -64,6 +66,12 @@ extern esp_reset_reason_t shrew_reset_get_reason();
 
 void WS281Binit()
 {
+    int16_t override_pixelCount = shrewdevhook_getPixelCount();
+
+    if (override_pixelCount > 0) {
+        pixelCount = override_pixelCount;
+    }
+
     if (OPT_WS2812_IS_GRB)
     {
 #if defined(PLATFORM_ESP32)
@@ -122,11 +130,20 @@ void WS281BsetLED(uint32_t color)
         striprgb->Show();
     }
 }
-#endif
 
-typedef struct {
-  uint8_t h, s, v;
-} blinkyColor_t;
+void WS281BshowLEDs()
+{
+    if (OPT_WS2812_IS_GRB)
+    {
+        stripgrb->Show();
+    }
+    else
+    {
+        striprgb->Show();
+    }
+}
+
+#endif
 
 uint32_t HsvToRgb(const blinkyColor_t &blinkyColor)
 {
@@ -535,6 +552,7 @@ device_t RGB_device = {
 void shrew_updateRgbLed()
 {
     static uint32_t last_time = 0;
+    static uint32_t last_time_xms = 0;
     static uint32_t accum = 0;
     static uint16_t prev[CRSF_NUM_CHANNELS];
 
@@ -550,6 +568,21 @@ void shrew_updateRgbLed()
     }
 
     uint32_t now = millis();
+
+    static uint32_t custom_tick_period = 0;
+    if (custom_tick_period == 0) { // have not been read
+        custom_tick_period = shrewdevhook_getLedTickPeriod();
+        if (custom_tick_period == 0) {
+            custom_tick_period = 1; // never read it again
+        }
+    }
+    if (custom_tick_period >= 10 && (now - last_time_xms) >= custom_tick_period) {
+        last_time_xms = now;
+        if (shrewdevhook_onLedTick()) {
+            return;
+        }
+    }
+
     if ((now - last_time) < 100) {
         return;
     }
@@ -598,6 +631,14 @@ int shrew_bootStatus()
     static uint8_t show_cnt = 0;
     static uint8_t prev_idx = 0;
     static auto reason = shrew_reset_get_reason();
+
+    uint8_t hook_ret = shrewdevhook_onLedBootStatusTick();
+    if (hook_ret != 0) {
+        if (hook_ret == 1) {
+            blinkyState = NORMAL;
+        }
+        return 50;
+    }
 
     if (now == 0) {
         DBGLN("1st call of shrew_bootStatus, reason %d", reason);

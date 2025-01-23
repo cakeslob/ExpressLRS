@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Arduino.h>
 
 class RgbColor
@@ -10,6 +12,10 @@ public:
     uint8_t G;
     uint8_t B;
 };
+
+typedef struct {
+  uint8_t h, s, v;
+} blinkyColor_t;
 
 class ESP32S3LedDriver
 {
