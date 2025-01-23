@@ -1,7 +1,11 @@
 #include "Annihilation_LED.h"
-#include "ShrewDevHook.h"
-//#include "common.h"
-//#include "esp32rgb.h"
+//#include "ShrewDevHook.h"
+#include "common.h"
+#include "esp32rgb.h"
+extern void WS281BsetLED(int index, uint32_t color);
+extern void WS281BsetLED(uint32_t color);
+extern void WS281BshowLEDs(void);
+extern uint32_t HsvToRgb(const blinkyColor_t &blinkyColor);
 
 #define IDLE_ANIMATION_STYLE 0
 #define SECONDARY_ANIMATION_STYLE 0
