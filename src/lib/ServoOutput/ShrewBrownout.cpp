@@ -18,10 +18,12 @@ static volatile uint8_t shrew_brownoutGoodCnt = 0;
 static volatile RTC_DATA_ATTR uint32_t shrew_brownout_indicator = 0; // use RTC to indicate if a reset was from a brownout and not software triggered
 static uint32_t shrew_reset_reason = 0xDEADBEEF;
 
+#if 0
 static void IRAM_ATTR brownout_handler(void *arg) {
     shrew_hasBrownedOut = millis();
     shrew_brownoutGoodCnt = 0;
 }
+#endif
 
 void shrew_brownoutSetup() {
     #ifdef BUILD_SHREW_BROWNOUT_DISABLE
@@ -44,7 +46,6 @@ void shrewbo_onDataHook() {
             shrew_brownoutGoodCnt = 0;
         }
     }
-    
 }
 
 void shrew_brownoutReset() {

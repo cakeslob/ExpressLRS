@@ -555,6 +555,7 @@ void shrew_updateRgbLed()
     static uint32_t last_time_xms = 0;
     static uint32_t accum = 0;
     static uint16_t prev[CRSF_NUM_CHANNELS];
+    static bool disable_default_animation = false;
 
     if (blinkyState == STARTUP && connectionState < FAILURE_STATES) {
         return;
@@ -579,11 +580,15 @@ void shrew_updateRgbLed()
     if (custom_tick_period >= 10 && (now - last_time_xms) >= custom_tick_period) {
         last_time_xms = now;
         if (shrewdevhook_onLedTick()) {
+            disable_default_animation = true;
             return;
+        }
+        else {
+            disable_default_animation = false;
         }
     }
 
-    if ((now - last_time) < 100) {
+    if ((now - last_time) < 100 || disable_default_animation) {
         return;
     }
     last_time = now;

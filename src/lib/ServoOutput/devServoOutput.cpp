@@ -54,6 +54,7 @@ void ICACHE_RAM_ATTR servoNewChannelsAvailable()
     newChannelsAvailable = true;
     shrewbo_onDataHook();
     shrewdevhook_onNewData();
+    shrew_mix();
 }
 
 uint16_t servoOutputModeToFrequency(eServoOutputMode mode)
@@ -203,7 +204,6 @@ static void servosUpdate(unsigned long now)
             dshotArmOnConnect = false;
         }
 
-        shrew_mix();
         shrewdevhook_preServoUpdate(now);
 
         #if defined(BUILD_SHREW_RGBLED) && defined(PLATFORM_ESP32)
