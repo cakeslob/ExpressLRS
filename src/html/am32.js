@@ -1576,7 +1576,7 @@ function register_test_params()
                 testesc_idleval = parseInt(getEleById("txt_servoneutral").value);
             }
             else {
-                testesc_idleval = parseInt(getEleById("txt_servolowthresh").value);;
+                testesc_idleval = parseInt(getEleById("txt_servolowthresh").value);
             }
         }
     }
