@@ -37,7 +37,7 @@ void shrew_brownoutSetup() {
     shrew_hasBrownedOut = 0;
 }
 
-void shrewbo_onDataHook() {
+void ICACHE_RAM_ATTR shrewbo_onDataHook() {
     if (shrew_hasBrownedOut > 1) {
         // if we get a few good packets then we can say the operation is sketchy but good enough
         shrew_brownoutGoodCnt++;

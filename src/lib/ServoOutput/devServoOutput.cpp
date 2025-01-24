@@ -48,13 +48,13 @@ extern volatile uint32_t shrew_hasBrownedOut;
 #endif
 
 extern void shrew_mix();
+extern uint32_t MixedChannelData[CRSF_NUM_CHANNELS];
 
 void ICACHE_RAM_ATTR servoNewChannelsAvailable()
 {
     newChannelsAvailable = true;
     shrewbo_onDataHook();
     shrewdevhook_onNewData();
-    shrew_mix();
 }
 
 uint16_t servoOutputModeToFrequency(eServoOutputMode mode)
@@ -204,6 +204,8 @@ static void servosUpdate(unsigned long now)
             dshotArmOnConnect = false;
         }
 
+        shrew_mix();
+
         shrewdevhook_preServoUpdate(now);
 
         #if defined(BUILD_SHREW_RGBLED) && defined(PLATFORM_ESP32)
@@ -220,7 +222,7 @@ static void servosUpdate(unsigned long now)
         for (int ch = 0 ; ch < GPIO_PIN_PWM_OUTPUTS_COUNT ; ++ch)
         {
             const rx_config_pwm_t *chConfig = config.GetPwmChannel(ch);
-            const unsigned crsfVal = ChannelData[chConfig->val.inputChannel];
+            const unsigned crsfVal = MixedChannelData[chConfig->val.inputChannel];
             // crsfVal might 0 if this is a switch channel, and it has not been
             // received yet. Delay initializing the servo until the channel is valid
             if (crsfVal == 0)
