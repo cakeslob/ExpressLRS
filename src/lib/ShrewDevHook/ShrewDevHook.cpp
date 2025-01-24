@@ -60,7 +60,9 @@ uint8_t shrewdevhook_onLedBootStatusTick(void)
 }
 
 // called from event "servoNewChannelsAvailable", which happens when a new packet arrives from the transmitter
-void shrewdevhook_onNewData(void)
+// do not use this function unless it is really important
+// because it is running in interrupt context and is stored in RAM
+void ICACHE_RAM_ATTR shrewdevhook_onNewData(void)
 {
 
 }

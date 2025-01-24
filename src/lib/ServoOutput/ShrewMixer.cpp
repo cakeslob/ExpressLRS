@@ -2,6 +2,10 @@
 #include "options.h"
 #include "config.h"
 #include "crsf_protocol.h"
+#include <stdlib.h>
+#include <string.h>
+
+uint32_t MixedChannelData[CRSF_NUM_CHANNELS];
 
 void shrew_mix()
 {
@@ -12,6 +16,7 @@ void shrew_mix()
     uint32_t ch_right = (mixer_settings & 0xF000) >> 12;
     uint32_t rev_left  = (mixer_settings & 0x10000);
     uint32_t rev_right = (mixer_settings & 0x20000);
+    memcpy(MixedChannelData, ChannelData, sizeof(uint32_t) * CRSF_NUM_CHANNELS);
     if ((ch_thr == 0 && ch_str == 0) || (ch_left == 0 && ch_right == 0)) {
         return;
     }
@@ -28,9 +33,9 @@ void shrew_mix()
     val_left   = val_left  > CRSF_CHANNEL_VALUE_MAX ? CRSF_CHANNEL_VALUE_MAX : (val_left  < CRSF_CHANNEL_VALUE_MIN ? CRSF_CHANNEL_VALUE_MIN : val_left);
     val_right  = val_right > CRSF_CHANNEL_VALUE_MAX ? CRSF_CHANNEL_VALUE_MAX : (val_right < CRSF_CHANNEL_VALUE_MIN ? CRSF_CHANNEL_VALUE_MIN : val_right);
     if (ch_left != 0) {
-        ChannelData[ch_left  - 1] = val_left;
+        MixedChannelData[ch_left  - 1] = val_left;
     }
     if (ch_right != 0) {
-        ChannelData[ch_right - 1] = val_right;
+        MixedChannelData[ch_right - 1] = val_right;
     }
 }
