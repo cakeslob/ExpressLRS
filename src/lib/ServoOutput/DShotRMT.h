@@ -87,6 +87,18 @@ typedef struct eRPM_packet_s {
 	uint8_t checksum : 4;
 } eRPM_packet_t;
 
+typedef enum extended_telem_type_e
+{
+	TELEM_TYPE_ERPM = 0x1, //due to how extended telemetry works, all odd numbers are this
+	TELEM_TYPE_TEMPRATURE = 0x2,
+	TELEM_TYPE_VOLTAGE = 0x4,
+	TELEM_TYPE_CURRENT = 0x6,
+	TELEM_TYPE_DEBUG_A = 0x8,
+	TELEM_TYPE_DEBUG_B = 0xA,
+	TELEM_TYPE_STRESS_LEVEL = 0xC,
+	TELEM_TYPE_STATUS = 0xE,
+} extended_telem_type_t;
+
 // ...all settings for the dshot mode
 typedef struct dshot_config_s {
 } dshot_config_t;
@@ -101,10 +113,19 @@ public:
 	void send_dshot_value(uint16_t throttle_value, telemetric_request_t telemetric_request = NO_TELEMETRIC);
 	void set_looping(bool x);
 
+	bool poll_rx(); // checks for telemetry pulses, returns true if message received
+	bool proc_rx(); // processes any collected telemetry packets, returns true if message received
+
+	// telemetry data
+	uint32_t telem_erpm, telem_temperature, telem_voltage, telem_current, telem_debug_a, telem_debug_b, telem_stress, telem_status;
+	uint32_t telem_timestamp = 0, telem_erpm_timestamp = 0;
+
 private:
 	gpio_num_t gpio_num;
 	rmt_channel_t rmt_channel;
 	rmt_item32_t dshot_tx_rmt_item[DSHOT_PACKET_LENGTH + 1];
+	uint16_t* dshot_rx_pulses;
+	uint16_t rx_itm_idx;
 	rmt_config_t rmt_cfg_cache;
 
 	dshot_mode_t mode = DSHOT_OFF;
@@ -121,4 +142,10 @@ private:
 
 	void output_rmt_data(const dshot_packet_t& dshot_packet);
 };
+
+extern "C" {
+uint32_t decode_eRPM_telemetry_value(uint16_t value);
+uint32_t erpmToRpm(uint16_t erpm, uint16_t motorPoleCount);
+}
+
 #endif

@@ -21,6 +21,8 @@ enum {
 static uint8_t ch_status[RMT_MAX_CHANNELS];
 static rmt_config_t* rmt_ch_cfg[RMT_MAX_CHANNELS]; // rmt_config_t contains both the channel number and the GPIO number, so it's nice to have a copy, these pointers point to the cached copy inside the class object
 static bool ch_is_bidir[RMT_MAX_CHANNELS];
+static uint16_t itm_cnt[RMT_MAX_CHANNELS];
+static RingbufHandle_t rx_ringbuf[RMT_MAX_CHANNELS];
 
 //ensures that the rx callback code is always in iram, which is essential for speed
 #define CONFIG_RMT_ISR_IRAM_SAFE 1
@@ -46,11 +48,37 @@ TEST_RMT_CALLBACK_ATTR static void tx_complete_cb(rmt_channel_t channel, void *a
 		};
 	gpio_ll_od_enable(GPIO_LL_GET_HW(GPIO_PORT_0), cfg->gpio_num);
 	rmt_config(cfg);
+	//rmt_set_pin(channel, RMT_MODE_RX, cfg->gpio_num);
 	rmt_rx_start(channel, true);
+	rmt_get_ringbuf_handle(channel, &(rx_ringbuf[channel]));
 	ch_status[channel] = CHSTS_RX;
+	itm_cnt[channel] = 0; // this signals a new start, can be read from the class object
 }
 
-}
+} // extern C
+
+// nibble mapping for GCR
+static const unsigned char GCR_encode[16] =
+{
+	0x19, 0x1B, 0x12, 0x13,
+	0x1D, 0x15, 0x16, 0x17,
+	0x1A, 0x09, 0x0A, 0x0B,
+	0x1E, 0x0D, 0x0E, 0x0F
+};
+
+// 5 bits > 4 bits (0xff => invalid)
+static const unsigned char GCR_decode[32] =
+{
+	0xFF, 0xFF, 0xFF, 0xFF, // 0 - 3
+	0xFF, 0xFF, 0xFF, 0xFF, // 4 - 7
+	0xFF, 9, 10, 11, // 8 - 11
+	0xFF, 13, 14, 15, // 12 - 15
+
+	0xFF, 0xFF, 2, 3, // 16 - 19
+	0xFF, 5, 6, 7, // 20 - 23
+	0xFF, 0, 8, 1, // 24 - 27
+	0xFF, 4, 12, 0xFF, // 28 - 31
+};
 
 DShotRMT::DShotRMT(gpio_num_t gpio, rmt_channel_t rmtChannel) : gpio_num(gpio), rmt_channel(rmtChannel) {
 	// ...create clean packet
@@ -256,5 +284,190 @@ void DShotRMT::output_rmt_data(const dshot_packet_t& dshot_packet) {
 
 	rmt_tx_start(rmt_channel, true);
 	ch_status[rmt_channel] = CHSTS_TX;
+	itm_cnt[rmt_channel] = 0;
+
+	if (bidirectional && dshot_rx_pulses == NULL) {
+		dshot_rx_pulses = (uint16_t*)malloc(DSHOT_PACKET_LENGTH * 2 * sizeof(uint16_t));
+		if (dshot_rx_pulses == NULL) {
+			bidirectional = false;
+			ch_is_bidir[rmt_channel] = false;
+		}
+	}
 }
+
+bool DShotRMT::poll_rx() {
+	if (ch_status[rmt_channel] != CHSTS_RX || dshot_rx_pulses == NULL) {
+		return false;
+	}
+	rmt_item32_t *items = NULL;
+	size_t length = 0;
+	items = (rmt_item32_t *) xRingbufferReceive(&(rx_ringbuf[rmt_channel]), &length, 0);
+	if (items) {
+		length /= 4; // one RMT = 4 Bytes
+		if (itm_cnt[rmt_channel] == 0) {
+			rx_itm_idx = 0;
+		}
+		for (int i = 0; i < length && rx_itm_idx < DSHOT_PACKET_LENGTH * 2; i++) {
+			rmt_item32_t* item = &(items[i]);
+			if (rx_itm_idx == 0 && item->level0 != 0) {
+				dshot_rx_pulses[0] = item->duration1;
+				rx_itm_idx += 1;
+			}
+			else {
+				dshot_rx_pulses[rx_itm_idx]     = item->duration0;
+				dshot_rx_pulses[rx_itm_idx + 1] = item->duration1;
+				rx_itm_idx += 2;
+			}
+		}
+		itm_cnt[rmt_channel] = rx_itm_idx;
+	}
+	if (rx_itm_idx >= 32) {
+		return proc_rx();
+	}
+	return false;
+}
+
+bool DShotRMT::proc_rx()
+{
+	if (rx_itm_idx < 32) {
+		return false;
+	}
+
+	unsigned short bitTime = ticks_one_high;
+	unsigned short bitCount0 = 0;
+	unsigned short bitCount1 = 0;
+	unsigned short bitShiftLevel = 20; // 21 bits, including 0
+	unsigned int assembledFrame = 0;
+
+	int i, j;
+
+	for (i = 0; i < rx_itm_idx; i += 2)
+	{
+		bitCount0 = dshot_rx_pulses[i    ] / bitTime + (dshot_rx_pulses[i    ] % bitTime > bitTime - 4);
+		bitCount1 = dshot_rx_pulses[i + 1] / bitTime + (dshot_rx_pulses[i + 1] % bitTime > bitTime - 4);
+		bitShiftLevel -= bitCount0;
+		for (j = 0; j < bitCount1; ++j)
+		{
+			assembledFrame |= 1 << bitShiftLevel;
+			--bitShiftLevel;
+		}
+	}
+	for (i = bitShiftLevel; i >= 0; --i)
+	{
+		assembledFrame |= 1 << i;
+	}
+	assembledFrame = (assembledFrame ^ (assembledFrame >> 1));
+	unsigned char nibble = 0;
+	unsigned char fiveBitSubset = 0;
+	unsigned int decodedFrame = 0;
+	//y = &decodedFrame;
+	//remove GCR encoding
+	for (i = 0; i < 4; ++i)
+	{
+		//bitmask out the encoded quintuple
+		fiveBitSubset = (assembledFrame >> (i * 5)) & 0b11111; //shift over in sets of 5
+		//use a lookup table to get the corresponding nibble
+		nibble = GCR_decode[fiveBitSubset];
+		//append nibble to the frame
+		decodedFrame |= nibble << (i * 4);
+	}
+
+	//mask out components of the frame
+	uint16_t frameData = (decodedFrame >> 4) & (0b111111111111);
+	uint8_t crc = decodedFrame & (0b1111);
+	uint8_t alsocrc = (~(frameData ^ (frameData >> 4) ^ (frameData >> 8))) & 0x0F;
+
+	//stop processing if the checksum is invalid
+	if (crc != alsocrc)
+	{
+		//error_packets += 1; //for now, the only error packets we will track are the ones where the checksum fails
+		//we don't update the RPM pointer that was passed to us
+		//return ERR_CHECKSUM_FAIL;
+		return false;
+	}
+
+	bool ret = true;
+
+	// determine packet type
+	if (frameData & 0b000100000000 || (~frameData & 0b111100000000) == 0b111100000000) //is erpm packet (4th bit is 1 or all four bits are 0)
+	{
+		telem_erpm = decode_eRPM_telemetry_value(frameData);
+		telem_erpm_timestamp = telem_timestamp = millis();
+	}
+	else // is extended telemetry packet
+	{
+		extended_telem_type_t packet_type = (extended_telem_type_t)((frameData >> 8) & 0b1111);
+		uint16_t value = (frameData & 0b11111111);
+		switch (packet_type)
+		{
+			case TELEM_TYPE_ERPM:
+				telem_erpm = decode_eRPM_telemetry_value(frameData);
+				telem_timestamp = millis();
+				break;
+			case TELEM_TYPE_TEMPRATURE:
+				telem_temperature = value;
+				telem_timestamp = millis();
+				break;
+			case TELEM_TYPE_VOLTAGE:
+				telem_voltage = value;
+				telem_timestamp = millis();
+				break;
+			case TELEM_TYPE_CURRENT:
+				telem_current = value;
+				telem_timestamp = millis();
+				break;
+			case TELEM_TYPE_DEBUG_A:
+				telem_debug_a = value;
+				telem_timestamp = millis();
+				break;
+			case TELEM_TYPE_DEBUG_B:
+				telem_debug_b = value;
+				telem_timestamp = millis();
+				break;
+			case TELEM_TYPE_STRESS_LEVEL:
+				telem_stress = value;
+				telem_timestamp = millis();
+				break;
+			case TELEM_TYPE_STATUS:
+				telem_status = value;
+				telem_timestamp = millis();
+				break;
+			default:
+				ret = false;
+				break;
+		}
+	}
+	return ret;
+}
+
+extern "C" {
+
+uint32_t decode_eRPM_telemetry_value(uint16_t value)
+{
+    // eRPM range
+    if (value == 0x0fff) {
+        return 0;
+    }
+
+    // Convert value to 16 bit from the GCR telemetry format (eeem mmmm mmmm)
+    value = (value & 0x01ff) << ((value & 0xfe00) >> 9);
+    if (!value) {
+        return 0;
+    }
+
+    // Convert period to erpm * 100
+    return (1000000 * 60 / 100 + value / 2) / value;
+}
+
+
+// stolen from betaflight (src/main/drivers/dshot.c)
+// Used with serial esc telem as well as dshot telem
+uint32_t erpmToRpm(uint16_t erpm, uint16_t motorPoleCount)
+{
+    //  rpm = (erpm * 100) / (motorConfig()->motorPoleCount / 2)
+    return (erpm * 200) / motorPoleCount;
+}
+
+} // extern C
+
 #endif
