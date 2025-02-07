@@ -19,6 +19,24 @@
                 "min_version": "3.4.0",
                 "platform": "esp32",
                 "firmware": "Unified_Shrew_2400_RX"
+            },
+            "shrewforxr2": {
+                "product_name": "Shrew for XR2",
+                "lua_name": "Shrew-for-XR2",
+                "layout_file": "ShrewForXR2.json",
+                "upload_methods": ["uart", "wifi"],
+                "min_version": "3.5.0",
+                "platform": "esp32",
+                "firmware": "Unified_ShrewForXR2_2400_RX"
+            },
+            "shrewforxr2crsf": {
+                "product_name": "Shrew for XR2 (CRSF)",
+                "lua_name": "Shrew-for-XR2-CRSF",
+                "layout_file": "ShrewForXR2_CRSF.json",
+                "upload_methods": ["uart", "wifi"],
+                "min_version": "3.5.0",
+                "platform": "esp32",
+                "firmware": "Unified_ShrewForXR2_2400_RX"
             }
         },
         "tx_2400": {
