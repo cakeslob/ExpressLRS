@@ -325,7 +325,7 @@ static void initialize()
                 pin = UNDEF_PIN;
             }
             else {
-                mode = som50Hz;
+                mode = som400Hz;
                 DBGLN("Init DShot failed: gpio: %u, ch: %d, fallback to PWM", gpio, ch);
                 rx_config_pwm_t * chcfg = (rx_config_pwm_t *)config.GetPwmChannel(ch);
                 chcfg->val.mode = mode;
