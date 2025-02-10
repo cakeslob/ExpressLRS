@@ -17,8 +17,12 @@ static uint16_t pwmChannelValues[PWM_MAX_CHANNELS];
 #if (defined(PLATFORM_ESP32))
 extern bool shrew_isActive();
 
-static DShotRMT *dshotInstances[PWM_MAX_CHANNELS] = {nullptr};
+#if defined(PLATFORM_ESP32_C3)
+const uint8_t RMT_MAX_CHANNELS = 2;
+#else
 const uint8_t RMT_MAX_CHANNELS = 8;
+#endif
+static DShotRMT *dshotInstances[PWM_MAX_CHANNELS] = {nullptr};
 
 #define DSHOT_ENABLE_AUTO_ARM     1
 
@@ -318,8 +322,14 @@ static void initialize()
                 pinMode(pin, OUTPUT);
                 dshotInstances[ch] = new DShotRMT(gpio, rmtChannel); // Initialize the DShotRMT instance
                 rmtCH++;
+                pin = UNDEF_PIN;
             }
-            pin = UNDEF_PIN;
+            else {
+                mode = som50Hz;
+                DBGLN("Init DShot failed: gpio: %u, ch: %d, fallback to PWM", gpio, ch);
+                rx_config_pwm_t * chcfg = (rx_config_pwm_t *)config.GetPwmChannel(ch);
+                chcfg->val.mode = mode;
+            }
         }
 #endif
         servoPins[ch] = pin;
