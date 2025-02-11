@@ -88,6 +88,8 @@ typedef struct eRPM_packet_s {
 typedef struct dshot_config_s {
 } dshot_config_t;
 
+#if (!defined(PLATFORM_ESP32_C3))
+
 class DShotRMT {
 public:
 	DShotRMT(gpio_num_t gpio, rmt_channel_t rmtChannel);
@@ -117,4 +119,7 @@ private:
 
 	void output_rmt_data(const dshot_packet_t& dshot_packet);
 };
+#else
+#include "DShotRMT_C3.h"
+#endif
 #endif

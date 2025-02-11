@@ -17,11 +17,7 @@ static uint16_t pwmChannelValues[PWM_MAX_CHANNELS];
 #if (defined(PLATFORM_ESP32))
 extern bool shrew_isActive();
 
-#if defined(PLATFORM_ESP32_C3)
-const uint8_t RMT_MAX_CHANNELS = 2;
-#else
 const uint8_t RMT_MAX_CHANNELS = 8;
-#endif
 static DShotRMT *dshotInstances[PWM_MAX_CHANNELS] = {nullptr};
 
 #define DSHOT_ENABLE_AUTO_ARM     1
@@ -186,6 +182,11 @@ static void servosFailsafe()
 static void servosUpdate(unsigned long now)
 {
     static uint32_t lastUpdate;
+
+    #if defined(PLATFORM_ESP32_C3)
+    dshotc3_poll();
+    #endif
+
     if (newChannelsAvailable)
     {
         newChannelsAvailable = false;
@@ -314,10 +315,10 @@ static void initialize()
 #if defined(PLATFORM_ESP32)
         else if (mode == somDShot || mode == somDShot3D)
         {
+            auto gpio = (gpio_num_t)pin;
+            auto rmtChannel = (rmt_channel_t)rmtCH;
             if (rmtCH < RMT_MAX_CHANNELS)
             {
-                auto gpio = (gpio_num_t)pin;
-                auto rmtChannel = (rmt_channel_t)rmtCH;
                 DBGLN("Initializing DShot: gpio: %u, ch: %d, rmtChannel: %u", gpio, ch, rmtChannel);
                 pinMode(pin, OUTPUT);
                 dshotInstances[ch] = new DShotRMT(gpio, rmtChannel); // Initialize the DShotRMT instance
