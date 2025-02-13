@@ -22,6 +22,7 @@ class DShotRMT {
         void* next_node = NULL; // linked list next node
     
         dshot_packet_t next_packet; // stores the data to be sent when the turn comes
+        uint32_t last_send_time = 0;
     
         dshot_mode_t mode = DSHOT_OFF;
         bool bidirectional = false;

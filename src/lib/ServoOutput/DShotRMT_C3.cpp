@@ -244,8 +244,8 @@ uint16_t DShotRMT::prepare_rmt_data(const dshot_packet_t& dshot_packet) {
 
 // ...finally output using ESP32 RMT
 void DShotRMT::output_rmt_data() {
-	set_pin();
 	rmt_tx_stop(rmt_channel);
+	set_pin();
 	encode_dshot_to_rmt(prepare_rmt_data(next_packet));
 	rmt_fill_tx_items(rmt_channel, dshot_tx_rmt_item, DSHOT_PACKET_LENGTH, 0);
 	rmt_tx_start(rmt_channel, true);
@@ -257,32 +257,14 @@ void DShotRMT::set_pin() {
 		// rmt_set_pin and rmt_config only seems to add pins to the RMT mux
 		// they do not remove pins
 		// so we must manually remove the previous pin from the mux
-		#if 1 // the lazy way that's easy to write
 		pinMode(prev_pin, INPUT);
-		digitalWrite(prev_pin, LOW);
-		pinMode(prev_pin, OUTPUT);
-		#else // the not lazy way
-		gpio_matrix_in(gpio_num, RMT_SIG_IN0_IDX, false);
-		gpio_config_t io_conf;
-		io_conf.intr_type = GPIO_INTR_DISABLE;
-		io_conf.pin_bit_mask = (1ULL << gpio_num);
-		io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-		io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-		gpio_config(&io_conf);
-		if (bidirectional) {
-			io_conf.mode = GPIO_MODE_INPUT;
-			io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
-			gpio_config(&io_conf);
+		if (bidirectional == false) {
+			digitalWrite(prev_pin, LOW);
+			pinMode(prev_pin, OUTPUT);
 		}
-		else {
-			io_conf.mode = GPIO_MODE_OUTPUT;
-			gpio_config(&io_conf);
-			gpio_set_level(gpio_num, 0);
-		}
-		#endif
 	}
 	pinMode(gpio_num, OUTPUT);
-	rmt_set_pin(rmt_channel, RMT_MODE_TX, gpio_num);
+	rmt_set_gpio(rmt_channel, RMT_MODE_TX, gpio_num, false);
 	rmt_set_idle_level(rmt_channel, bidirectional ? false : true, bidirectional ? RMT_IDLE_LEVEL_HIGH : RMT_IDLE_LEVEL_LOW);
 	prev_pin = gpio_num;
 }
@@ -293,13 +275,23 @@ void DShotRMT::poll() {
 	}
 	static uint32_t last_time_us = 0;
 	uint32_t now_us = micros();
-	if ((now_us - last_time_us) < 150) { // make sure enough time has passed (RMT driver does not indicate end of transmission at the right time)
+	if ((now_us - last_time_us) < 500) {
+		// make sure enough time has passed (RMT driver does not indicate end of transmission at the right time)
+		// the number 500 is found by using a logic analyzer to see how often a dshot packet gets cut off
+		return;
+	}
+	rmt_channel_status_result_t status;
+	if (rmt_get_channel_status(&status) != ESP_OK || status.status[rmt_channel] != RMT_CHANNEL_IDLE) {
+		// make sure RMT is actually idle
 		return;
 	}
 	DShotRMT* inst = cur_node;
 	cur_node = (DShotRMT*)inst->next_node; // cycle through linked list
-	if (inst != NULL && (inst->has_new_data || inst->looping)) { // only send if required
+	if (inst->has_new_data || //  send if required
+		(inst->looping && (now_us - inst->last_send_time) >= 2000) // limit looping speed
+		) {
 		inst->output_rmt_data(); // actually send the data, this will set the pin first, and clear the has_new_data flag
+		inst->last_send_time = now_us;
 		last_time_us = now_us;
 	}
 }
