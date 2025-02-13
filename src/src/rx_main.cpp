@@ -1088,14 +1088,16 @@ static void ICACHE_RAM_ATTR updateSwitchModePendingFromOta(uint8_t newSwitchMode
 static bool ICACHE_RAM_ATTR ProcessRfPacket_SYNC(uint32_t const now, OTA_Sync_s const * const otaSync)
 {
     // Verify the first byte of the binding ID, which should always match
-    if (otaSync->UID4 != UID[4])
+    if (otaSync->UID4 != UID[4]) {
         return false;
+    }
 
     // The third byte will be XORed with inverse of the ModelId if ModelMatch is on
     // Only require the first 18 bits of the UID to match to establish a connection
     // but the last 6 bits must modelmatch before sending any data to the FC
-    if ((otaSync->UID5 & ~MODELMATCH_MASK) != (UID[5] & ~MODELMATCH_MASK))
+    if ((otaSync->UID5 & ~MODELMATCH_MASK) != (UID[5] & ~MODELMATCH_MASK)) {
         return false;
+    }
 
     LastSyncPacket = now;
 #if defined(DEBUG_RX_SCOREBOARD)
@@ -1159,6 +1161,8 @@ static bool ICACHE_RAM_ATTR ProcessRfPacket_SYNC(uint32_t const now, OTA_Sync_s 
 
     return false;
 }
+
+extern bool ICACHE_RAM_ATTR ProcessRFPacket_v3(SX12xxDriverCommon::rx_status const status);
 
 bool ICACHE_RAM_ATTR ProcessRFPacket(SX12xxDriverCommon::rx_status const status)
 {
@@ -1273,7 +1277,13 @@ bool ICACHE_RAM_ATTR RXdoneISR(SX12xxDriverCommon::rx_status const status)
         return false; // Already received a packet, do not run ProcessRFPacket() again.
     }
 
-    if (ProcessRFPacket(status))
+    bool success = ProcessRFPacket(status);
+    // if failed to decode for any reason, try using a previous protocol version
+    if (!success) {
+        success = ProcessRFPacket_v3(status);
+    }
+
+    if (success)
     {
         didFHSS = HandleFHSS();
 

@@ -20,7 +20,7 @@ uint16_t OtaCrcInitializer;
 OtaSwitchMode_e OtaSwitchModeCurrent;
 
 // CRC
-static Crc2Byte ota_crc;
+extern Crc2Byte ota_crc;
 ValidatePacketCrc_t OtaValidatePacketCrc;
 GeneratePacketCrc_t OtaGeneratePacketCrc;
 
