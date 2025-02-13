@@ -334,7 +334,7 @@ void SetRFLinkRate(uint8_t index, bool bindMode) // Set speed of RF link
     Radio.Config(ModParams->bw, ModParams->sf, ModParams->cr, FHSSgetInitialFreq(),
                  ModParams->PreambleLen, invertIQ, ModParams->PayloadLength, 0
 #if defined(RADIO_SX128X)
-                 , uidMacSeedGet(), OtaCrcInitializer, (ModParams->radio_type == RADIO_TYPE_SX128x_FLRC)
+                 , !ota_isLegacy ? uidMacSeedGet() : uidMacSeedGet_v3(), !ota_isLegacy ? OtaCrcInitializer : OtaCrcInitializer_v3, (ModParams->radio_type == RADIO_TYPE_SX128x_FLRC)
 #endif
 #if defined(RADIO_LR1121)
                , ModParams->radio_type == RADIO_TYPE_LR1121_GFSK_900 || ModParams->radio_type == RADIO_TYPE_LR1121_GFSK_2G4, (uint8_t)UID[5], (uint8_t)UID[4]
@@ -370,6 +370,8 @@ void SetRFLinkRate(uint8_t index, bool bindMode) // Set speed of RF link
     ExpressLRS_currAirRate_RFperfParams = RFperf;
     ExpressLRS_nextAirRateIndex = index; // presumably we just handled this
     telemBurstValid = false;
+
+    ota_resetPktVersionCounters();
 }
 
 bool ICACHE_RAM_ATTR HandleFHSS()
@@ -1282,6 +1284,9 @@ bool ICACHE_RAM_ATTR RXdoneISR(SX12xxDriverCommon::rx_status const status)
     if (!success) {
         success = ProcessRFPacket_v3(status);
     }
+    else {
+        ota_cntNewVersionPkts();
+    }
 
     if (success)
     {
@@ -1828,7 +1833,7 @@ static void ExitBindingMode()
     config.Commit();
 
     OtaUpdateCrcInitFromUid();
-    FHSSrandomiseFHSSsequence(uidMacSeedGet());
+    FHSSrandomiseFHSSsequence(!ota_isLegacy ? uidMacSeedGet() : uidMacSeedGet_v3());
 
     webserverPreventAutoStart = true;
 
