@@ -1,327 +1,307 @@
 #if (defined(GPIO_PIN_PWM_OUTPUTS) && defined(PLATFORM_ESP32) && defined(PLATFORM_ESP32_C3))
 
+//
+// Name:		DShotRMT.cpp
+// Created: 	20.03.2021 00:49:15
+// Author:  	derdoktor667
+//
+
+#include "DShotRMT.h"
+#include "common.h"
 #include "config.h"
 #include "logging.h"
-#include "DShotRMT.h"
 
-#define DSHOTC3_WAIT_US 200
+static const rmt_channel_t rmt_channel = (rmt_channel_t)0; // instead of using many RMT channels, we are using just one, channel 0 is capable of transmitting on both ESP32-classic and ESP32-C3 so we pick 0
 
-static rmt_channel_t rmt_channel;
+static DShotRMT *head_node = NULL, *cur_node = NULL, *tail_node; // linked list of all initailized RMT instances
 
-static bool dshotc3_has_inited = false;
-static bool dshotc3_has_deinited = false;
+static int prev_pin = -1; // we need to remember what the previous GPIO pin used was to remove it from the RMT (setting a new RMT pin does not unset the previous pin)
 
-static dshot_mode_t mode;
-static rmt_config_t rmt_cfg_cache;
+// latch status to indicate if the RMT driver has been installed or uninstalled, so we don't do it twice 
+static bool has_inited = false;
+static bool has_deinited = false;
 
-static uint16_t ticks_zero_high = 0;
-static uint16_t ticks_zero_low = 0;
-static uint16_t ticks_one_high = 0;
-static uint16_t ticks_one_low = 0;
-static uint16_t ticks_per_bit;
+static rmt_item32_t dshot_tx_rmt_item[DSHOT_PACKET_LENGTH + 1];
 
-static DShotRMT* instances[PWM_MAX_CHANNELS];
-static int inst_cnt = 0;
-static int round_robin_idx = 0;
-static int prev_pin = -1;
-
-uint16_t dshotc3_calc_dshot_chksum(const dshot_packet_t& dshot_packet);
-uint16_t dshotc3_prepare_rmt_data(const dshot_packet_t& dshot_packet);
-static void dshotc3_output_rmt_data(int inst_idx);
-
-bool dshotc3_init(dshot_mode_t dshot_mode, int pin_num)
-{
-    if (dshotc3_has_inited) {
-        return true;
-    }
-
-    mode = dshot_mode;
-
-    switch (mode) {
-        case DSHOT150:
-            ticks_per_bit = 64; // ...Bit Period Time 6.67 us
-            ticks_zero_high = 24; // ...zero time 2.50 us
-            ticks_one_high = 48; // ...one time 5.00 us
-            break;
-
-        case DSHOT300:
-            ticks_per_bit = 32; // ...Bit Period Time 3.33 us
-            ticks_zero_high = 12; // ...zero time 1.25 us
-            ticks_one_high = 24; // ...one time 2.50 us
-            break;
-
-        case DSHOT600:
-            ticks_per_bit = 16; // ...Bit Period Time 1.67 us
-            ticks_zero_high = 6; // ...zero time 0.625 us
-            ticks_one_high = 12; // ...one time 1.25 us
-            break;
-
-        case DSHOT1200:
-            ticks_per_bit = 8; // ...Bit Period Time 0.83 us
-            ticks_zero_high = 3; // ...zero time 0.313 us
-            ticks_one_high = 6; // ...one time 0.625 us
-            break;
-
-        // ...because having a default is "good style"
-        default:
-            ticks_per_bit = 0; // ...Bit Period Time endless
-            ticks_zero_high = 0; // ...no bits, no time
-            ticks_one_high = 0; // ......no bits, no time
-            break;
-    }
-
-    // ...calc low signal timing
-    ticks_zero_low = (ticks_per_bit - ticks_zero_high);
-    ticks_one_low = (ticks_per_bit - ticks_one_high);
-
-    rmt_config_t dshot_tx_rmt_config = {
-        .rmt_mode = RMT_MODE_TX,
-        .channel = rmt_channel,
-        .gpio_num = (gpio_num_t)pin_num,
-        .clk_div = DSHOT_CLK_DIVIDER,
-        .mem_block_num = uint8_t(RMT_CHANNEL_MAX - uint8_t(rmt_channel)),
-        .tx_config = {
-            .idle_level = RMT_IDLE_LEVEL_LOW,
-            .carrier_en = false,
-            .loop_en = false,
-            .idle_output_en = true,
-        },
-    };
-    memcpy(&rmt_cfg_cache, &dshot_tx_rmt_config, sizeof(rmt_config_t));
-
-    // ...setup selected dshot mode
-    rmt_config(&dshot_tx_rmt_config);
-    // ...essential step, return the result
-    int ret = rmt_driver_install(dshot_tx_rmt_config.channel, 0, 0);
-
-    if (ret == ESP_OK) {
-        #ifdef DSHOTC3_DEBUG_INIT
-        DBGLN("dshotc3 init %d", rmt_channel);
-        #endif
-        dshotc3_has_inited = true;
-        dshotc3_has_deinited = false;
-    }
-    else {
-        DBGLN("dshotc3 init failed ch %d ret %d", rmt_channel, ret);
-    }
-
-    return (ret == ESP_OK);
-}
-
-void dshotc3_deinit()
-{
-    if (dshotc3_has_deinited) {
-        return;
-    }
-    #ifdef DSHOTC3_DEBUG_INIT
-    DBGLN("dshotc3_deinit");
-    #endif
-    round_robin_idx = 0;
-    rmt_tx_stop(rmt_channel);
-    rmt_driver_uninstall(rmt_channel);
-    dshotc3_has_deinited = true;
-    dshotc3_has_inited = false;
-}
-
-DShotRMT::DShotRMT(gpio_num_t gpio, rmt_channel_t rmtChannel) : gpio_num(gpio), my_idx(rmtChannel) {
-    // ...create clean packet
-    encode_dshot_to_rmt(DSHOT_NULL_PACKET);
+DShotRMT::DShotRMT(gpio_num_t gpio, int idx) : gpio_num(gpio), my_idx(idx) {
 }
 
 DShotRMT::~DShotRMT() {
-    dshotc3_deinit();
-}
-
-void DShotRMT::set_pin() {
-    #ifdef DSHOTC3_DEBUG_PINSWITCH
-    DBGLN("dshotc3 set_pin c %d p %d", rmt_channel, gpio_num);
-    #endif
-    rmt_cfg_cache.gpio_num = gpio_num;
-    rmt_tx_stop(rmt_channel);
-    if (prev_pin >= 0) {
-        pinMode(prev_pin, INPUT);
-        digitalWrite(prev_pin, LOW);
-        pinMode(prev_pin, OUTPUT);
-        // this code looks weird, but it's because calling rmt_set_pin seems to add the GPIO to a list of pins connected to the RMT
-        // so multiple pins are simultaneously outputting RMT data
-        // I've discovered by setting the pin to input and then output again, the pin's mapping resets as expected
-    }
-    pinMode(gpio_num, OUTPUT);
-    rmt_set_pin(rmt_channel, RMT_MODE_TX, gpio_num);
-    prev_pin = gpio_num;
+	if (has_deinited) {
+		// only allow uninstall once, not important but prevents errors over the debug log
+		return;
+	}
+	rmt_tx_stop(rmt_channel);
+	rmt_driver_uninstall(rmt_channel);
+	has_deinited = true;
+	head_node = NULL; // this isn't proper but all the instances are deleted at once anyways
+	cur_node = NULL;
 }
 
 bool DShotRMT::begin(dshot_mode_t dshot_mode, bool is_bidirectional) {
-    instances[my_idx] = this;
-    if (my_idx >= inst_cnt) {
-        inst_cnt = my_idx + 1;
-        #ifdef DSHOTC3_DEBUG_INIT
-        DBGLN("dshotc3 new inst %d", inst_cnt);
-        #endif
-    }
-    if (dshotc3_has_inited == false) {
-        rmt_channel = (rmt_channel_t)my_idx;
-        #ifdef DSHOTC3_DEBUG_INIT
-        DBGLN("dshotc3 new inst %d init ch %d", inst_cnt, rmt_channel);
-        #endif
-        return dshotc3_init(dshot_mode, gpio_num);
-    }
-    return true;
+
+	if (head_node == NULL) {
+		// first one, initialize linked list
+		head_node = this;
+		tail_node = this;
+		cur_node = this;
+		this->next_node = (DShotRMT*)this;
+	}
+	else {
+		// not the first node, so insert it as the next node
+		tail_node->next_node = (DShotRMT*)this;
+		tail_node = this;
+		this->next_node = head_node;
+	}
+
+	mode = dshot_mode;
+	bidirectional = is_bidirectional;
+
+	switch (mode) {
+		case DSHOT150:
+			ticks_per_bit = 64; // ...Bit Period Time 6.67 us
+			ticks_zero_high = 24; // ...zero time 2.50 us
+			ticks_one_high = 48; // ...one time 5.00 us
+			break;
+
+		case DSHOT300:
+			ticks_per_bit = 32; // ...Bit Period Time 3.33 us
+			ticks_zero_high = 12; // ...zero time 1.25 us
+			ticks_one_high = 24; // ...one time 2.50 us
+			break;
+
+		case DSHOT600:
+			ticks_per_bit = 16; // ...Bit Period Time 1.67 us
+			ticks_zero_high = 6; // ...zero time 0.625 us
+			ticks_one_high = 12; // ...one time 1.25 us
+			break;
+
+		case DSHOT1200:
+			ticks_per_bit = 8; // ...Bit Period Time 0.83 us
+			ticks_zero_high = 3; // ...zero time 0.313 us
+			ticks_one_high = 6; // ...one time 0.625 us
+			break;
+
+		// ...because having a default is "good style"
+		default:
+			ticks_per_bit = 0; // ...Bit Period Time endless
+			ticks_zero_high = 0; // ...no bits, no time
+			ticks_one_high = 0; // ......no bits, no time
+			break;
+	}
+
+	// ...calc low signal timing
+	ticks_zero_low = (ticks_per_bit - ticks_zero_high);
+	ticks_one_low = (ticks_per_bit - ticks_one_high);
+
+	rmt_config_t dshot_tx_rmt_config = {
+		.rmt_mode = RMT_MODE_TX,
+		.channel = rmt_channel,
+		.gpio_num = gpio_num,
+		.clk_div = DSHOT_CLK_DIVIDER,
+		.mem_block_num = uint8_t(RMT_CHANNEL_MAX - uint8_t(rmt_channel)),
+		.tx_config = {
+			.idle_level = bidirectional ? RMT_IDLE_LEVEL_HIGH : RMT_IDLE_LEVEL_LOW,
+			.carrier_en = false,
+			.loop_en = true,
+			.idle_output_en = true,
+		},
+	};
+
+	// setup the RMT end marker
+	dshot_tx_rmt_item[DSHOT_PACKET_LENGTH-1].duration0 = 0;
+	dshot_tx_rmt_item[DSHOT_PACKET_LENGTH-1].level0 = HIGH;
+	dshot_tx_rmt_item[DSHOT_PACKET_LENGTH-1].duration1 = 0;
+	dshot_tx_rmt_item[DSHOT_PACKET_LENGTH-1].level1 = LOW;
+
+	if (has_inited) { // only do installation once
+		return true;
+	}
+
+	// ...setup selected dshot mode
+	rmt_config(&dshot_tx_rmt_config);
+
+	// ...essential step, return the result
+	esp_err_t ret = rmt_driver_install(dshot_tx_rmt_config.channel, 0, 0);
+
+	if (ret == ESP_OK) {
+		 // only do installation once
+		has_inited = true;
+		has_deinited = false;
+		encode_dshot_to_rmt(DSHOT_NULL_PACKET); // cache default timings
+		#ifdef DSHOTC3_DEBUG_INIT
+		DBGLN("Dshot RMT installed");
+		#endif
+		return true;
+	}
+	else {
+		DBGLN("Dshot RMT install failed - err %d", ret);
+		return false;
+	}
 }
 
 void DShotRMT::set_looping(bool x) {
-    rmt_cfg_cache.tx_config.loop_en = x;
-    rmt_cfg_cache.gpio_num = gpio_num;
-    rmt_config(&rmt_cfg_cache);
+	looping = x;
 }
 
 // ...the config part is done, now the calculating and sending part
 void DShotRMT::send_dshot_value(uint16_t throttle_value, telemetric_request_t telemetric_request) {
-    dshot_packet_t dshot_rmt_packet = { };
+	if (throttle_value == 0) {
+		next_packet.throttle_value = 0;
+	} else {
+		if (throttle_value < DSHOT_THROTTLE_MIN) {
+			throttle_value = DSHOT_THROTTLE_MIN;
+		}
 
-    // ...packets are the same for bidirectional mode
-    dshot_rmt_packet.throttle_value = throttle_value;
-    dshot_rmt_packet.telemetric_request = telemetric_request;
-    dshot_rmt_packet.checksum = dshotc3_calc_dshot_chksum(dshot_rmt_packet);
+		if (throttle_value > DSHOT_THROTTLE_MAX) {
+			throttle_value = DSHOT_THROTTLE_MAX;
+		}
 
-    encode_dshot_to_rmt(dshotc3_prepare_rmt_data(dshot_rmt_packet));
-    new_data = true;
-    dshotc3_poll();
+		// ...packets are the same for bidirectional mode
+		next_packet.throttle_value = throttle_value;
+	}
+	
+	next_packet.telemetric_request = telemetric_request;
+	next_packet.checksum = this->calc_dshot_chksum(next_packet);
+
+	has_new_data = true;
+	// only cache the next packet but don't need to encode it or send it yet, it'll be sent later
 }
 
 rmt_item32_t* DShotRMT::encode_dshot_to_rmt(uint16_t parsed_packet) {
-    rmt_item32_t* dshot_tx_rmt_item = this->get_queued_item();
+	dshot_tx_rmt_item[DSHOT_PAUSE_BIT].duration1 = 0;
+	dshot_tx_rmt_item[DSHOT_PAUSE_BIT].duration0 = 10000 - (16*ticks_per_bit) - 1;
 
-    // ...pause "bit" added to each frame
-    dshot_tx_rmt_item[DSHOT_PAUSE_BIT].level0 = LOW;
-    dshot_tx_rmt_item[DSHOT_PAUSE_BIT].level1 = LOW;
+	if (bidirectional) {
+		dshot_tx_rmt_item[DSHOT_PAUSE_BIT].level0 = HIGH; // ...pause "bit" added to each frame
+		dshot_tx_rmt_item[DSHOT_PAUSE_BIT].level1 = HIGH;
+		// ..."invert" the signal duration
+		for (int i = 0; i < DSHOT_PAUSE_BIT; i++, parsed_packet <<= 1) 	{
+			if (parsed_packet & 0b1000000000000000) {
+				// set one
+				dshot_tx_rmt_item[i].duration0 = ticks_one_low;
+				dshot_tx_rmt_item[i].duration1 = ticks_one_high;
+			}
+			else {
+				// set zero
+				dshot_tx_rmt_item[i].duration0 = ticks_zero_low;
+				dshot_tx_rmt_item[i].duration1 = ticks_zero_high;
+			}
 
-    dshot_tx_rmt_item[DSHOT_PAUSE_BIT].duration1 = 0;
-    dshot_tx_rmt_item[DSHOT_PAUSE_BIT].duration0 = 10000 - (16*ticks_per_bit) - 1;
+			dshot_tx_rmt_item[i].level0 = LOW;
+			dshot_tx_rmt_item[i].level1 = HIGH;
+		}
+	}
+	// ..."normal" DShot mode / "bidirectional" mode OFF
+	else {
+		dshot_tx_rmt_item[DSHOT_PAUSE_BIT].level0 = LOW;
+		dshot_tx_rmt_item[DSHOT_PAUSE_BIT].level1 = LOW;
+	
+		for (int i = 0; i < DSHOT_PAUSE_BIT; i++, parsed_packet <<= 1) 	{
+			if (parsed_packet & 0b1000000000000000) {
+				// set one
+				dshot_tx_rmt_item[i].duration0 = ticks_one_high;
+				dshot_tx_rmt_item[i].duration1 = ticks_one_low;
+			}
+			else {
+				// set zero
+				dshot_tx_rmt_item[i].duration0 = ticks_zero_high;
+				dshot_tx_rmt_item[i].duration1 = ticks_zero_low;
+			}
 
-    // setup the RMT end marker
-    dshot_tx_rmt_item[DSHOT_PACKET_LENGTH-1].duration0 = 0;
-    dshot_tx_rmt_item[DSHOT_PACKET_LENGTH-1].level0 = HIGH;
-    dshot_tx_rmt_item[DSHOT_PACKET_LENGTH-1].duration1 = 0;
-    dshot_tx_rmt_item[DSHOT_PACKET_LENGTH-1].level1 = LOW;
+			dshot_tx_rmt_item[i].level0 = HIGH;
+			dshot_tx_rmt_item[i].level1 = LOW;
+		}
+	}
 
-    for (int i = 0; i < DSHOT_PAUSE_BIT; i++, parsed_packet <<= 1) 	{
-        if (parsed_packet & 0b1000000000000000) {
-            // set one
-            dshot_tx_rmt_item[i].duration0 = ticks_one_high;
-            dshot_tx_rmt_item[i].duration1 = ticks_one_low;
-        }
-        else {
-            // set zero
-            dshot_tx_rmt_item[i].duration0 = ticks_zero_high;
-            dshot_tx_rmt_item[i].duration1 = ticks_zero_low;
-        }
-
-        dshot_tx_rmt_item[i].level0 = HIGH;
-        dshot_tx_rmt_item[i].level1 = LOW;
-    }
-
-    return dshot_tx_rmt_item;
+	return dshot_tx_rmt_item;
 }
 
 // ...just returns the checksum
 // DOES NOT APPEND CHECKSUM!!!
-uint16_t dshotc3_calc_dshot_chksum(const dshot_packet_t& dshot_packet) {
-    // ...same initial 12bit data for bidirectional or "normal" mode
-    uint16_t packet = (dshot_packet.throttle_value << 1) | dshot_packet.telemetric_request;
-    // ...calc the checksum "normal" mode
-    return (packet ^ (packet >> 4) ^ (packet >> 8)) & 0x0F;
+uint16_t DShotRMT::calc_dshot_chksum(const dshot_packet_t& dshot_packet) {
+	// ...same initial 12bit data for bidirectional or "normal" mode
+	uint16_t packet = (dshot_packet.throttle_value << 1) | dshot_packet.telemetric_request;
+
+	if (bidirectional) {
+		// ...calc the checksum "inverted" / bidirectional mode
+		return (~(packet ^ (packet >> 4) ^ (packet >> 8))) & 0x0F;
+	} else {
+		// ...calc the checksum "normal" mode
+		return (packet ^ (packet >> 4) ^ (packet >> 8)) & 0x0F;
+	}
 }
 
-uint16_t dshotc3_prepare_rmt_data(const dshot_packet_t& dshot_packet) {
-    auto chksum = dshotc3_calc_dshot_chksum(dshot_packet);
+uint16_t DShotRMT::prepare_rmt_data(const dshot_packet_t& dshot_packet) {
+	auto chksum = calc_dshot_chksum(dshot_packet);
 
-    // ..."construct" the packet
-    uint16_t prepared_to_encode = (dshot_packet.throttle_value << 1) | dshot_packet.telemetric_request;
-    prepared_to_encode = (prepared_to_encode << 4) | chksum;
+	// ..."construct" the packet
+	uint16_t prepared_to_encode = (dshot_packet.throttle_value << 1) | dshot_packet.telemetric_request;
+	prepared_to_encode = (prepared_to_encode << 4) | chksum;
 
-    return prepared_to_encode;
+	return prepared_to_encode;
 }
 
 // ...finally output using ESP32 RMT
-static void dshotc3_output_rmt_data(int inst_idx) {
-    if (instances[inst_idx] == NULL) {
-        return;
-    }
-    if (instances[inst_idx]->new_data) {
-        #ifdef DSHOTC3_DEBUG_OUTPUT
-        DBGLN("dshotc3 out %d", inst_idx);
-        #endif
-        instances[inst_idx]->new_data = false;
-        instances[inst_idx]->set_pin();
-        rmt_fill_tx_items(rmt_channel, instances[inst_idx]->get_queued_item(), DSHOT_PACKET_LENGTH, 0);
-        rmt_tx_start(rmt_channel, true);
-    }
+void DShotRMT::output_rmt_data() {
+	set_pin();
+	rmt_tx_stop(rmt_channel);
+	encode_dshot_to_rmt(prepare_rmt_data(next_packet));
+	rmt_fill_tx_items(rmt_channel, dshot_tx_rmt_item, DSHOT_PACKET_LENGTH, 0);
+	rmt_tx_start(rmt_channel, true);
+	has_new_data = false;
 }
 
-void dshotc3_poll(void) {
-    #define DSHOTC3_DEBUG_POLL
-    #ifdef DSHOTC3_DEBUG_POLL
-    static uint32_t no_init = 0;
-    static uint32_t status_failed = 0;
-    static uint32_t status_no_init = 0;
-    static uint32_t status_idle = 0;
-    static uint32_t status_busy = 0;
-    static uint32_t status_else_cnt = 0;
-    static uint32_t status_else = 0;
-    static uint32_t last_time = 0;
-    if ((millis() - last_time) >= 500) {
-        last_time = millis();
-        DBGLN("dshotc3 dbg %d %d %d %d %d %d %d", no_init, status_failed, status_no_init, status_idle, status_busy, status_else_cnt, status_else);
-    }
-    #endif
-    if (dshotc3_has_inited == false) {
-        #ifdef DSHOTC3_DEBUG_POLL
-        no_init++;
-        #endif
-        return;
-    }
-    rmt_channel_status_result_t status;
-    if (rmt_get_channel_status(&status) == ESP_OK) {
-        if (status.status[rmt_channel] == RMT_CHANNEL_IDLE) {
-            #if defined(DSHOTC3_WAIT_US)
-            #if DSHOTC3_WAIT_US > 0
-            // without an actual pause, the dshot packet appears cut off
-            static uint32_t last_tx_time = 0;
-            uint32_t now_us = micros();
-            if ((now_us - last_tx_time) < DSHOTC3_WAIT_US) {
-                return;
-            }
-            last_tx_time = now_us;
-            #endif
-            #endif
-            dshotc3_output_rmt_data(round_robin_idx);
-            round_robin_idx += 1;
-            round_robin_idx %= inst_cnt;
-            #ifdef DSHOTC3_DEBUG_POLL
-            status_idle++;
-            #endif
-        }
-        #ifdef DSHOTC3_DEBUG_POLL
-        else {
-            if (status.status[rmt_channel] == RMT_CHANNEL_UNINIT) {
-                status_no_init++;
-            }
-            else if (status.status[rmt_channel] == RMT_CHANNEL_BUSY) {
-                status_busy++;
-            }
-            else {
-                status_else_cnt++;
-                status_else = status.status[rmt_channel];
-            }
-        }
-        #endif
-    }
-    #ifdef DSHOTC3_DEBUG_POLL
-    else {
-        status_failed++;
-    }
-    #endif
+void DShotRMT::set_pin() {
+	if (prev_pin >= 0) { // if there was a previously used pin that needs to be decoupled from RMT
+		// rmt_set_pin and rmt_config only seems to add pins to the RMT mux
+		// they do not remove pins
+		// so we must manually remove the previous pin from the mux
+		#if 1 // the lazy way that's easy to write
+		pinMode(prev_pin, INPUT);
+		digitalWrite(prev_pin, LOW);
+		pinMode(prev_pin, OUTPUT);
+		#else // the not lazy way
+		gpio_matrix_in(gpio_num, RMT_SIG_IN0_IDX, false);
+		gpio_config_t io_conf;
+		io_conf.intr_type = GPIO_INTR_DISABLE;
+		io_conf.pin_bit_mask = (1ULL << gpio_num);
+		io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+		io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+		gpio_config(&io_conf);
+		if (bidirectional) {
+			io_conf.mode = GPIO_MODE_INPUT;
+			io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
+			gpio_config(&io_conf);
+		}
+		else {
+			io_conf.mode = GPIO_MODE_OUTPUT;
+			gpio_config(&io_conf);
+			gpio_set_level(gpio_num, 0);
+		}
+		#endif
+	}
+	pinMode(gpio_num, OUTPUT);
+	rmt_set_pin(rmt_channel, RMT_MODE_TX, gpio_num);
+	rmt_set_idle_level(rmt_channel, bidirectional ? false : true, bidirectional ? RMT_IDLE_LEVEL_HIGH : RMT_IDLE_LEVEL_LOW);
+	prev_pin = gpio_num;
+}
+
+void DShotRMT::poll() {
+	if (cur_node == NULL) { // no instances initalized, do nothing
+		return;
+	}
+	static uint32_t last_time_us = 0;
+	uint32_t now_us = micros();
+	if ((now_us - last_time_us) < 150) { // make sure enough time has passed (RMT driver does not indicate end of transmission at the right time)
+		return;
+	}
+	DShotRMT* inst = cur_node;
+	cur_node = (DShotRMT*)inst->next_node; // cycle through linked list
+	if (inst != NULL && (inst->has_new_data || inst->looping)) { // only send if required
+		inst->output_rmt_data(); // actually send the data, this will set the pin first, and clear the has_new_data flag
+		last_time_us = now_us;
+	}
 }
 
 #endif

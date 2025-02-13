@@ -123,6 +123,7 @@ static void servoWrite(uint8_t ch, uint16_t us)
             }
             else {
                 // no pulse
+                dshotInstances[ch]->set_looping(false);
             }
         }
     }
@@ -184,7 +185,7 @@ static void servosUpdate(unsigned long now)
     static uint32_t lastUpdate;
 
     #if defined(PLATFORM_ESP32_C3)
-    dshotc3_poll();
+    DShotRMT::poll();
     #endif
 
     if (newChannelsAvailable)
@@ -518,7 +519,6 @@ bool servos_singleInit(int selected_pin)
                 pinMode(pin, OUTPUT);
                 dshotInstances[ch] = new DShotRMT(gpio, rmtChannel); // Initialize the DShotRMT instance
                 dshotInstances[ch]->begin(DSHOT300, false);
-                dshotInstances[ch]->set_looping(true);
                 servoWrite(ch, 0);
                 res = true;
                 rmtCH++;
