@@ -3,8 +3,12 @@
 #include "config.h"
 #include "crsf_protocol.h"
 
+uint32_t ChannelDataMixed[CRSF_NUM_CHANNELS];
+
 void shrew_mix()
 {
+    memcpy(ChannelDataMixed, ChannelData, sizeof(uint32_t) * CRSF_NUM_CHANNELS);
+
     uint32_t mixer_settings = config.GetShrewMixer();
     uint32_t ch_thr   = (mixer_settings & 0x000F);
     uint32_t ch_str   = (mixer_settings & 0x00F0) >> 4;
@@ -28,9 +32,9 @@ void shrew_mix()
     val_left   = val_left  > CRSF_CHANNEL_VALUE_MAX ? CRSF_CHANNEL_VALUE_MAX : (val_left  < CRSF_CHANNEL_VALUE_MIN ? CRSF_CHANNEL_VALUE_MIN : val_left);
     val_right  = val_right > CRSF_CHANNEL_VALUE_MAX ? CRSF_CHANNEL_VALUE_MAX : (val_right < CRSF_CHANNEL_VALUE_MIN ? CRSF_CHANNEL_VALUE_MIN : val_right);
     if (ch_left != 0) {
-        ChannelData[ch_left  - 1] = val_left;
+        ChannelDataMixed[ch_left  - 1] = val_left;
     }
     if (ch_right != 0) {
-        ChannelData[ch_right - 1] = val_right;
+        ChannelDataMixed[ch_right - 1] = val_right;
     }
 }

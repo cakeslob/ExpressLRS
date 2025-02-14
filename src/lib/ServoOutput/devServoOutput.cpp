@@ -13,6 +13,7 @@
 static int8_t servoPins[PWM_MAX_CHANNELS];
 static pwm_channel_t pwmChannels[PWM_MAX_CHANNELS];
 static uint16_t pwmChannelValues[PWM_MAX_CHANNELS];
+extern uint32_t ChannelDataMixed[CRSF_NUM_CHANNELS];
 
 #if (defined(PLATFORM_ESP32))
 extern bool shrew_isActive();
@@ -220,7 +221,7 @@ static void servosUpdate(unsigned long now)
         for (int ch = 0 ; ch < GPIO_PIN_PWM_OUTPUTS_COUNT ; ++ch)
         {
             const rx_config_pwm_t *chConfig = config.GetPwmChannel(ch);
-            const unsigned crsfVal = ChannelData[chConfig->val.inputChannel];
+            const unsigned crsfVal = ChannelDataMixed[chConfig->val.inputChannel];
             // crsfVal might 0 if this is a switch channel, and it has not been
             // received yet. Delay initializing the servo until the channel is valid
             if (crsfVal == 0)
@@ -252,7 +253,7 @@ static void servosUpdate(unsigned long now)
 
         // if channel 5, the arming channel, is not assigned as a output, then if the user toggles it, it forces all dshot outputs to issue an arm signal
         if (dshotCh5State == false) {
-            if (ChannelData[4] > (CRSF_CHANNEL_VALUE_MID + 100)) {
+            if (ChannelDataMixed[4] > (CRSF_CHANNEL_VALUE_MID + 100)) {
                 dshotCh5State = true;
                 if (dshotArmingTime == 0 && dshotCh5Assigned == false) {
                     dshotArmingTime = millis();
@@ -260,7 +261,7 @@ static void servosUpdate(unsigned long now)
             }
         }
         else {
-            if (ChannelData[4] < CRSF_CHANNEL_VALUE_MID) {
+            if (ChannelDataMixed[4] < CRSF_CHANNEL_VALUE_MID) {
                 dshotCh5State = false;
             }
         }
