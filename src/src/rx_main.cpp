@@ -1166,7 +1166,7 @@ static bool ICACHE_RAM_ATTR ProcessRfPacket_SYNC(uint32_t const now, OTA_Sync_s 
 
 extern bool ICACHE_RAM_ATTR ProcessRFPacket_v3(SX12xxDriverCommon::rx_status const status);
 
-bool ICACHE_RAM_ATTR ProcessRFPacket(SX12xxDriverCommon::rx_status const status)
+bool ICACHE_RAM_ATTR ProcessRFPacket(SX12xxDriverCommon::rx_status const status, bool skip_crc)
 {
     if (status != SX12xxDriverCommon::SX12XX_RX_OK)
     {
@@ -1181,13 +1181,16 @@ bool ICACHE_RAM_ATTR ProcessRFPacket(SX12xxDriverCommon::rx_status const status)
     OTA_Packet_s * const otaPktPtr = (OTA_Packet_s * const)Radio.RXdataBuffer;
     OTA_Packet_s * const otaPktPtrSecond = (OTA_Packet_s * const)Radio.RXdataBufferSecond;
 
-    if (!OtaValidatePacketCrc(otaPktPtr))
+    if (skip_crc == false)
     {
-        DBGVLN("CRC error");
-        #if defined(DEBUG_RX_SCOREBOARD)
-            lastPacketCrcError = true;
-        #endif
-        return false;
+        if (!OtaValidatePacketCrc(otaPktPtr))
+        {
+            DBGVLN("CRC error");
+            #if defined(DEBUG_RX_SCOREBOARD)
+                lastPacketCrcError = true;
+            #endif
+            return false;
+        }
     }
 
     PFDloop.extEvent(beginProcessing + PACKET_TO_TOCK_SLACK);
@@ -1279,7 +1282,7 @@ bool ICACHE_RAM_ATTR RXdoneISR(SX12xxDriverCommon::rx_status const status)
         return false; // Already received a packet, do not run ProcessRFPacket() again.
     }
 
-    bool success = ProcessRFPacket(status);
+    bool success = ProcessRFPacket(status, false);
     // if failed to decode for any reason, try using a previous protocol version
     if (!success) {
         success = ProcessRFPacket_v3(status);

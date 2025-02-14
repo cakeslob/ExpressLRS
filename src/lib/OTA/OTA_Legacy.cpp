@@ -2,25 +2,29 @@
 #include "OTA.h"
 #include "common.h"
 #include "logging.h"
+#include "FHSS.h"
 #include <stdlib.h>
+#include "esp_task_wdt.h"
 
 bool ota_isLegacy = false;
 extern uint8_t ExpressLRS_nextAirRateIndex; // used to call SetRFLinkRate
+extern uint32_t RFmodeLastCycled; // reset the scan timer
 
 static uint32_t consecutive_old_pkt_cnt = 0;
 static uint32_t consecutive_new_pkt_cnt = 0;
 
 extern bool OtaIsFullRes;
 extern Crc2Byte ota_crc;
-//extern bool FHSSuseDualBand;
 
-extern bool ICACHE_RAM_ATTR ProcessRFPacket(SX12xxDriverCommon::rx_status const status);
+extern bool ICACHE_RAM_ATTR ProcessRFPacket(SX12xxDriverCommon::rx_status const status, bool skip_crc);
 extern void SetRFLinkRate(uint8_t index, bool bindMode);
 extern void FHSSrandomiseFHSSsequence(const uint32_t seed);
+extern void FHSSrandomiseFHSSsequenceBuild(const uint32_t seed, uint32_t freqCount, uint_fast8_t syncChannel, uint8_t *inSequence);
 extern void ICACHE_RAM_ATTR GeneratePacketCrcFull(OTA_Packet_s * const otaPktPtr);
 extern void ICACHE_RAM_ATTR GeneratePacketCrcStd(OTA_Packet_s * const otaPktPtr);
 
-static uint8_t rateIdx2Enum(uint8_t x);
+static uint8_t rateIdxXform(uint8_t x);
+static void FHSSrandomiseFHSSsequence_v3(const uint32_t seed);
 
 bool ICACHE_RAM_ATTR ValidatePacketCrcFull_v3(OTA_Packet_v3_s * otaPktPtr)
 {
@@ -70,14 +74,14 @@ bool ICACHE_RAM_ATTR ProcessRFPacket_v3(SX12xxDriverCommon::rx_status const stat
         if (!ValidatePacketCrcFull_v3(otaPktPtr)) {
             return false;
         }
-        GeneratePacketCrcFull((OTA_Packet_s*)otaPktPtr); // this will correct the CRC with the latest version salt
     }
     else {
         if (!ValidatePacketCrcStd_v3(otaPktPtr)) {
             return false;
         }
-        GeneratePacketCrcStd((OTA_Packet_s*)otaPktPtr); // this will correct the CRC with the latest version salt
     }
+
+    esp_task_wdt_reset();
 
     consecutive_old_pkt_cnt++;
     consecutive_new_pkt_cnt = 0;
@@ -86,11 +90,15 @@ bool ICACHE_RAM_ATTR ProcessRFPacket_v3(SX12xxDriverCommon::rx_status const stat
             // time to switch over
             DBGLN("many legacy packets detected");
             ota_isLegacy = true;
+            // reset the search scan timer
+            RFmodeLastCycled = millis();
             // regenerate the hop table so we know what the actual sync channel is
-            FHSSrandomiseFHSSsequence(uidMacSeedGet_v3());
+            FHSSrandomiseFHSSsequence_v3(uidMacSeedGet_v3());
             // reinitialize the radio with the new config
             SetRFLinkRate(ExpressLRS_nextAirRateIndex, false);
+            Radio.RXnb();
             // now we should be listening for sync on the correct sync channel since the hop table has been changed
+            return false;
         }
     }
 
@@ -102,7 +110,7 @@ bool ICACHE_RAM_ATTR ProcessRFPacket_v3(SX12xxDriverCommon::rx_status const stat
         else {
             memcpy(&otaSync, &otaPktPtr->std.sync, sizeof(OTA_Sync_s));
         }
-        otaSync.rfRateEnum = rateIdx2Enum(OtaIsFullRes ? otaPktPtr->full.sync.sync.rateIndex : otaPktPtr->std.sync.rateIndex);
+        otaSync.rfRateEnum = rateIdxXform(OtaIsFullRes ? otaPktPtr->full.sync.sync.rateIndex : otaPktPtr->std.sync.rateIndex);
         #if 0
         if (isDualRadio()) {
             // unknown if packet is Gemini, so use Gemini if available
@@ -119,11 +127,24 @@ bool ICACHE_RAM_ATTR ProcessRFPacket_v3(SX12xxDriverCommon::rx_status const stat
             memcpy(&otaPktPtr->std.sync, &otaSync, sizeof(OTA_Sync_s));
         }
     }
-    bool ret = ProcessRFPacket(status);
+
+    esp_task_wdt_reset();
+
+    #if 0
+    // this will correct the CRC with the latest version salt
+    if (OtaIsFullRes) {
+        GeneratePacketCrcFull((OTA_Packet_s*)otaPktPtr);
+    }
+    else {
+        GeneratePacketCrcStd((OTA_Packet_s*)otaPktPtr);
+    }
+    #endif
+
+    bool ret = ProcessRFPacket(status, true);
     return ret;
 }
 
-static uint8_t ICACHE_RAM_ATTR rateIdx2Enum_2G4(uint8_t x)
+static expresslrs_RFrates_e ICACHE_RAM_ATTR rateEnumXform_2G4(uint8_t x)
 {
     switch(x)
     {
@@ -143,12 +164,12 @@ static uint8_t ICACHE_RAM_ATTR rateIdx2Enum_2G4(uint8_t x)
         case RATE_v3_LORA_200HZ_8CH: return RATE_LORA_2G4_200HZ_8CH;
         case RATE_v3_FSK_2G4_DVDA_500HZ: return RATE_FSK_2G4_500HZ_DVDA;
         case RATE_v3_FSK_2G4_1000HZ: return RATE_FSK_2G4_1000HZ;
-        default: return 0xFF;
+        default: return (expresslrs_RFrates_e)0xFF;
     }
 }
 
 #if defined(RADIO_SX127X) || defined(RADIO_LR1121)
-static uint8_t ICACHE_RAM_ATTR rateIdx2Enum_900(uint8_t x)
+static expresslrs_RFrates_e ICACHE_RAM_ATTR rateEnumXform_900(uint8_t x)
 {
     switch(x)
     {
@@ -164,23 +185,68 @@ static uint8_t ICACHE_RAM_ATTR rateIdx2Enum_900(uint8_t x)
         case RATE_v3_DVDA_50HZ     : return RATE_LORA_900_50HZ_DVDA;
         case RATE_v3_LORA_200HZ_8CH: return RATE_LORA_900_200HZ_8CH;
         case RATE_v3_FSK_900_1000HZ_8CH: return RATE_FSK_900_1000HZ_8CH;
-        default: return 0xFF;
+        default: return (expresslrs_RFrates_e)0xFF;
     }
 }
 #endif
 
-static uint8_t ICACHE_RAM_ATTR rateIdx2Enum(uint8_t x)
+#if defined(RADIO_SX127X)
+const static uint8_t rateXformTbl[RATE_MAX] = {
+    RATE_v3_LORA_200HZ,     ,
+    RATE_v3_LORA_100HZ_8CH, ,
+    RATE_v3_LORA_100HZ,     ,
+    RATE_v3_LORA_50HZ,      ,
+    RATE_v3_LORA_25HZ,      ,
+    RATE_v3_DVDA_50HZ,      };
+
+#endif
+
+#if defined(RADIO_LR1121)
+const static uint8_t rateXformTbl[] = {
+    RATE_v3_LORA_200HZ,         ,
+    RATE_v3_LORA_100HZ_8CH,     ,
+    RATE_v3_LORA_100HZ,         ,
+    RATE_v3_LORA_50HZ,          ,
+    RATE_v3_LORA_500HZ,         ,
+    RATE_v3_LORA_333HZ_8CH,     ,
+    RATE_v3_LORA_250HZ,         ,
+    RATE_v3_LORA_150HZ,         ,
+    RATE_v3_LORA_100HZ_8CH,     ,
+    RATE_v3_LORA_50HZ,          ,
+    RATE_v3_LORA_150HZ,         ,
+    RATE_v3_LORA_100HZ_8CH,     ,
+    RATE_v3_LORA_250HZ,         ,
+    RATE_v3_LORA_200HZ_8CH,     ,
+    RATE_v3_FSK_2G4_DVDA_500HZ, ,
+    RATE_v3_FSK_900_1000HZ_8CH, };
+#endif
+
+#if defined(RADIO_SX128X)
+const uint8_t rateXformTbl[] = {
+    RATE_v3_FLRC_1000HZ,   
+    RATE_v3_FLRC_500HZ,    
+    RATE_v3_DVDA_500HZ,    
+    RATE_v3_DVDA_250HZ,    
+    RATE_v3_LORA_500HZ,    
+    RATE_v3_LORA_333HZ_8CH,
+    RATE_v3_LORA_250HZ,    
+    RATE_v3_LORA_150HZ,    
+    RATE_v3_LORA_100HZ_8CH,
+    RATE_v3_LORA_50HZ,      };
+#endif
+
+static uint8_t ICACHE_RAM_ATTR rateIdxXform(uint8_t x)
 {
     #if defined(RADIO_SX127X)
-    return rateIdx2Enum_900(x);
+    return rateEnumXform_900(rateXformTbl[x]);
     #elif defined(RADIO_LR1121)
-    uint8_t ret = rateIdx2Enum_2G4(x);
+    uint8_t ret = rateEnumXform_2G4(rateXformTbl[x]);
     if (ret == 0xFF) {
-        ret = rateIdx2Enum_900(x);
+        ret = rateEnumXform_900(rateXformTbl[x]);
     }
     return ret;
     #elif defined(RADIO_SX128X)
-    return rateIdx2Enum_2G4(x);
+    return rateEnumXform_2G4(rateXformTbl[x]);
     #endif
 }
 
@@ -192,11 +258,15 @@ void ota_cntNewVersionPkts()
         if (ota_isLegacy != false) {
             // switch over to "normal" mode
             ota_isLegacy = false;
+            // reset the search scan timer
+            RFmodeLastCycled = millis();
             // regenerate the hop table with the correct seed
             FHSSrandomiseFHSSsequence(uidMacSeedGet());
             // reinitialize all radio parameters
             SetRFLinkRate(ExpressLRS_nextAirRateIndex, false);
+            Radio.RXnb();
             // now when we hop we will be at the sync channel and actually get a sync packet
+            DBGLN("ret to normal pkts");
         }
     }
 }
@@ -214,7 +284,24 @@ uint32_t uidMacSeedGet_v3()
     return macSeed;
 }
 
-static void debug_sync_packet(void* pkt, int len)
+void FHSSrandomiseFHSSsequence_v3(const uint32_t seed)
+{
+    sync_channel = (FHSSconfig->freq_count / 2) + 1;
+    freq_spread = (FHSSconfig->freq_stop - FHSSconfig->freq_start) * FREQ_SPREAD_SCALE / (FHSSconfig->freq_count - 1);
+    primaryBandCount = (FHSS_SEQUENCE_LEN / FHSSconfig->freq_count) * FHSSconfig->freq_count;
+    FHSSrandomiseFHSSsequenceBuild(seed, FHSSconfig->freq_count, sync_channel, FHSSsequence);
+
+#if defined(RADIO_LR1121)
+    sync_channel_DualBand = (FHSSconfigDualBand->freq_count / 2) + 1;
+    freq_spread_DualBand = (FHSSconfigDualBand->freq_stop - FHSSconfigDualBand->freq_start) * FREQ_SPREAD_SCALE / (FHSSconfigDualBand->freq_count - 1);
+    secondaryBandCount = (FHSS_SEQUENCE_LEN / FHSSconfigDualBand->freq_count) * FHSSconfigDualBand->freq_count;
+    FHSSusePrimaryFreqBand = false;
+    FHSSrandomiseFHSSsequenceBuild(seed, FHSSconfigDualBand->freq_count, sync_channel_DualBand, FHSSsequence_DualBand);
+    FHSSusePrimaryFreqBand = true;
+#endif
+}
+
+void debug_sync_packet(void* pkt, int len)
 {
     OTA_Packet_v3_s * const otaPktPtr = (OTA_Packet_v3_s * const)pkt;
     if (otaPktPtr->std.type != PACKET_TYPE_SYNC) {
@@ -229,8 +316,11 @@ static void debug_sync_packet(void* pkt, int len)
     }
     DBG("SYNC ");
     if (len == sizeof(OTA_Packet4_v3_s)) {
+        uint8_t crcH = otaPktPtr->std.crcHigh;
         uint16_t const inCRC = ((uint16_t)otaPktPtr->std.crcHigh << 8) + otaPktPtr->std.crcLow;
+        otaPktPtr->std.crcHigh = 0;
         DBG("std %x=%x=%x ", inCRC, ota_crc.calc((uint8_t*)pkt, OTA4_CRC_CALC_LEN, OtaCrcInitializer), ota_crc.calc((uint8_t*)pkt, OTA4_CRC_CALC_LEN_v3, OtaCrcInitializer_v3));
+        otaPktPtr->std.crcHigh = crcH;
     }
     else {
         DBG("full %x=%x=%x ", otaPktPtr->full.crc, ota_crc.calc((uint8_t*)pkt, OTA8_CRC_CALC_LEN, OtaCrcInitializer), ota_crc.calc((uint8_t*)pkt, OTA8_CRC_CALC_LEN_v3, OtaCrcInitializer_v3));
@@ -240,5 +330,5 @@ static void debug_sync_packet(void* pkt, int len)
     for (int i = 0; i < len; i++) {
         DBG("%x ", ((uint8_t*)pkt)[i]);
     }
-    DBG("\r\n");
+    DBGCR;
 }
