@@ -9,4 +9,4 @@ void hbridge_failsafe(void);
 void hbridge_update(unsigned long now);
 
 void shrew_markServosInitialized(bool);
-bool shrew_isActive(void);
+bool shrew_isWebCtrlActive(void);

@@ -168,7 +168,7 @@ void shrew_markServosInitialized(bool x) {
 }
 #endif
 
-bool shrew_isActive() {
+bool shrew_isWebCtrlActive() {
     #ifdef BUILD_SHREW_WIFI
     if (has_inited)
     {

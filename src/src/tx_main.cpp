@@ -34,7 +34,7 @@
 extern bool shrew_hasWifiStarted();
 extern void shrew_startWifi();
 extern uint32_t shrew_getLastDataTime();
-extern bool shrew_isActive();
+extern bool shrew_isWebCtrlActive();
 #endif
 
 //// CONSTANTS ////
@@ -725,7 +725,7 @@ void ICACHE_RAM_ATTR timerCallback()
 static void UARTdisconnected()
 {
   #ifdef BUILD_SHREW_WIFI
-  if (shrew_isActive()) {
+  if (shrew_isWebCtrlActive()) {
     return;
   }
   if (shrew_hasWifiStarted() == false && millis() >= 1000 && millis() <= 10000 && firmwareOptions.wifi_auto_on_interval < 10000 && firmwareOptions.wifi_auto_on_interval >= 0) {

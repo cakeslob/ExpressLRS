@@ -16,7 +16,7 @@ static uint16_t pwmChannelValues[PWM_MAX_CHANNELS];
 extern uint32_t ChannelDataMixed[CRSF_NUM_CHANNELS];
 
 #if (defined(PLATFORM_ESP32))
-extern bool shrew_isActive();
+extern bool shrew_isWebCtrlActive();
 
 const uint8_t RMT_MAX_CHANNELS = 8;
 static DShotRMT *dshotInstances[PWM_MAX_CHANNELS] = {nullptr};
@@ -394,7 +394,7 @@ static int start()
 
 static int event()
 {
-    if (shrew_isActive()) {
+    if (shrew_isWebCtrlActive()) {
         return DURATION_IMMEDIATELY;
     }
     if (!OPT_HAS_SERVO_OUTPUT || connectionState == disconnected)
