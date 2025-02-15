@@ -14,7 +14,7 @@
 #-DMY_BINDING_PHRASE="default ExpressLRS binding phrase"
 
 -DPERMANENT_BINDING
--DFIXED_PACKET_RATE=4
+#-DFIXED_PACKET_RATE=4
 
 ### REGULATORY DOMAIN: ###
 
@@ -26,7 +26,7 @@
 #-DRegulatory_Domain_EU_433
 #-DRegulatory_Domain_US_433
 #-DRegulatory_Domain_US_433_WIDE
-#-DRegulatory_Domain_FCC_915
+-DRegulatory_Domain_FCC_915
 #-DRegulatory_Domain_ISM_2400
 #-DRegulatory_Domain_EU_CE_2400
 

@@ -13,8 +13,12 @@
 static int8_t servoPins[PWM_MAX_CHANNELS];
 static pwm_channel_t pwmChannels[PWM_MAX_CHANNELS];
 static uint16_t pwmChannelValues[PWM_MAX_CHANNELS];
+extern uint32_t ChannelDataMixed[CRSF_NUM_CHANNELS];
 
 #if (defined(PLATFORM_ESP32))
+extern bool shrew_isActive();
+
+const uint8_t RMT_MAX_CHANNELS = 8;
 static DShotRMT *dshotInstances[PWM_MAX_CHANNELS] = {nullptr};
 
 #define DSHOT_ENABLE_AUTO_ARM     1
@@ -120,6 +124,7 @@ static void servoWrite(uint8_t ch, uint16_t us)
             }
             else {
                 // no pulse
+                dshotInstances[ch]->set_looping(false);
             }
         }
     }
@@ -179,6 +184,11 @@ static void servosFailsafe()
 static void servosUpdate(unsigned long now)
 {
     static uint32_t lastUpdate;
+
+    #if defined(PLATFORM_ESP32_C3)
+    DShotRMT::poll();
+    #endif
+
     if (newChannelsAvailable)
     {
         newChannelsAvailable = false;
@@ -211,7 +221,7 @@ static void servosUpdate(unsigned long now)
         for (int ch = 0 ; ch < GPIO_PIN_PWM_OUTPUTS_COUNT ; ++ch)
         {
             const rx_config_pwm_t *chConfig = config.GetPwmChannel(ch);
-            const unsigned crsfVal = ChannelData[chConfig->val.inputChannel];
+            const unsigned crsfVal = ChannelDataMixed[chConfig->val.inputChannel];
             // crsfVal might 0 if this is a switch channel, and it has not been
             // received yet. Delay initializing the servo until the channel is valid
             if (crsfVal == 0)
@@ -243,7 +253,7 @@ static void servosUpdate(unsigned long now)
 
         // if channel 5, the arming channel, is not assigned as a output, then if the user toggles it, it forces all dshot outputs to issue an arm signal
         if (dshotCh5State == false) {
-            if (ChannelData[4] > (CRSF_CHANNEL_VALUE_MID + 100)) {
+            if (ChannelDataMixed[4] > (CRSF_CHANNEL_VALUE_MID + 100)) {
                 dshotCh5State = true;
                 if (dshotArmingTime == 0 && dshotCh5Assigned == false) {
                     dshotArmingTime = millis();
@@ -251,7 +261,7 @@ static void servosUpdate(unsigned long now)
             }
         }
         else {
-            if (ChannelData[4] < CRSF_CHANNEL_VALUE_MID) {
+            if (ChannelDataMixed[4] < CRSF_CHANNEL_VALUE_MID) {
                 dshotCh5State = false;
             }
         }
@@ -307,16 +317,22 @@ static void initialize()
 #if defined(PLATFORM_ESP32)
         else if (mode == somDShot || mode == somDShot3D)
         {
+            auto gpio = (gpio_num_t)pin;
+            auto rmtChannel = (rmt_channel_t)rmtCH;
             if (rmtCH < RMT_MAX_CHANNELS)
             {
-                auto gpio = (gpio_num_t)pin;
-                auto rmtChannel = (rmt_channel_t)rmtCH;
                 DBGLN("Initializing DShot: gpio: %u, ch: %d, rmtChannel: %u", gpio, ch, rmtChannel);
                 pinMode(pin, OUTPUT);
                 dshotInstances[ch] = new DShotRMT(gpio, rmtChannel); // Initialize the DShotRMT instance
                 rmtCH++;
+                pin = UNDEF_PIN;
             }
-            pin = UNDEF_PIN;
+            else {
+                mode = som400Hz;
+                DBGLN("Init DShot failed: gpio: %u, ch: %d, fallback to PWM", gpio, ch);
+                rx_config_pwm_t * chcfg = (rx_config_pwm_t *)config.GetPwmChannel(ch);
+                chcfg->val.mode = mode;
+            }
         }
 #endif
         servoPins[ch] = pin;
@@ -505,6 +521,7 @@ bool servos_singleInit(int selected_pin)
                 dshotInstances[ch] = new DShotRMT(gpio, rmtChannel); // Initialize the DShotRMT instance
                 dshotInstances[ch]->begin(DSHOT300, true);
                 dshotInstances[ch]->set_looping(true);
+
                 servoWrite(ch, 0);
                 res = true;
                 rmtCH++;

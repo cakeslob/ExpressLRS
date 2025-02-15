@@ -103,6 +103,8 @@ typedef enum extended_telem_type_e
 typedef struct dshot_config_s {
 } dshot_config_t;
 
+#if (!defined(PLATFORM_ESP32_C3))
+
 class DShotRMT {
 public:
 	DShotRMT(gpio_num_t gpio, rmt_channel_t rmtChannel);
@@ -148,4 +150,7 @@ uint32_t decode_eRPM_telemetry_value(uint16_t value);
 uint32_t erpmToRpm(uint16_t erpm, uint16_t motorPoleCount);
 }
 
+#else
+#include "DShotRMT_C3.h"
+#endif
 #endif
