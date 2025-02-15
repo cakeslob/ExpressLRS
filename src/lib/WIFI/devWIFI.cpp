@@ -1433,7 +1433,7 @@ static int start()
 static int event()
 {
   #ifdef BUILD_SHREW_WIFI
-  if (shrew_isActive() || shrew_hasWifiStarted()) {
+  if (shrew_isWebCtrlActive() || shrew_hasWifiStarted()) {
     return DURATION_IMMEDIATELY;
   }
   #endif
