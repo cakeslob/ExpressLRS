@@ -18,8 +18,7 @@ extern uint32_t ChannelDataMixed[CRSF_NUM_CHANNELS];
 #if (defined(PLATFORM_ESP32))
 extern bool shrew_isWebCtrlActive();
 
-const uint8_t RMT_MAX_CHANNELS = 8;
-static DShotRMT *dshotInstances[PWM_MAX_CHANNELS] = {nullptr};
+DShotRMT *dshotInstances[PWM_MAX_CHANNELS] = {nullptr};
 
 #define DSHOT_ENABLE_AUTO_ARM     1
 

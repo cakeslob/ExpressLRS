@@ -1356,6 +1356,10 @@ static void setupSerial()
         mavlinkSerialOutput = true;
         serialBaud = 460800;
     }
+    else if (config.GetSerialProtocol() == PROTOCOL_KISSTELEM)
+    {
+        serialBaud = 115200;
+    }
 #if defined(PLATFORM_ESP8266) || defined(PLATFORM_ESP32)
     else if (config.GetSerialProtocol() == PROTOCOL_HOTT_TLM)
     {
@@ -1567,6 +1571,10 @@ static void setupSerial1()
         case PROTOCOL_SERIAL1_SMARTAUDIO:
             Serial1.begin(4800, SERIAL_8N2, UNDEF_PIN, serial1TXpin, false);
             serial1IO = new SerialSmartAudio(SERIAL1_PROTOCOL_TX, SERIAL1_PROTOCOL_RX, serial1TXpin);
+            break;
+        case PROTOCOL_SERIAL1_KISSTELEM:
+            Serial1.begin(115200, SERIAL_8N1, serial1RXpin, -1, false);
+            serial1IO = new SerialCRSF(SERIAL1_PROTOCOL_TX, SERIAL1_PROTOCOL_RX);
             break;
     }
 }

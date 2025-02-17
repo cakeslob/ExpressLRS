@@ -111,7 +111,7 @@ void DShotRMT::send_dshot_value(uint16_t throttle_value, telemetric_request_t te
 
 	// ...packets are the same for bidirectional mode
 	dshot_rmt_packet.throttle_value = throttle_value;
-	dshot_rmt_packet.telemetric_request = telemetric_request;
+	dshot_rmt_packet.telemetric_request = telemetric_request != NO_TELEMETRIC || telem_next ? ENABLE_TELEMETRIC : NO_TELEMETRIC;
 	dshot_rmt_packet.checksum = this->calc_dshot_chksum(dshot_rmt_packet);
 
 	output_rmt_data(dshot_rmt_packet);

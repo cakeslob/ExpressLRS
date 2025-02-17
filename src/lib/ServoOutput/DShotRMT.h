@@ -14,6 +14,8 @@
 // ...utilizing the IR Module library for generating the DShot signal
 #include <driver/rmt.h>
 
+#define RMT_MAX_CHANNELS 8
+
 constexpr auto DSHOT_CLK_DIVIDER = 8; // ...slow down RMT clock to 0.1 microseconds / 100 nanoseconds per cycle
 constexpr auto DSHOT_PACKET_LENGTH = 18; // ...last packet is the pause followed by RMT end marker
 
@@ -99,6 +101,7 @@ public:
 	bool begin(dshot_mode_t dshot_mode = DSHOT_OFF, bool is_bidirectional = false);
 	void send_dshot_value(uint16_t throttle_value, telemetric_request_t telemetric_request = NO_TELEMETRIC);
 	void set_looping(bool x);
+	inline void set_telem_on_next() { telem_next = true; };
 
 private:
 	gpio_num_t gpio_num;
@@ -112,6 +115,8 @@ private:
 	uint16_t ticks_zero_low = 0;
 	uint16_t ticks_one_high = 0;
 	uint16_t ticks_one_low = 0;
+
+	bool telem_next = false;
 
 	rmt_item32_t* encode_dshot_to_rmt(uint16_t parsed_packet);
 	uint16_t calc_dshot_chksum(const dshot_packet_t& dshot_packet);

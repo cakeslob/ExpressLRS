@@ -13,6 +13,7 @@ class DShotRMT {
         bool begin(dshot_mode_t dshot_mode = DSHOT_OFF, bool is_bidirectional = false);
         void set_looping(bool);
         void send_dshot_value(uint16_t throttle_value, telemetric_request_t telemetric_request = NO_TELEMETRIC);
+        inline void set_telem_on_next() { telem_next = true; };
 
         static void poll(); // call this as often as possible (or about every 150us)
 
@@ -34,6 +35,7 @@ class DShotRMT {
 
         bool has_new_data = false;
         bool looping = true;
+        bool telem_next = false;
 
         rmt_item32_t* encode_dshot_to_rmt(uint16_t parsed_packet);
         uint16_t calc_dshot_chksum(const dshot_packet_t& dshot_packet);

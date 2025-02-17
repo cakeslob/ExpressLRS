@@ -15,6 +15,8 @@ extern SerialIO *serialIO;
 extern SerialIO *serial1IO;
 #endif
 
+extern void shrew_serRxIntercept();
+
 enum teamraceOutputInhibitState_e {
     troiPass = 0,               // Allow all packets through, normal operation
     troiDisableAwaitConfirm,    // Have received one packet with another model selected, awaiting confirm to Inhibit
@@ -231,6 +233,9 @@ static int timeout(devserial_ctx_t *ctx)
     bool sendChannels = confirmFrameAvailable(ctx);
 
     uint32_t duration = (*(ctx->io))->sendRCFrame(sendChannels, missed, ChannelData);
+
+    // shrew code has the choice of emptying the RX buffer before processSerialInput
+    shrew_serRxIntercept();
 
     // still get telemetry and send link stats if theres no model match
     (*(ctx->io))->processSerialInput();
