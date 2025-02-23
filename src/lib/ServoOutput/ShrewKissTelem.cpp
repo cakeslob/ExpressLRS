@@ -18,7 +18,7 @@ static unsigned char rx_buff_1[KISS_TELEM_RX_BUFF_SIZE];
 static uint8_t rx_buff_1_idx = 0;
 #endif
 
-kiss_telem_t* kiss_telem_data[PWM_MAX_CHANNELS] = {nullptr};
+esc_telem_t* esc_telem_data[PWM_MAX_CHANNELS] = {nullptr};
 
 static int inst_idx = 0;
 static uint32_t last_time = 0;
@@ -41,20 +41,19 @@ void shrew_kissTelemPoll()
 
     uint32_t now = millis();
 
+    bool has_new = false;
+
     if (config.GetSerialProtocol() == PROTOCOL_KISSTELEM) {
         read_ser(&Serial, now, (uint8_t*)rx_buff_0, &rx_buff_0_idx);
+        has_new |= check_pkt((uint8_t*)rx_buff_0, &rx_buff_0_idx, now);
     }
     #if defined(PLATFORM_ESP32)
     if (config.GetSerial1Protocol() == PROTOCOL_SERIAL1_KISSTELEM) {
         read_ser(&Serial1, now, (uint8_t*)rx_buff_1, &rx_buff_1_idx);
+        has_new |= check_pkt((uint8_t*)rx_buff_1, &rx_buff_1_idx, now);
     }
     #endif
 
-    bool has_new = false;
-    has_new |= check_pkt((uint8_t*)rx_buff_0, &rx_buff_0_idx, now);
-    #if defined(PLATFORM_ESP32)
-    has_new |= check_pkt((uint8_t*)rx_buff_1, &rx_buff_1_idx, now);
-    #endif
     has_new_kiss_telem |= has_new;
 
     if ((now - last_time) < 50 || has_new == false) {
@@ -163,12 +162,12 @@ static bool check_pkt(uint8_t* buffer, uint8_t* buffer_idx, uint32_t timenow)
             }
 
             // allocate memory for data if not already existing
-            if (kiss_telem_data[i] == nullptr) {
-                kiss_telem_data[i] = (kiss_telem_t*)malloc(sizeof(kiss_telem_t));
+            if (esc_telem_data[i] == nullptr) {
+                esc_telem_data[i] = (esc_telem_t*)malloc(sizeof(esc_telem_t));
             }
 
             // repackage the data in a convenient format
-            kiss_telem_t* dst = kiss_telem_data[i];
+            esc_telem_t* dst = esc_telem_data[i];
             dst->ch = i;
             dst->timestamp = timenow;
             dst->voltage = (ptr->voltage_h << 8) + ptr->voltage_l;

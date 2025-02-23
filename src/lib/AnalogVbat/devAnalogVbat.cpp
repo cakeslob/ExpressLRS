@@ -32,6 +32,8 @@ static bool use_lut = false;
 /* Shameful externs */
 extern Telemetry telemetry;
 
+extern void blackbox_log_vbat(int32_t x);
+
 /**
  * @brief: Enable SlowUpdate mode to reduce the frequency Vbat telemetry is sent
  ***/
@@ -104,6 +106,7 @@ static int32_t calcVbat()
         vbat = shrewvbat_get(adc);
     }
 #endif
+    blackbox_log_vbat(vbat);
     return vbat;
 }
 

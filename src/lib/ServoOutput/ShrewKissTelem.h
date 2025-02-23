@@ -31,9 +31,9 @@ typedef struct
     uint16_t consumption;
     uint16_t erpm;
 }
-kiss_telem_t;
+esc_telem_t;
 
-extern kiss_telem_t* kiss_telem_data[PWM_MAX_CHANNELS]; // user custom code can get data out of here
+extern esc_telem_t* esc_telem_data[PWM_MAX_CHANNELS]; // user custom code can get data out of here
 extern bool has_new_kiss_telem; // use this to see if new telemetry data has arrived (mark it false please)
 
 void shrew_kissTelemPoll(); 

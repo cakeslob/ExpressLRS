@@ -716,6 +716,9 @@ static void WebUpdateHandleNotFound(AsyncWebServerRequest *request)
   { // If captive portal redirect instead of displaying the error page.
     return;
   }
+  if (shrew_handle404(request)) {
+    return;
+  }
   String message = F("File Not Found\n\n");
   message += F("URI: ");
   message += request->url();

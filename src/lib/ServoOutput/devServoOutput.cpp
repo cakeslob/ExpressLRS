@@ -322,7 +322,7 @@ static void initialize()
             {
                 DBGLN("Initializing DShot: gpio: %u, ch: %d, rmtChannel: %u", gpio, ch, rmtChannel);
                 pinMode(pin, OUTPUT);
-                dshotInstances[ch] = new DShotRMT(gpio, rmtChannel); // Initialize the DShotRMT instance
+                dshotInstances[ch] = new DShotRMT(gpio, ch); // Initialize the DShotRMT instance
                 rmtCH++;
                 pin = UNDEF_PIN;
             }
@@ -517,7 +517,7 @@ bool servos_singleInit(int selected_pin)
                 auto rmtChannel = (rmt_channel_t)rmtCH;
                 DBGLN("Initializing DShot: gpio: %u, ch: %d, rmtChannel: %u", gpio, ch, rmtChannel);
                 pinMode(pin, OUTPUT);
-                dshotInstances[ch] = new DShotRMT(gpio, rmtChannel); // Initialize the DShotRMT instance
+                dshotInstances[ch] = new DShotRMT(gpio, ch); // Initialize the DShotRMT instance
                 dshotInstances[ch]->begin(DSHOT300, false);
                 servoWrite(ch, 0);
                 res = true;
