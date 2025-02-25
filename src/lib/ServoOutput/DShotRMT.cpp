@@ -303,11 +303,11 @@ bool DShotRMT::poll_rx() {
 	size_t length = 0;
 	items = (rmt_item32_t *) xRingbufferReceive(&(rx_ringbuf[rmt_channel]), &length, 0);
 	if (items) {
-		length /= 4; // one RMT = 4 Bytes
+		int len_d4 = length / 4; // one RMT = 4 Bytes
 		if (itm_cnt[rmt_channel] == 0) {
 			rx_itm_idx = 0;
 		}
-		for (int i = 0; i < length && rx_itm_idx < DSHOT_PACKET_LENGTH * 2; i++) {
+		for (int i = 0; i < len_d4 && rx_itm_idx < DSHOT_PACKET_LENGTH * 2; i++) {
 			rmt_item32_t* item = &(items[i]);
 			if (rx_itm_idx == 0 && item->level0 != 0) {
 				dshot_rx_pulses[0] = item->duration1;

@@ -20,6 +20,15 @@
                 "platform": "esp32",
                 "firmware": "Unified_Shrew_2400_RX"
             },
+            "shrewdshottestrig": {
+                "product_name": "Shrew Dshot Test Rig",
+                "lua_name": "ShrewDshotTestRig",
+                "layout_file": "ShrewDshotTestRig.json",
+                "upload_methods": ["uart", "wifi"],
+                "min_version": "3.4.0",
+                "platform": "esp32",
+                "firmware": "Unified_Shrew_2400_RX"
+            },
             "shrewforxr2": {
                 "product_name": "Shrew for XR2",
                 "lua_name": "Shrew-for-XR2",
