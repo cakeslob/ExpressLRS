@@ -11,10 +11,10 @@
 ### BINDING PHRASE: ###
 # Uncomment the line below to use a hardcoded binding phrase
 # Leave commented to use traditional binding
-#-DMY_BINDING_PHRASE="default ExpressLRS binding phrase"
+-DMY_BINDING_PHRASE="moomoomilk"
 
 -DPERMANENT_BINDING
-#-DFIXED_PACKET_RATE=4
+-DFIXED_PACKET_RATE=9
 
 ### REGULATORY DOMAIN: ###
 

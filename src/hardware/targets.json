@@ -37,6 +37,15 @@
                 "min_version": "3.5.0",
                 "platform": "esp32",
                 "firmware": "Unified_ShrewForXR2_2400_RX"
+            },
+            "bleedxr2": {
+                "product_name": "Bleed XR2",
+                "lua_name": "Bleed-XR2",
+                "layout_file": "BleedXR2.json",
+                "upload_methods": ["uart", "wifi"],
+                "min_version": "3.5.0",
+                "platform": "esp32",
+                "firmware": "Unified_BleedXR2_2400_RX"
             }
         },
         "tx_2400": {
