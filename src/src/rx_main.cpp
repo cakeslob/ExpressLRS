@@ -2212,6 +2212,11 @@ void loop()
 
     if ((connectionState != disconnected) && (ExpressLRS_currAirRate_Modparams->index != ExpressLRS_nextAirRateIndex)){ // forced change
         DBGLN("Req air rate change %u->%u", ExpressLRS_currAirRate_Modparams->index, ExpressLRS_nextAirRateIndex);
+        if (!isSupportedRFRate(ExpressLRS_nextAirRateIndex))
+        {
+            DBGLN("Mode %u not supported, ignoring", ExpressLRS_nextAirRateIndex);
+            ExpressLRS_nextAirRateIndex = ExpressLRS_currAirRate_Modparams->index;
+        }
         LostConnection(true);
         LastSyncPacket = now;           // reset this variable to stop rf mode switching and add extra time
         RFmodeLastCycled = now;         // reset this variable to stop rf mode switching and add extra time
