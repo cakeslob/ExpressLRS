@@ -872,7 +872,8 @@ static void CheckConfigChangePending()
 
 bool ICACHE_RAM_ATTR RXdoneISR(SX12xxDriverCommon::rx_status const status)
 {
-  if (LQCalc.currentIsSet())
+  // busyTransmitting is required here to prevent accidental rxdone IRQs due to interference triggering RXdoneISR.
+  if (LQCalc.currentIsSet() || busyTransmitting)
   {
     return false; // Already received tlm, do not run ProcessTLMpacket() again.
   }
@@ -884,7 +885,7 @@ bool ICACHE_RAM_ATTR RXdoneISR(SX12xxDriverCommon::rx_status const status)
     SetClearChannelAssessmentTime();
   }
 #endif
-  busyTransmitting = false;
+
   return packetSuccessful;
 }
 
