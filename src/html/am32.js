@@ -113,8 +113,9 @@ async function fill_rcinputs()
             if (pin_parts[0] == "PWM" || pin_parts[0] == "DSHOT" || pin_parts[0] == "DSHOT3D") {
                 pin_num = parseInt(pin_parts[2]);
                 let ch_num = parseInt(pin_parts[1]);
+                let ch_num_print = ch_num + 1;
                 opt.value = pin_num;
-                opt.innerHTML = `${pin_parts[0]} CH-${ch_num} PIN-${pin_num}`;
+                opt.innerHTML = `${pin_parts[0]} CH-${ch_num_print} PIN-${pin_num}`;
             }
             else if (pin_parts[0].startsWith("SERTX")) {
                 pin_num = parseInt(pin_parts[1]);
