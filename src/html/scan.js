@@ -169,9 +169,9 @@ function updatePwmSettings(arPwm) {
   arPwm.forEach((item,index)=>{
     const pinMode = _(`pwm_${index}_mode`)
     pinMode.onchange = () => {
-      setDisabled(index, pinMode.value > 9);
+      setDisabled(index, pinMode.value > 10);
       const updateOthers = (value, enable) => {
-        if (value > 9) { // disable others
+        if (value > 10) { // disable others
           arPwm.forEach((item, other) => {
             if (other != index) {
               document.querySelectorAll(`#pwm_${other}_mode option`).forEach(opt => {
@@ -220,8 +220,8 @@ function updatePwmSettings(arPwm) {
     const pinRxMode = _(`pwm_${pinRxIndex}_mode`);
     const pinTxMode = _(`pwm_${pinTxIndex}_mode`);
     pinRxMode.onchange = () => {
-      if (pinRxMode.value == 9) { // Serial
-        pinTxMode.value = 9;
+      if (pinRxMode.value == 10) { // Serial
+        pinTxMode.value = 10;
         setDisabled(pinRxIndex, true);
         setDisabled(pinTxIndex, true);
         pinTxMode.disabled = true;
@@ -238,8 +238,8 @@ function updatePwmSettings(arPwm) {
       }
     }
     pinTxMode.onchange = () => {
-      if (pinTxMode.value == 9) { // Serial
-        pinRxMode.value = 9;
+      if (pinTxMode.value == 10) { // Serial
+        pinRxMode.value = 10;
         setDisabled(pinRxIndex, true);
         setDisabled(pinTxIndex, true);
         pinTxMode.disabled = true;
@@ -249,7 +249,7 @@ function updatePwmSettings(arPwm) {
     }
     const pinTx = pinTxMode.value;
     pinRxMode.onchange();
-    if (pinRxMode.value != 9) pinTxMode.value = pinTx;
+    if (pinRxMode.value != 10) pinTxMode.value = pinTx;
   }
 }
 @@end
