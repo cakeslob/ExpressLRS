@@ -140,10 +140,13 @@ pwm_channel_t PWMController::allocate(uint8_t pin, uint32_t frequency)
             .duty_mode = MCPWM_DUTY_MODE_0,
             .counter_mode = MCPWM_UP_COUNTER,
         };
+        pinMode(pin, OUTPUT);
         auto err = mcpwm_gpio_init(mcpwm_config[channel].unit, mcpwm_config[channel].signal, pin);
-        if (err != ESP_OK)
-        {
+        if (err != ESP_OK) {
             DBGLN("mcpwm_gpio_init failed with error 0x%x on pin %d", err, pin);
+        }
+        else {
+            DBGLN("allocated mcpwm ch %d on pin %d", channel, pin);
         }
         mcpwm_init(mcpwm_config[channel].unit, mcpwm_config[channel].timer, &pwm_config);
         mcpwm_frequencies[channel] = frequency;
@@ -174,6 +177,7 @@ pwm_channel_t PWMController::allocate(uint8_t pin, uint32_t frequency)
                 }
                 if (ledcTimerConfigs[timer_idx] == frequency)
                 {
+                    pinMode(pin, OUTPUT);
                     ledcAttachPinEx(pin, ch, (ledc_timer_t)timer_idx);
                     ledc_config[ch].pin = pin;
                     ledc_config[ch].resolution_bits = bits;
@@ -202,6 +206,7 @@ void PWMController::release(pwm_channel_t channel)
         ledc_config[ch].pin = -1;
         ledc_config[ch].resolution_bits = 0;
         ledc_config[ch].interval = 0;
+        ledc_config[ch].attached = false;
     }
 #if SOC_MCPWM_SUPPORTED
     else if (IS_MCPWM_CHANNEL(channel))
@@ -226,13 +231,16 @@ void PWMController::setDuty(pwm_channel_t channel, uint16_t duty)
             if (ledc_config[ch].attached == false) {
                 ledcAttachPinEx(ledc_config[ch].pin, ch, (ledc_timer_t)(ledc_config[ch].tmr_idx));
                 ledc_config[ch].attached = true;
+                //DBGLN("ledc reattach %u", ch);
             }
             ledcWrite(ch, map(duty, 0, 1000, 0, (1 << ledc_config[ch].resolution_bits) - 1));
+            //DBGLN("ledc duty %u %u", ch, duty);
         }
         else {
             if (ledc_config[ch].attached) {
                 ledcDetachPin(ledc_config[ch].pin);
                 ledc_config[ch].attached = false;
+                //DBGLN("ledc detach %u", ch);
             }
         }
     }
@@ -240,12 +248,8 @@ void PWMController::setDuty(pwm_channel_t channel, uint16_t duty)
     else if (IS_MCPWM_CHANNEL(channel))
     {
         auto ch = MCPWM_CHANNEL(channel);
-        if (duty > 0) {
-            mcpwm_set_duty(mcpwm_config[ch].unit, mcpwm_config[ch].timer, mcpwm_config[ch].generator, duty / 10.0f);
-        }
-        else {
-            mcpwm_stop(mcpwm_config[ch].unit, mcpwm_config[ch].timer);
-        }
+        mcpwm_set_duty(mcpwm_config[ch].unit, mcpwm_config[ch].timer, mcpwm_config[ch].generator, duty / 10.0f);
+        //DBGLN("mcpwm duty %u %u", ch, duty);
     }
 #endif
 }
@@ -259,13 +263,16 @@ void PWMController::setMicroseconds(pwm_channel_t channel, uint16_t microseconds
             if (ledc_config[ch].attached == false) {
                 ledcAttachPinEx(ledc_config[ch].pin, ch, (ledc_timer_t)(ledc_config[ch].tmr_idx));
                 ledc_config[ch].attached = true;
+                //DBGLN("ledc reattach %u", ch);
             }
             ledcWrite(ch, map(microseconds, 0, ledc_config[ch].interval, 0, (1 << ledc_config[ch].resolution_bits) - 1));
+            //DBGLN("ledc us %u", channel, microseconds);
         }
         else {
             if (ledc_config[ch].attached) {
                 ledcDetachPin(ledc_config[ch].pin);
                 ledc_config[ch].attached = false;
+                //DBGLN("ledc detach %u", ch);
             }
         }
     }
@@ -273,12 +280,8 @@ void PWMController::setMicroseconds(pwm_channel_t channel, uint16_t microseconds
     else if (IS_MCPWM_CHANNEL(channel))
     {
         auto ch = MCPWM_CHANNEL(channel);
-        if (microseconds > 0) {
-            mcpwm_set_duty_in_us(mcpwm_config[ch].unit, mcpwm_config[ch].timer, mcpwm_config[ch].generator, microseconds);
-        }
-        else {
-            mcpwm_stop(mcpwm_config[ch].unit, mcpwm_config[ch].timer);
-        }
+        mcpwm_set_duty_in_us(mcpwm_config[ch].unit, mcpwm_config[ch].timer, mcpwm_config[ch].generator, microseconds);
+        //DBGLN("mcpwm us %u %u", ch, microseconds);
     }
 #endif
 }

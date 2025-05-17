@@ -14,6 +14,7 @@ enum {
     HBRIDGE_IDX_B2 = 3,
 };
 
+extern uint32_t ChannelDataMixed[CRSF_NUM_CHANNELS];
 static pwm_channel_t hbridge_channels[4];
 static bool has_init = false;
 static unsigned long move_time = 0;
@@ -133,11 +134,12 @@ void hbridge_update(unsigned long now)
         return;
     }
 
-    unsigned ch1 = ChannelData[0];
-    unsigned ch2 = ChannelData[1];
+    unsigned ch1 = ChannelDataMixed[0];
+    unsigned ch2 = ChannelDataMixed[1];
 
     if (hbridge_armed == false && ch1 == CRSF_CHANNEL_VALUE_MID && ch2 == CRSF_CHANNEL_VALUE_MID) {
         hbridge_armed = true;
+        DBGLN("hbridge armed");
     }
 
     if (hbridge_armed == false) {
