@@ -1,3 +1,5 @@
+#ifdef BUILD_SHREW_GENERAL
+
 #include <stdio.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -7,8 +9,6 @@
 #include <esp_intr_alloc.h>
 
 #include "common.h"
-
-#ifdef BUILD_SHREW_GENERAL
 
 extern void shrew_forceAllFailsafe();
 

@@ -54,7 +54,9 @@ extern void shrew_mix();
 void ICACHE_RAM_ATTR servoNewChannelsAvailable()
 {
     newChannelsAvailable = true;
+    #ifdef BUILD_SHREW_GENERAL
     shrewbo_onDataHook();
+    #endif
 }
 
 uint16_t servoOutputModeToFrequency(eServoOutputMode mode)
@@ -156,7 +158,7 @@ static void servosFailsafe()
         const rx_config_pwm_t *chConfig = config.GetPwmChannel(ch);
         if (chConfig->val.failsafeMode == PWMFAILSAFE_SET_POSITION) {
             // Note: Failsafe values do not respect the inverted flag, failsafe values are absolute
-            uint16_t us = chConfig->val.failsafe + SERVO_FAILSAFE_MIN;
+            uint16_t us = chConfig->val.failsafe + SERVO_FAILSAFE_MIN; // 1500 = x + 988
             if (chConfig->val.stretched) {
                 us = fmap(us, SERVO_FAILSAFE_MIN, 2012, 476, 2524);
             }
@@ -194,6 +196,7 @@ static void servosUpdate(unsigned long now)
         newChannelsAvailable = false;
         lastUpdate = now;
 
+        #ifdef BUILD_SHREW_GENERAL
         #if DSHOT_ENABLE_AUTO_ARM
         if (dshotWasFailsafe) {
             dshotArmingTime = millis();
@@ -217,6 +220,7 @@ static void servosUpdate(unsigned long now)
         #if defined(PLATFORM_ESP32)
         dshotAllZero = true;
         #endif
+        #endif // #ifdef BUILD_SHREW_GENERAL
 
         for (int ch = 0 ; ch < GPIO_PIN_PWM_OUTPUTS_COUNT ; ++ch)
         {
@@ -274,7 +278,9 @@ static void servosUpdate(unsigned long now)
     else if (lastUpdate && ((getLq() == 0) || (now - lastUpdate > FAILSAFE_ABS_TIMEOUT_MS)))
     {
         servosFailsafe();
+        #ifdef BUILD_SHREW_GENERAL
         shrewbo_onDisconnectHook();
+        #endif
         lastUpdate = 0;
     }
 }
@@ -394,9 +400,11 @@ static int start()
 
 static int event()
 {
+    #ifdef BUILD_SHREW_GENERAL
     if (shrew_isWebCtrlActive()) {
         return DURATION_IMMEDIATELY;
     }
+    #endif
     if (!OPT_HAS_SERVO_OUTPUT || connectionState == disconnected)
     {
         // Disconnected should come after failsafe on the RX,
