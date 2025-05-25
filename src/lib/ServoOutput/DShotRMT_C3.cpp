@@ -166,7 +166,7 @@ void DShotRMT::send_dshot_value(uint16_t throttle_value, telemetric_request_t te
 	next_packet.telemetric_request = telemetric_request;
 	next_packet.checksum = this->calc_dshot_chksum(next_packet);
 
-	has_new_data = true;
+	has_new_data = 10;
 	// only cache the next packet but don't need to encode it or send it yet, it'll be sent later
 }
 
@@ -251,7 +251,7 @@ void DShotRMT::output_rmt_data() {
 	encode_dshot_to_rmt(prepare_rmt_data(next_packet));
 	rmt_fill_tx_items(rmt_channel, dshot_tx_rmt_item, DSHOT_PACKET_LENGTH, 0);
 	rmt_tx_start(rmt_channel, true);
-	has_new_data = false;
+	has_new_data = has_new_data >= 1 ? (has_new_data - 1) : 0;
 }
 
 void DShotRMT::set_pin() {
@@ -285,7 +285,7 @@ void DShotRMT::poll() {
 	}
 	DShotRMT* inst = cur_node;
 	cur_node = (DShotRMT*)inst->next_node; // cycle through linked list
-	if (inst->has_new_data || //  send if required
+	if (inst->has_new_data > 0 || //  send if required
 		(inst->looping && (now_us - inst->last_send_time) >= 2000) // limit looping speed
 		) {
 		inst->output_rmt_data(); // actually send the data, this will set the pin first, and clear the has_new_data flag

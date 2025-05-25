@@ -32,7 +32,7 @@ class DShotRMT {
         uint16_t ticks_one_high = 0;
         uint16_t ticks_one_low = 0;
 
-        bool has_new_data = false;
+        uint8_t has_new_data = 0;
         bool looping = true;
 
         rmt_item32_t* encode_dshot_to_rmt(uint16_t parsed_packet);
