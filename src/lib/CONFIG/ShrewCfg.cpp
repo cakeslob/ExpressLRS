@@ -24,7 +24,11 @@ void shrew_appendDefaults(RxConfig* cfg, rx_config_t* rxcfg)
             pwm->val.inputChannel += 2;
         }
         pwm->val.failsafeMode = PWMFAILSAFE_NO_PULSES;
-        #if defined(BUILD_SHREW_LACERATION)
+        #if defined(BUILD_SHREW_LACERATION_PWM)
+        pwm->val.failsafeMode = PWMFAILSAFE_NO_PULSES;
+        pwm->val.failsafe = 512;
+        pwm->val.mode = som400Hz;
+        #elif defined(BUILD_SHREW_LACERATION_DSHOT)
         pwm->val.failsafeMode = PWMFAILSAFE_SET_POSITION;
         pwm->val.failsafe = 512;
         pwm->val.mode = somDShot3D;
