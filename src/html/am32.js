@@ -1024,30 +1024,45 @@ async function serport_ajax_flashRead(start_addr, read_len, chunk_size, addr_mul
     let adr = start_addr;
     while (buffer.length < read_len)
     {
-        let data = await serport_ajax("send set address", srvaction_ser_write, serport_lastpin, serport_genSetAddressCmd(adr / addr_multi));
-        await serport_ajax_readAck("set address");
-        data = await serport_ajax("send read cmd", srvaction_ser_write, serport_lastpin, serport_genReadCmd(chunk_size));
-        await new Promise(resolve => setTimeout(resolve, 50));
-        let reply_size = chunk_size + 3;
-        data = await serport_ajax_read(reply_size, 1000);
-        let timedout = false;
-        if (data.length < reply_size)
+        var data = null;
+        for (let retries = 3; retries >= 0; retries--)
         {
-            timedout = true;
-        }
-        if (data.length >= 4) {
-            if (data[data.length - 1] != 0x30) {
-                throw new Error(`did not get ACK during read of address ${adr}, reply was 0x${data[data.length - 1].toString(16)}`);
+            try
+            {
+                data = await serport_ajax("send set address", srvaction_ser_write, serport_lastpin, serport_genSetAddressCmd(adr / addr_multi));
+                await serport_ajax_readAck("set address");
+                data = await serport_ajax("send read cmd", srvaction_ser_write, serport_lastpin, serport_genReadCmd(chunk_size));
+                await new Promise(resolve => setTimeout(resolve, 50));
+                let reply_size = chunk_size + 3;
+                data = await serport_ajax_read(reply_size, 1000);
+                let timedout = false;
+                if (data.length < reply_size)
+                {
+                    timedout = true;
+                }
+                if (data.length >= 4) {
+                    if (data[data.length - 1] != 0x30) {
+                        throw new Error(`did not get ACK during read of address ${adr}, reply was 0x${data[data.length - 1].toString(16)}`);
+                    }
+                    if (serport_verifyCrc(data) == false) {
+                        throw new Error(`CRC failed during read of address ${adr}`);
+                    }
+                    let actual_data = data.slice(0, -3);
+                    buffer = buffer.concat(actual_data);
+                }
+                if (timedout)
+                {
+                    return buffer;
+                }
+                break; // all good, no need to retry
             }
-            if (serport_verifyCrc(data) == false) {
-                throw new Error(`CRC failed during read of address ${adr}`);
+            catch (e)
+            {
+                console.log("serport_ajax_flashRead internal error: " + e.toString());
+                if (retries == 0) {
+                    throw e;
+                }
             }
-            let actual_data = data.slice(0, -3);
-            buffer = buffer.concat(actual_data);
-        }
-        if (timedout)
-        {
-            return buffer;
         }
         adr += chunk_size;
         let percentage;
@@ -1307,6 +1322,8 @@ async function btn_serwrite_onclick_a()
     getEleById("btn_fwupdate").disabled = false;
 }
 
+let fwupdate_is_ongoing = false;
+
 async function fwupdate_data(content)
 {
     let success = false;
@@ -1329,11 +1346,27 @@ async function fwupdate_data(content)
     let pinnum = getEleById("drop_selpin").value;
     if (!isRunningLocally()) {
         let flash_length = current_chip["mcu"]["eeprom_start"] - current_chip["mcu"]["flash_start"];
+        fwupdate_is_ongoing = true;
         await serport_ajax_flashWrite(content, current_chip["mcu"]["flash_start"], flash_length, flash_write_chunk, current_chip["mcu"]["addr_multi"], true);
-        data = await serport_ajax_flashRead(current_chip["mcu"]["flash_start"], flash_length, flash_write_chunk, current_chip["mcu"]["addr_multi"], true);
-        for (let i = 0; i < content.length; i++) {
-            if (content[i] != data[i]) {
-                throw new Error(`write verification failed at index ${i}`);
+        for (let retries = 3; retries >= 0; retries--)
+        {
+            try
+            {
+                data = await serport_ajax_flashRead(current_chip["mcu"]["flash_start"], flash_length, flash_write_chunk, current_chip["mcu"]["addr_multi"], true);
+                fwupdate_is_ongoing = false;
+                for (let i = 0; i < content.length; i++) {
+                    if (content[i] != data[i]) {
+                        throw new Error(`FW update verification failed at index ${i}`);
+                    }
+                }
+                break; // all good, no need to retry
+            }
+            catch (e)
+            {
+                console.log("fwupdate_data serport_ajax_flashRead error: " + e.toString());
+                if (retries == 0) {
+                    throw e;
+                }
             }
         }
     }
@@ -1356,10 +1389,12 @@ async function fwupdate_data(content)
     catch (e) {
         cuteAlert({
             type: 'error',
-            title: 'Error during EEPROM write',
-            message: e.toString()
+            title: 'Error during FW Update',
+            message: e.toString() + "\r\n > Last Progress: " + getEleById("div_progress").innerHTML
         });
     }
+
+    fwupdate_is_ongoing = false;
 
     getEleById("div_progress").style.display = "none";
     getEleById("btn_serwrite").style.display = "inline-block";
@@ -1504,7 +1539,7 @@ function fwupdate(e)
                 cuteAlert({
                     type: 'error',
                     title: 'Error During FW Update',
-                    message: er.toString()
+                    message: er.toString() + "\r\n > Last Progress: " + getEleById("div_progress").innerHTML
                 });
                 console.log("error: exception while reading/sending firmware: " + er.toString());
             });
