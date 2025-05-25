@@ -191,9 +191,9 @@ function updatePwmSettings(arPwm) {
       pinModes[index] = pinMode.value;
 
       // show Serial2 protocol selection only if Serial2 TX is assigned
-      _('serial1-config').style.display = 'none';
-      if (pinMode.value == 14) // Serial2 TX
-        _('serial1-config').style.display = 'block';
+      //_('serial1-config').style.display = 'none';
+      //if (pinMode.value == 14) // Serial2 TX
+      //  _('serial1-config').style.display = 'block';
     }
     pinMode.onchange();
 
@@ -229,7 +229,6 @@ function updatePwmSettings(arPwm) {
         _('baud-config').style.display = 'block';
       }
       else {
-        pinTxMode.value = 0;
         setDisabled(pinRxIndex, false);
         setDisabled(pinTxIndex, false);
         pinTxMode.disabled = false;
