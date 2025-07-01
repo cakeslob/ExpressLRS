@@ -2067,9 +2067,13 @@ void resetConfigAndReboot()
 
 void setup()
 {
-    #ifdef BUILD_SHREW_HBRIDGE_MEGA
+    #if defined(BUILD_SHREW_HBRIDGE_MEGA)
     pinMode(4, OUTPUT);
     digitalWrite(4, HIGH);
+    #endif
+    #if defined(BUILD_SHREW_HBRIDGE_PRO)
+    pinMode(21, OUTPUT);
+    digitalWrite(21, HIGH);
     #endif
 
     #if defined(TARGET_UNIFIED_RX)
