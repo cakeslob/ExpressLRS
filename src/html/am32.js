@@ -376,9 +376,10 @@ function sld_onchange(i)
 
 function chkbox_onchange(i)
 {
-    if (getEleById("chk_bidirectional").checked) {
-        getEleById("chk_complementarypwm").checked = true;
-    }
+    //if (getEleById("chk_bidirectional").checked) {
+    //    getEleById("chk_complementarypwm").checked = true;
+    //}
+
     if (i == "bidirectional") {
         const dropdown = getEleById("drop_selpin");
         if (dropdown) {
