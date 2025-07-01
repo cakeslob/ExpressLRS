@@ -385,7 +385,7 @@ static int start()
 #if defined(PLATFORM_ESP32)
         else if (((eServoOutputMode)chConfig->val.mode) == somDShot || ((eServoOutputMode)chConfig->val.mode) == somDShot3D)
         {
-            dshotInstances[ch]->begin(DSHOT300, false); // Set DShot protocol and bidirectional dshot bool
+            dshotInstances[ch]->begin(DSHOT600, false); // Set DShot protocol and bidirectional dshot bool
             dshotInstances[ch]->send_dshot_value(0);    // Set throttle low so the ESC can continue initialsation
         }
 #endif
@@ -527,7 +527,7 @@ bool servos_singleInit(int selected_pin)
                 DBGLN("Initializing DShot: gpio: %u, ch: %d, rmtChannel: %u", gpio, ch, rmtChannel);
                 pinMode(pin, OUTPUT);
                 dshotInstances[ch] = new DShotRMT(gpio, rmtChannel); // Initialize the DShotRMT instance
-                dshotInstances[ch]->begin(DSHOT300, false);
+                dshotInstances[ch]->begin(DSHOT600, false);
                 servoWrite(ch, 0);
                 res = true;
                 rmtCH++;
