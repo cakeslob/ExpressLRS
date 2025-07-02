@@ -2170,6 +2170,11 @@ void setup()
     // setup() eats up some of this time, which can cause the first mode connection to fail.
     // Resetting the time here give the first mode a better chance of connection.
     RFmodeLastCycled = millis();
+
+    // if there's no way to continue operating due to no way to bind, then just start Wi-Fi
+    if (!config.GetIsBound() && config.GetBindStorage() == BINDSTORAGE_PERMANENT) {
+        setWifiUpdateMode();
+    }
 }
 
 #if defined(PLATFORM_ESP32_C3)
