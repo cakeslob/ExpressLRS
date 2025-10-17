@@ -3,6 +3,8 @@ function am32_init()
     getEleById("btn_readbinfile").addEventListener("change", readBinFile, false);
     getEleById("tbl_checkboxes").innerHTML      = make_all_checkboxes(plain_checkboxes);
     getEleById("tbl_sliders").innerHTML         = make_all_sliders(plain_sliders);
+    getEleById("tbl_checkboxes_219").innerHTML  = make_all_checkboxes(more_checkboxes);
+    getEleById("tbl_sliders_219").innerHTML     = make_all_sliders(more_sliders);
     getEleById("tbl_extracheckboxes").innerHTML = make_all_checkboxes(extra_checkboxes);
     getEleById("tbl_extrasliders").innerHTML    = make_all_sliders(extra_sliders);
     getEleById("btn_fwupdate").addEventListener("change", fwupdate, false);
@@ -203,6 +205,10 @@ let plain_checkboxes = [
     ["Double Tap Reverse",     false, 38, ],
 ];
 
+let more_checkboxes = [
+    ["Disable Stick Calibration", false, 7, ],
+];
+
 let extra_checkboxes = [
     ["Automatic Timing",       false, 53, ],
     ["Drive by RPM",           false, 54, ],
@@ -231,6 +237,16 @@ let plain_sliders = [
     ["Current Limit Amps"    ,     0,     0,   202,      2,      0,   44, false, ],
 ];
 
+let more_sliders = [
+    ["Max Ramp"              ,   160,     0,   255,      1,      0,    5, false, ],
+    ["Minimum Duty Cycle"    ,     2,     2,   512,      2,      0,    6, false, ],
+    ["Abs. Voltage Cutoff"   ,     0,     0,  1275,      5,      0,    8, false, ],
+    ["Current K_P"           ,   100,     0,   255,      1,      0,    9, false, ],
+    ["Current K_I"           ,     0,     0,   255,      1,      0,    9, false, ],
+    ["Current K_D"           ,   100,     0,   255,      1,      0,    9, false, ],
+    ["Active Brake Power"    ,     0,     0,   255,      1,      0,    9, false, ],
+];
+
 let extra_sliders = [
 //    ["Speed Ctrl Min Input"  ,    47,    47,  5147,     20,     47,   55, false, ],
 //    ["Speed Ctrl Max Input"  ,  5147,    47,  5147,     20,     47,   56, false, ],
@@ -247,9 +263,9 @@ let extra_sliders = [
 ];
 
 let all_sliders = [];
-all_sliders = all_sliders.concat(plain_sliders, extra_sliders);
+all_sliders = all_sliders.concat(plain_sliders, more_sliders, extra_sliders);
 let all_checkboxes = [];
-all_checkboxes = all_checkboxes.concat(plain_checkboxes, extra_checkboxes);
+all_checkboxes = all_checkboxes.concat(plain_checkboxes, more_checkboxes, extra_checkboxes);
 
 let fn_saveByteArray; // this will be a function
 
@@ -510,11 +526,12 @@ function readBin(barr, isFile)
             dbg_txt += "warning: bootloader version invalid\r\n";
         }
 
+        if (current_chip == null) {
+            current_chip = {};
+        }
+
         if (isFile == false)
         {
-            if (current_chip == null) {
-                current_chip = {};
-            }
             current_chip["eeprom_0"] = barr[0];
             current_chip["eeprom_layout"] = barr[1];
             current_chip["bootloader_version"] = barr[2];
@@ -527,6 +544,11 @@ function readBin(barr, isFile)
             let allow_extras;
             //allow_extras = getEleById("chk_experimentalupgrade").checked;
             allow_extras = current_chip["eeprom_layout"] >= 5 && current_chip["fw_version_major"] >= 3;
+
+            let is_219;
+            is_219 = current_chip["eeprom_layout"] >= 3 && current_chip["fw_version_major"] == 2 && current_chip["fw_version_minor"] >= 19;
+            current_chip["is_219_or_later"] = is_219;
+
             let extras_bidx = extra_checkboxes[0][2];
             for (let i = 0; i < all_checkboxes.length; i++)
             {
@@ -572,14 +594,19 @@ function readBin(barr, isFile)
 
             let txt_devicename = getEleById("txt_devicename");
             let dev_name = "";
-            for (let i = 0; i < 12; i++)
-            {
-                let x = barr[5 + i];
-                if (x == 0 || x == 0xFF) {
-                    break;
+            
+            if (!is_219) {
+                for (let i = 0; i < 12; i++)
+                {
+                    let x = barr[5 + i];
+                    if (x == 0 || x == 0xFF) {
+                        break;
+                    }
+                    dev_name += String.fromCharCode(x);
                 }
-                dev_name += String.fromCharCode(x);
+                txt_devicename.disabled = false;
             }
+
             txt_devicename.value = dev_name;
 
             let txt_crsfchannel = getEleById("txt_crsfchannel");
@@ -676,15 +703,26 @@ function generateBin()
     let drop_rcinput = getEleById("drop_rcinput");
     buffer8[46] = Math.round(parseInt(drop_rcinput.value.substring(2)));
 
+    let is_219;
+    is_219 = current_chip["eeprom_layout"] >= 3 && current_chip["fw_version_major"] == 2 && current_chip["fw_version_minor"] >= 19;
+
     let txt_devicename = getEleById("txt_devicename");
     let i;
-    for (i = 0; i < 12 && i < txt_devicename.value.length; i++)
-    {
-        buffer8[5 + i] = Math.round(txt_devicename.value.charCodeAt(i)) & 0xFF;
+    if (!is_219) {
+        for (i = 0; i < 12 && i < txt_devicename.value.length; i++)
+        {
+            buffer8[5 + i] = Math.round(txt_devicename.value.charCodeAt(i)) & 0xFF;
+        }
+        for (; i < 12; i++)
+        {
+            buffer8[5 + i] = 0;
+        }
+        getEleById("tbl_checkboxes_219").style.display = "none";
+        getEleById("tbl_sliders_219").style.display = "none";
     }
-    for (; i < 12; i++)
-    {
-        buffer8[5 + i] = 0;
+    else {
+        getEleById("tbl_checkboxes_219").style.display = "table-row-group";
+        getEleById("tbl_sliders_219").style.display = "table-row-group";
     }
 
     let txt_crsfchannel = getEleById("txt_crsfchannel");
@@ -1128,6 +1166,16 @@ async function serport_ajax_flashWrite(contents, start_addr, write_len, chunk_si
     }
 }
 
+async function serport_ajax_forceReboot()
+{
+    await serport_ajax("force reboot", srvaction_ser_write, serport_lastpin, [0, 0, 0, 0], 100, [0, 0, 0, 0]);
+    await serport_ajax_readAck("force reboot");
+    await serport_ajax("setting pin low", srvaction_pin_low, serport_lastpin);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    await serport_ajax("setting pin high", srvaction_pin_high, serport_lastpin);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+}
+
 function btn_connect_onclick()
 {
     btn_connect_onclick_a();
@@ -1188,6 +1236,23 @@ async function btn_connect_onclick_a()
 
                 data = await serport_ajax_flashRead(mcu["eeprom_start"], eeprom_total_length, flash_write_chunk, mcu["addr_multi"], false);
                 readBin(data, false);
+                if (current_chip != null && current_chip.hasOwnProperty("is_219_or_later")) {
+                    if (current_chip["is_219_or_later"]) {
+                        data = await serport_ajax_flashRead(mcu["eeprom_start"] - 32, 20, flash_write_chunk, mcu["addr_multi"], false);
+                        let txt_devicename = getEleById("txt_devicename");
+                        let dev_name = "";
+                        for (let i = 0; i < 20; i++)
+                        {
+                            let x = data[i];
+                            if (x == 0 || x == 0xFF) {
+                                break;
+                            }
+                            dev_name += String.fromCharCode(x);
+                        }
+                        txt_devicename.value = dev_name;
+                        txt_devicename.disabled = true;
+                    }
+                }
                 break;
             }
             catch (e_inner) {
@@ -1370,6 +1435,7 @@ async function fwupdate_data(content)
                 }
             }
         }
+        await serport_ajax_forceReboot();
     }
     else {
         getEleById("div_progress").style.display = "block";
@@ -1403,6 +1469,9 @@ async function fwupdate_data(content)
     getEleById("drop_selpin").disabled = false;
     getEleById("btn_connect").disabled = false;
     getEleById("btn_fwupdate").disabled = false;
+
+    await btn_connect_onclick_a();
+
     return success;
 }
 
@@ -1528,11 +1597,13 @@ function fwupdate(e)
                 }
                 else if (need_read_again)
                 {
+                    /*
                     cuteAlert({
                         type: 'info',
                         title: 'You should reboot',
                         message: `The new firmware file appears to also write EEPROM data, in this case, please power-cycle the ESC, and then read it again`
                     });
+                    */
                 }
                 getEleById("btn_fwupdate").value = "";
             }).catch(er => {
