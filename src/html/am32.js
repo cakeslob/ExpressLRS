@@ -242,9 +242,9 @@ let more_sliders = [
     ["Minimum Duty Cycle"    ,     2,     2,   512,      2,      0,    6, false, ],
     ["Abs. Voltage Cutoff"   ,     0,     0,  1275,      5,      0,    8, false, ],
     ["Current K_P"           ,   100,     0,   255,      1,      0,    9, false, ],
-    ["Current K_I"           ,     0,     0,   255,      1,      0,    9, false, ],
-    ["Current K_D"           ,   100,     0,   255,      1,      0,    9, false, ],
-    ["Active Brake Power"    ,     0,     0,   255,      1,      0,    9, false, ],
+    ["Current K_I"           ,     0,     0,   255,      1,      0,   10, false, ],
+    ["Current K_D"           ,   100,     0,   255,      1,      0,   11, false, ],
+    ["Active Brake Power"    ,     0,     0,   255,      1,      0,   12, false, ],
 ];
 
 let extra_sliders = [
@@ -605,6 +605,14 @@ function readBin(barr, isFile)
                     dev_name += String.fromCharCode(x);
                 }
                 txt_devicename.disabled = false;
+                getEleById("tbl_checkboxes_219").style.display = "none";
+                getEleById("tbl_sliders_219").style.display = "none";
+            }
+            else {
+                // device name is not a part of EEPROM in v2.19 or later
+                txt_devicename.disabled = true;
+                getEleById("tbl_checkboxes_219").style.display = "table-row-group";
+                getEleById("tbl_sliders_219").style.display = "table-row-group";
             }
 
             txt_devicename.value = dev_name;
@@ -1169,7 +1177,6 @@ async function serport_ajax_flashWrite(contents, start_addr, write_len, chunk_si
 async function serport_ajax_forceReboot()
 {
     await serport_ajax("force reboot", srvaction_ser_write, serport_lastpin, [0, 0, 0, 0], 100, [0, 0, 0, 0]);
-    await serport_ajax_readAck("force reboot");
     await serport_ajax("setting pin low", srvaction_pin_low, serport_lastpin);
     await new Promise(resolve => setTimeout(resolve, 2000));
     await serport_ajax("setting pin high", srvaction_pin_high, serport_lastpin);
@@ -1236,22 +1243,24 @@ async function btn_connect_onclick_a()
 
                 data = await serport_ajax_flashRead(mcu["eeprom_start"], eeprom_total_length, flash_write_chunk, mcu["addr_multi"], false);
                 readBin(data, false);
-                if (current_chip != null && current_chip.hasOwnProperty("is_219_or_later")) {
-                    if (current_chip["is_219_or_later"]) {
-                        data = await serport_ajax_flashRead(mcu["eeprom_start"] - 32, 20, flash_write_chunk, mcu["addr_multi"], false);
-                        let txt_devicename = getEleById("txt_devicename");
-                        let dev_name = "";
-                        for (let i = 0; i < 20; i++)
-                        {
-                            let x = data[i];
-                            if (x == 0 || x == 0xFF) {
-                                break;
-                            }
-                            dev_name += String.fromCharCode(x);
+                if (current_chip != null && current_chip.hasOwnProperty("is_219_or_later") && current_chip["is_219_or_later"]) {
+                    data = await serport_ajax_flashRead(mcu["eeprom_start"] - 32, 20, flash_write_chunk, mcu["addr_multi"], false);
+                    let txt_devicename = getEleById("txt_devicename");
+                    let dev_name = "";
+                    for (let i = 0; i < 20; i++)
+                    {
+                        let x = data[i];
+                        if (x == 0 || x == 0xFF) {
+                            break;
                         }
-                        txt_devicename.value = dev_name;
-                        txt_devicename.disabled = true;
+                        dev_name += String.fromCharCode(x);
                     }
+                    txt_devicename.value = dev_name;
+                    txt_devicename.disabled = true;
+                }
+                else {
+                    let txt_devicename = getEleById("txt_devicename");
+                    txt_devicename.disabled = false;
                 }
                 break;
             }
