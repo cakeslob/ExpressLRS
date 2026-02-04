@@ -20,6 +20,15 @@
                 "platform": "esp32",
                 "firmware": "Unified_Shrew_2400_RX"
             },
+            "shrewforweact": {
+                "product_name": "WeAct SHREW PWM 2.4Ghz RX P6",
+                "lua_name": "WEACT SHREW PWM2.4R P6",
+                "layout_file": "WeAct Studio C3 2400 PWM 6.json",
+                "upload_methods": ["uart", "wifi"],
+                "min_version": "3.5.0",
+                "platform": "esp32-c3",
+                "firmware": "Unified_SHREW_ESP32C3_2400_RX"
+            },
             "shrewforxr2": {
                 "product_name": "Shrew for XR2",
                 "lua_name": "Shrew-for-XR2",
@@ -613,6 +622,16 @@
                 "firmware": "Unified_ESP32_2400_TX",
                 "prior_target_name": "DIY_2400_TX_ESP32_SX1280_Mini"
             },
+            "weact": {
+                "product_name": "WeAct Studio C3 PWM 2.4Ghz TX",
+                "lua_name": "WS C3 PWM2.4T P6",
+                "layout_file": "WeAct Studio C3 2400 PWM 6.json",
+                "upload_methods": ["uart", "wifi"],
+                "min_version": "3.5.0",
+                "platform": "esp32-c3",
+                "firmware": "Unified_ESP32C3_2400_TX",
+                "prior_target_name": "WeAct_Studio_C3_PWM_2.4Ghz_TX"
+            }, 
             "e28": {
                 "product_name": "DIY ESP32 E28 2.4GHz TX",
                 "lua_name": "DIY2400 E28",
@@ -1076,6 +1095,15 @@
                 "product_name": "Generic ESP32C3 PWM 2.4Ghz RX",
                 "lua_name": "C3 PWM 2400RX",
                 "layout_file": "Generic C3 2400 PWM.json",
+                "upload_methods": ["uart", "wifi", "betaflight"],
+                "min_version": "3.5.0",
+                "platform": "esp32-c3",
+                "firmware": "Unified_ESP32C3_2400_RX"
+            },
+            "c3-pwm6": {
+                "product_name": "WeAct Studio C3 PWM 2.4Ghz RX P6",
+                "lua_name": "WS C3 PWM2.4R P6",
+                "layout_file": "WeAct Studio C3 2400 PWM 6.json",
                 "upload_methods": ["uart", "wifi", "betaflight"],
                 "min_version": "3.5.0",
                 "platform": "esp32-c3",
