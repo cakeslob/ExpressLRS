@@ -261,7 +261,16 @@ export default defineConfig(({ command, mode }) => {
       minifyTemplateLiterals(),
       pruneAm32AssetsPlugin({ enabled: is8285 }),
       viteEsp32HeaderPlugin({ headerOut: env.ELRS_WEB_HEADER_OUT, expectedHeaderName: expectedHeaderName, excludePrefixes: excludePrefixes }),
-      babelDecoratorsPlugin(),
+      babel({
+        babelConfig: {
+          babelrc: false,
+          configFile: false,
+          plugins: [
+            // Configure the decorators plugin with the desired version
+            ['@babel/plugin-proposal-decorators', { version: '2023-05' }],
+          ],
+        },
+      }),
       ...(command === 'serve'
         ? [
             env.VITE_ELRS_PROXY_TARGET
