@@ -1,5 +1,5 @@
 import { defineConfig, loadEnv } from 'vite'
-import babel from 'vite-plugin-babel'
+import { transformAsync } from '@babel/core'
 import { promises as fs } from 'fs'
 import path from 'path'
 import Zopfli from 'node-zopfli-es'
@@ -36,6 +36,10 @@ function toHexArray(buf) {
     lines.push('  ' + parts.slice(i, i + 16).join(', '))
   }
   return lines.join(',\n')
+}
+
+function formatBytes(bytes) {
+  return `${bytes} bytes (${(bytes / 1024).toFixed(2)} KiB)`
 }
 
 function headerPreamble(generatedBy, dateStr, expectedHeaderName) {
@@ -116,8 +120,38 @@ function pruneAm32AssetsPlugin(options = {}) {
   }
 }
 
+function babelDecoratorsPlugin() {
+  let root = process.cwd()
+
+  return {
+    name: 'babel-decorators',
+    configResolved(config) {
+      root = config.root || process.cwd()
+    },
+    async transform(code, id) {
+      const file = id.split('?')[0]
+      const normalized = file.split(path.sep).join('/')
+      const srcRoot = path.resolve(root, 'src').split(path.sep).join('/') + '/'
+
+      if (!normalized.startsWith(srcRoot) || !normalized.endsWith('.js')) {
+        return null
+      }
+
+      const result = await transformAsync(code, {
+        cwd: root,
+        root,
+        filename: file,
+        sourceMaps: true,
+      })
+
+      return result ? { code: result.code ?? code, map: result.map ?? null } : null
+    },
+  }
+}
+
 function viteEsp32HeaderPlugin(options = {}) {
   const headerName = options.headerName || 'esp32_fs.h'
+  const headerOut = options.headerOut || null
   const expectedHeaderName = options.expectedHeaderName || headerName
   const includeMaps = options.includeMaps ?? false // whether to include source maps
   const excludePrefixes = options.excludePrefixes || []
@@ -154,31 +188,39 @@ function viteEsp32HeaderPlugin(options = {}) {
       }
 
       if (files.length === 0) return
+      files.sort()
 
       const genBy = 'vite-esp32-header plugin'
       const when = new Date().toISOString()
       let header = headerPreamble(genBy, when, expectedHeaderName)
 
       const assetEntries = []
+      let totalCompressedBytes = 0
 
       for (const abs of files) {
         const rel = path.relative(distDir, abs).split(path.sep).join('/')
         const webPath = '/' + rel // leading slash for HTTP paths
         const id = toCIdentifier(rel)
-        let data
-        try {
-          data = await fs.readFile(abs)
-        } catch (e) {
-          if (e && e.code === 'ENOENT') continue
-          throw e
-        }
+        const data = await fs.readFile(abs)
         const compressed = Zopfli.gzipSync(data, { numiterations: 15 })
-        const hex = toHexArray(compressed)
+        totalCompressedBytes += compressed.length
         const contentType = guessContentType(rel)
-        header += `\n// ${webPath} (original ${data.length} bytes) -> compressed ${compressed.length} bytes\n`;
-        header += `static const unsigned char ${id}[] PROGMEM = {\n${hex}\n};\n`
-        header += `static const size_t ${id}_len = ${compressed.length};\n`
-        assetEntries.push({ webPath, id, contentType})
+        const hex = toHexArray(compressed)
+        assetEntries.push({ webPath, id, contentType, hex, originalBytes: data.length, compressedBytes: compressed.length })
+      }
+
+      const outFile = headerOut
+        ? path.resolve(root, headerOut)
+        : path.join(distDir, headerName)
+      const artifactName = path.relative(root, outFile)
+
+      header += `\n// Artifact: ${artifactName}\n`
+      header += `// Total web asset payload: ${formatBytes(totalCompressedBytes)} across ${assetEntries.length} assets\n`
+
+      for (const entry of assetEntries) {
+        header += `\n// ${entry.webPath} (original ${entry.originalBytes} bytes) -> compressed ${entry.compressedBytes} bytes\n`
+        header += `static const unsigned char ${entry.id}[] PROGMEM = {\n${entry.hex}\n};\n`
+        header += `static const size_t ${entry.id}_len = ${entry.compressedBytes};\n`
       }
 
       header += '\n// File index for convenient iteration\n'
@@ -191,16 +233,21 @@ function viteEsp32HeaderPlugin(options = {}) {
       header += 'static const size_t WEB_ASSETS_COUNT = sizeof(WEB_ASSETS) / sizeof(WEB_ASSETS[0]);\n\n'
       header += headerEpilogue()
 
-      const outFile = path.join(distDir, headerName)
+      await fs.mkdir(path.dirname(outFile), { recursive: true })
       await fs.writeFile(outFile, header, 'utf8')
-      // eslint-disable-next-line no-console
-      console.log(`\n[${genBy}] Wrote ${path.relative(root, outFile)} with ${assetEntries.length} assets.`)
+      this.info(
+        `Wrote ${artifactName} with ${assetEntries.length} assets. ` +
+        `Total byte-array payload: ${formatBytes(totalCompressedBytes)}.`
+      )
     },
   }
 }
 
 // Simple dev mock server plugin
 import { devMockPlugin } from './dev-mock-plugin.js'
+
+// Proxy plugin for devlopment against real hardware
+import { devProxyPlugin } from './dev-proxy-plugin.js'
 
 // Export standard Vite config with the plugin enabled for builds
 export default defineConfig(({ command, mode }) => {
@@ -213,24 +260,26 @@ export default defineConfig(({ command, mode }) => {
       htmlFeatureBlocksPlugin(env),
       minifyTemplateLiterals(),
       pruneAm32AssetsPlugin({ enabled: is8285 }),
-      viteEsp32HeaderPlugin({ expectedHeaderName, excludePrefixes }),
-      babel({
-        babelConfig: {
-          babelrc: false,
-          configFile: false,
-          plugins: [
-            // Configure the decorators plugin with the desired version
-            ['@babel/plugin-proposal-decorators', { version: '2023-05' }],
-          ],
-        },
-      }),
-      ...(command === 'serve' ? [devMockPlugin()] : []),
+      viteEsp32HeaderPlugin({ headerOut: env.ELRS_WEB_HEADER_OUT, expectedHeaderName: expectedHeaderName, excludePrefixes: excludePrefixes }),
+      babelDecoratorsPlugin(),
+      ...(command === 'serve'
+        ? [
+            env.VITE_ELRS_PROXY_TARGET
+              ? devProxyPlugin({ target: env.VITE_ELRS_PROXY_TARGET })
+              : devMockPlugin()
+          ]
+        : []),
     ],
+    optimizeDeps: {
+      rolldownOptions: {
+        plugins: [htmlFeatureBlocksPlugin(env)],
+      },
+    },
     esbuild: {
       legalComments: 'none'
     },
     build: {
-      rollupOptions: {
+      rolldownOptions: {
         input: {
           app: path.resolve(__dirname, 'index.html'),
         },
@@ -240,7 +289,6 @@ export default defineConfig(({ command, mode }) => {
           manualChunks(id) {
             const p = id.split('\\').join('/');
             const is = (name) => p.includes(`/src/pages/${name}.js`);
-            // Group General route modules
             if (
               is('binding-panel') ||
               is('wifi-panel') ||
@@ -250,25 +298,24 @@ export default defineConfig(({ command, mode }) => {
               is('buttons-panel') ||
               is('rx-options-panel') ||
               is('connections-panel') ||
-              is('serial-panel') ||
-              is('vesc-panel')
+              is('serial-panel')
             ) {
               return 'general';
             }
-            // Group Advanced route modules
             if (
               is('hardware-layout') ||
               //is('continuous-wave') ||
+              is('custom-mixer-panel') ||
+              is('am32-panel') ||
+              is('vesc-panel') ||
               is('lr1121-updater')
             ) {
               return 'advanced';
             }
-            // Force everything else (including node_modules) into the main chunk
-            return 'main';
+            return undefined;
           },
         },
       },
-      // Keep CSS separate; request was specifically about JS files
       cssCodeSplit: true,
       sourcemap: false,
     }
