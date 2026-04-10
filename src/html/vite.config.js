@@ -1,5 +1,5 @@
 import { defineConfig, loadEnv } from 'vite'
-import babel from 'vite-plugin-babel'
+import { transformAsync } from '@babel/core'
 import { promises as fs } from 'fs'
 import path from 'path'
 import Zopfli from 'node-zopfli-es'
@@ -120,6 +120,38 @@ function pruneAm32AssetsPlugin(options = {}) {
   }
 }
 
+function babelDecoratorsPlugin() {
+  let root = process.cwd()
+
+  return {
+    name: 'babel-decorators',
+    configResolved(config) {
+      root = config.root || process.cwd()
+    },
+    async transform(code, id) {
+      const file = id.split('?')[0]
+      const normalized = file.split(path.sep).join('/')
+      const srcRoot = path.resolve(root, 'src').split(path.sep).join('/') + '/'
+
+      if (!normalized.startsWith(srcRoot) || !normalized.endsWith('.js')) {
+        return null
+      }
+
+      const result = await transformAsync(code, {
+        cwd: root,
+        root,
+        filename: file,
+        babelrc: false,
+        configFile: false,
+        sourceMaps: true,
+        plugins: [['@babel/plugin-proposal-decorators', { version: '2023-11' }]],
+      })
+
+      return result ? { code: result.code ?? code, map: result.map ?? null } : null
+    },
+  }
+}
+
 function viteEsp32HeaderPlugin(options = {}) {
   const headerName = options.headerName || 'esp32_fs.h'
   const headerOut = options.headerOut || null
@@ -232,16 +264,7 @@ export default defineConfig(({ command, mode }) => {
       minifyTemplateLiterals(),
       pruneAm32AssetsPlugin({ enabled: is8285 }),
       viteEsp32HeaderPlugin({ headerOut: env.ELRS_WEB_HEADER_OUT, expectedHeaderName: expectedHeaderName, excludePrefixes: excludePrefixes }),
-      babel({
-        babelConfig: {
-          babelrc: false,
-          configFile: false,
-          plugins: [
-            // Configure the decorators plugin with the desired version
-            ['@babel/plugin-proposal-decorators', { version: '2023-05' }],
-          ],
-        },
-      }),
+      babelDecoratorsPlugin(),
       ...(command === 'serve'
         ? [
             env.VITE_ELRS_PROXY_TARGET
@@ -254,7 +277,7 @@ export default defineConfig(({ command, mode }) => {
       legalComments: 'none'
     },
     build: {
-      rollupOptions: {
+      rolldownOptions: {
         input: {
           app: path.resolve(__dirname, 'index.html'),
         },
@@ -289,8 +312,7 @@ export default defineConfig(({ command, mode }) => {
             ) {
               return 'advanced';
             }
-            // Force everything else (including node_modules) into the main chunk
-            return 'main';
+            return undefined;
           },
         },
       },
