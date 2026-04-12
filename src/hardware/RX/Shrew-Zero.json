@@ -1,0 +1,31 @@
+{
+    "serial_rx": 3,
+    "serial_tx": 1,
+    "pwm_outputs": [19, 22, 13, 27, 9, 10],
+
+    "radio_busy": 23,
+    "radio_dio1": 18,
+    "radio_miso": 26,
+    "radio_mosi": 25,
+    "radio_nss": 32,
+    "radio_rst": 21,
+    "radio_sck": 33,
+    "radio_dcdc": true,
+    "power_min": 0,
+    "power_high": 0,
+    "power_max": 0,
+    "power_default": 0,
+    "power_control": 0,
+    "power_values": [13],
+
+    "led_rgb": 5,
+    "led_rgb_isgrb": true,
+    "ledidx_rgb_status": [0],
+    "ledidx_rgb_boot": [0],
+    "led_rgb_shrewcycle": true,
+
+    "vbat": 4,
+    "vbat_offset": 0,
+    "vbat_scale": 14,
+    "vbat_atten": 11
+}
