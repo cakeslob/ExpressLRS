@@ -817,6 +817,17 @@ void RxConfig::Load()
         version = m_config.version & ~CONFIG_MAGIC_MASK;
     DBGLN("Config version %u", version);
 
+    // any flash will force re-reading the defaults from firmware options payload
+    if (m_config.flash_discriminator != firmwareOptions.flash_discriminator) {
+        SetDefaults(false);
+        m_config.flash_discriminator = firmwareOptions.flash_discriminator;
+        m_config.version = RX_CONFIG_VERSION | RX_CONFIG_MAGIC;
+        m_modified = true;
+        Commit();
+        ESP.restart();
+        return;
+    }
+
     // If version is current, all done
     if (version == RX_CONFIG_VERSION)
     {
@@ -1219,6 +1230,10 @@ RxConfig::SetDefaults(bool commit)
     m_config.version = RX_CONFIG_VERSION | RX_CONFIG_MAGIC;
     m_config.modelId = 0xff;
     m_config.power = POWERMGNT::getDefaultPower();
+
+    if (firmwareOptions.hasUID)
+        memcpy(m_config.uid, firmwareOptions.uid, UID_LEN);
+
     if (GPIO_PIN_ANT_CTRL != UNDEF_PIN)
         m_config.antennaMode = 2; // 2 is diversity
     if (GPIO_PIN_NSS_2 != UNDEF_PIN)
@@ -1260,6 +1275,11 @@ RxConfig::SetDefaults(bool commit)
     }
 
     m_config.teamraceChannel = AUX7; // CH11
+
+    if (firmwareOptions.administered_binding) {
+        m_config.bindStorage = BINDSTORAGE_ADMINISTERED;
+    }
+    m_config.fixedPacketRate = firmwareOptions.fixed_packet_rate;
 
     if (commit)
     {
@@ -1420,6 +1440,15 @@ void RxConfig::ReturnLoan()
             memset(m_config.uid, 0, UID_LEN);
 
         m_modified = EVENT_CONFIG_UID_CHANGED;
+    }
+}
+
+void RxConfig::SetFixedPacketRate(int8_t value)
+{
+    if (m_config.fixedPacketRate != value)
+    {
+        m_config.fixedPacketRate = value;
+        m_modified = EVENT_CONFIG_MODEL_CHANGED;
     }
 }
 

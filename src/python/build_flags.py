@@ -61,10 +61,15 @@ def process_json_flag(define):
                 json_flags['rcvr-uart-baud'] = int(dequote(parts.group(2)))
             else:
                 json_flags['airport-uart-baud'] = int(dequote(parts.group(2)))
+        if parts.group(1) == "FIXED_PACKET_RATE":
+            parts = re.search(r"-D(.*)\s*=\s*\"?([0-9]+).*\"?$", define)
+            json_flags['fixed-packet-rate'] = int(dequote(parts.group(2)))
     if define == "-DUNLOCK_HIGHER_POWER"  and not isRX:
         json_flags['unlock-higher-power'] = True
     if define == "-DLOCK_ON_FIRST_CONNECTION" and isRX:
         json_flags['lock-on-first-connection'] = True
+    if define == "-DADMINISTERED_BINDING" and isRX:
+        json_flags['administered-binding'] = True
 
 def process_build_flag(define):
     if define.startswith("-D") or define.startswith("!-D"):

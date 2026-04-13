@@ -200,6 +200,9 @@ static void options_LoadFromFlashOrFile(EspFlashStream &strmFlash)
     #endif
     firmwareOptions.lock_on_first_connection = doc["lock-on-first-connection"] | true;
     firmwareOptions.dji_permanently_armed = doc["dji-permanently-armed"] | false;
+
+    firmwareOptions.administered_binding = doc["administered-binding"] | false;
+    firmwareOptions.fixed_packet_rate = doc["fixed-packet-rate"] | -1;
     #endif
     firmwareOptions.domain = doc["domain"] | 0;
     firmwareOptions.flash_discriminator = doc["flash-discriminator"] | 0U;

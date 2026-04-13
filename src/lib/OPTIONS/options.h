@@ -36,6 +36,8 @@ typedef struct _options {
     bool        lock_on_first_connection:1;
     bool        dji_permanently_armed:1;
     bool        is_airport:1;
+    bool        administered_binding:1; // sets binding type to administered
+    int8_t      fixed_packet_rate; // -1 means automatic, otherwise stores expresslrs_RFrates_e
 #endif
 #if defined(TARGET_TX) || defined(UNIT_TEST)
     uint32_t    tlm_report_interval;

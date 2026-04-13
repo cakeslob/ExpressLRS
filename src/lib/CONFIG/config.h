@@ -252,6 +252,9 @@ typedef struct __attribute__((packed)) {
     uint8_t     teamraceChannel:4,
                 teamracePosition:3,
                 teamracePitMode:1;  // FUTURE: Enable pit mode when disabling model
+
+    int8_t      fixedPacketRate; // -1 means automatic, otherwise stores expresslrs_RFrates_e
+
     uint8_t     targetSysId;
     uint8_t     sourceSysId;
 } rx_config_t;
@@ -290,6 +293,7 @@ public:
     uint8_t GetSourceSysId()  const { return m_config.sourceSysId; }
     rx_config_bindstorage_t GetBindStorage() const { return (rx_config_bindstorage_t)m_config.bindStorage; }
     bool IsOnLoan() const;
+    int8_t GetFixedPacketRate() const { return m_config.fixedPacketRate; }
 
     // Setters
     void SetUID(uint8_t* uid);
@@ -314,6 +318,7 @@ public:
     void SetSourceSysId(uint8_t sysID);
     void SetBindStorage(rx_config_bindstorage_t value);
     void ReturnLoan();
+    void SetFixedPacketRate(int8_t x);
 
 private:
     void CheckUpdateFlashedUid(bool skipDescrimCheck);

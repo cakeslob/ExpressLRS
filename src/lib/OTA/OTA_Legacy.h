@@ -12,7 +12,8 @@ The strategy is to:
  * if we get enough V3 packets, then we can use the old seed to regenerate the hop table, use the old home channel, and switch to legacy mode
 
 The packet structures are so similar that the differences are essentially... ignored...
-except channel 4 is the arming switch, if you are not using a flight controller, this is inconsequential
+except the sync packet, which is decoded as v3, then repackaged as v4, and then processed as v4
+also, channel 4 is the arming switch, if you are not using a flight controller, this is inconsequential
 and Gemini will not work, and any newer additions to OTA functionality will not work
 
 */
@@ -41,8 +42,6 @@ extern uint32_t uidMacSeedGet_v3();
 extern void OtaUpdateCrcInitFromUid_v3();
 extern void ota_cntNewVersionPkts(); // call this when an non-legacy packet is validated
 extern void ota_resetPktVersionCounters(); // call this when switching radio configs/rates
-
-extern void debug_sync_packet(void* pkt, int len);
 
 extern uint16_t OtaCrcInitializer;
 extern uint16_t OtaCrcInitializer_v3;

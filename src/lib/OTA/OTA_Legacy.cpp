@@ -31,6 +31,9 @@ extern void ICACHE_RAM_ATTR GeneratePacketCrcStd(OTA_Packet_s * const otaPktPtr)
 static uint8_t rateIdxXform(uint8_t x);
 static void FHSSrandomiseFHSSsequence_v3(const uint32_t seed);
 
+static void debug_sync_packet(void* pkt, int len);
+static void debug_generic_packet(uint8_t* data, int length, uint32_t crc_initializer);
+
 bool ICACHE_RAM_ATTR ValidatePacketCrcFull_v3(OTA_Packet_v3_s * otaPktPtr)
 {
     uint16_t const calculatedCRC = ota_crc_v3_long.calc((uint8_t*)otaPktPtr, OTA8_CRC_CALC_LEN_v3, OtaCrcInitializer_v3);
@@ -96,7 +99,7 @@ bool ICACHE_RAM_ATTR ProcessRFPacket_v3(SX12xxDriverCommon::rx_status const stat
 
     consecutive_old_pkt_cnt++;
     consecutive_new_pkt_cnt = 0;
-    if (consecutive_old_pkt_cnt >= 5) { // got enough packets passing CRC to think we might be hearing a transmitter running older firmware
+    if (consecutive_old_pkt_cnt >= 3) { // got enough packets passing CRC to think we might be hearing a transmitter running older firmware
         if (ota_isLegacy == false) {
             // time to switch over
             DBGLN("many legacy packets detected");
@@ -113,7 +116,7 @@ bool ICACHE_RAM_ATTR ProcessRFPacket_v3(SX12xxDriverCommon::rx_status const stat
         }
     }
 
-    OTA_Sync_s otaSync;
+    OTA_Sync_s otaSync; // this is the new sync packet structure, we will copy the old sync packet parameters into the new one, field by field, with some translations
     if (otaPktPtr->std.type == PACKET_TYPE_SYNC) {
         if (OtaIsFullRes) {
             memcpy(&otaSync, &otaPktPtr->full.sync.sync, sizeof(OTA_Sync_s));
@@ -121,6 +124,7 @@ bool ICACHE_RAM_ATTR ProcessRFPacket_v3(SX12xxDriverCommon::rx_status const stat
         else {
             memcpy(&otaSync, &otaPktPtr->std.sync, sizeof(OTA_Sync_s));
         }
+        // the old rate indices and the new rate indices are different, we transform this using a look-up table
         otaSync.rfRateEnum = rateIdxXform(OtaIsFullRes ? otaPktPtr->full.sync.sync.rateIndex : otaPktPtr->std.sync.rateIndex);
         #if 0
         if (isDualRadio()) {
@@ -131,6 +135,8 @@ bool ICACHE_RAM_ATTR ProcessRFPacket_v3(SX12xxDriverCommon::rx_status const stat
         otaSync.geminiMode = 0; // TODO: I can't test this anyways
         #endif
         otaSync.otaProtocol = 0; // this bit forces change to MAVLink, but the user can also manually configure MAVLink
+        // now copy the temporary buffer into the original RX buffer
+        // as we will call ProcessRFPacket later
         if (OtaIsFullRes) {
             memcpy(&otaPktPtr->full.sync.sync, &otaSync, sizeof(OTA_Sync_s));
         }
@@ -145,6 +151,7 @@ bool ICACHE_RAM_ATTR ProcessRFPacket_v3(SX12xxDriverCommon::rx_status const stat
 
     #if 0
     // this will correct the CRC with the latest version salt
+    // this is inefficient, it's better to just skip CRC check in the later processing
     if (OtaIsFullRes) {
         GeneratePacketCrcFull((OTA_Packet_s*)otaPktPtr);
     }
@@ -326,7 +333,7 @@ void FHSSrandomiseFHSSsequence_v3(const uint32_t seed)
 #endif
 }
 
-void debug_sync_packet(void* pkt, int len)
+static void debug_sync_packet(void* pkt, int len)
 {
     OTA_Packet_v3_s * const otaPktPtr = (OTA_Packet_v3_s * const)pkt;
     if (otaPktPtr->std.type != PACKET_TYPE_SYNC) {
@@ -357,4 +364,30 @@ void debug_sync_packet(void* pkt, int len)
         DBG("%x ", ((uint8_t*)pkt)[i]);
     }
     DBGCR;
+}
+
+static void debug_generic_packet(uint8_t* data, int length, uint32_t crc_initializer)
+{
+    static uint32_t last_dbg_time = 0;
+    uint32_t now = millis();
+
+    if ((now - last_dbg_time) < 200) {
+        return;
+    }
+    last_dbg_time = now;
+
+    OTA_Packet_v3_s * otaPktPtr = (OTA_Packet_v3_s *)data;
+    bool is_short = length <= sizeof(OTA_Packet4_v3_s);
+
+    uint8_t preserveCrcHigh = otaPktPtr->std.crcHigh;
+    uint16_t inCRC = is_short ? (((uint16_t)otaPktPtr->std.crcHigh << 8) + otaPktPtr->std.crcLow) : otaPktPtr->full.crc;
+
+    uint16_t calculatedCRC = is_short ? ota_crc_v3_short.calc((uint8_t*)data, OTA4_CRC_CALC_LEN_v3, OtaCrcInitializer_v3) : ota_crc_v3_long.calc((uint8_t*)data, OTA8_CRC_CALC_LEN_v3, OtaCrcInitializer_v3);
+    DBGV("OTA DBG [%u]: ", length);
+    for (int i = 0; i < length + 2; i++) {
+        DBGV(" %x", data[i]);
+    }
+    DBGVLN(" # CRC [%x] %x ? %x", OtaCrcInitializer_v3, inCRC, calculatedCRC);
+
+    otaPktPtr->std.crcHigh = preserveCrcHigh;
 }
