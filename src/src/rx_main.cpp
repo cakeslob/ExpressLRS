@@ -134,13 +134,13 @@ SerialIO *serialIO = nullptr;
 
 StubbornSender DataDlSender;
 uint8_t DataDlBuffer[CRSF_MAX_PACKET_LEN];
-static uint8_t telemetryBurstCount;
-static uint8_t telemetryBurstMax;
+uint8_t telemetryBurstCount;
+uint8_t telemetryBurstMax;
 
 StubbornReceiver DataUlReceiver;
 uint8_t DataUlBuffer[ELRS_DATA_UL_BUFFER];
 
-static uint8_t NextTelemetryType = PACKET_TYPE_LINKSTATS;
+uint8_t NextTelemetryType = PACKET_TYPE_LINKSTATS;
 static bool telemBurstValid;
 /// PFD Filters ////////////////
 LPF LPF_Offset(2);
@@ -166,7 +166,7 @@ bool doStartTimer = false;
 
 ///////////////////////////////////////////////
 
-static bool alreadyTLMresp = false;
+bool alreadyTLMresp = false;
 
 //////////////////////////////////////////////////////////////
 
@@ -791,7 +791,7 @@ void ICACHE_RAM_ATTR HWtimerCallbackTock()
     OtaNonce++;
     HandleFHSS();
     updateDiversity();
-    bool tlmSent = HandleSendDataDl();
+    bool tlmSent = !ota_isLegacy ? HandleSendDataDl() : HandleSendTelemetryResponse_v3();
     updatePhaseLock();
 
     #if defined(DEBUG_RX_SCOREBOARD)

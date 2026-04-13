@@ -20,6 +20,7 @@ and Gemini will not work, and any newer additions to OTA functionality will not 
 
 #include <cstddef>
 
+#include "OTA.h"
 #include "crc.h"
 #include "crsf_protocol.h"
 #include "FIFO.h"
@@ -42,6 +43,7 @@ extern uint32_t uidMacSeedGet_v3();
 extern void OtaUpdateCrcInitFromUid_v3();
 extern void ota_cntNewVersionPkts(); // call this when an non-legacy packet is validated
 extern void ota_resetPktVersionCounters(); // call this when switching radio configs/rates
+extern bool ICACHE_RAM_ATTR HandleSendTelemetryResponse_v3();
 
 extern uint16_t OtaCrcInitializer;
 extern uint16_t OtaCrcInitializer_v3;
@@ -104,7 +106,7 @@ typedef struct {
                     packageIndex:(8 - OTALEGACY_ELRS4_TELEMETRY_SHIFT);
             union {
                 struct {
-                    OTA_LinkStats_v3_s stats;
+                    OTA_LinkStats_s stats;
                     uint8_t free;
                 } PACKED ul_link_stats;
                 uint8_t payload[OTALEGACY_ELRS4_TELEMETRY_BYTES_PER_CALL];
@@ -160,7 +162,7 @@ typedef struct {
                     packageIndex: 5;
             union {
                 struct {
-                    OTA_LinkStats_v3_s stats;
+                    OTA_LinkStats_s stats;
                     uint8_t payload[OTALEGACY_ELRS8_TELEMETRY_BYTES_PER_CALL - sizeof(OTA_LinkStats_v3_s)];
                 } PACKED ul_link_stats; // containsLinkStats == true
                 uint8_t payload[OTALEGACY_ELRS8_TELEMETRY_BYTES_PER_CALL]; // containsLinkStats == false

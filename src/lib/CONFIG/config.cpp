@@ -3,7 +3,7 @@
 #include "common.h"
 #include "device.h"
 #include "POWERMGNT.h"
-#include "OTA.h"
+#include "crsf_protocol.h"
 #include "helpers.h"
 #include "logging.h"
 
