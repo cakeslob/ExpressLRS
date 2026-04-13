@@ -1569,6 +1569,7 @@ static void setupBindingFromConfig()
         UID[0], UID[1], UID[2], UID[3], UID[4], UID[5], config.GetModelId());
 
     OtaUpdateCrcInitFromUid();
+    OtaUpdateCrcInitFromUid_v3();
 }
 
 static void setupRadio()
@@ -1675,6 +1676,7 @@ static void EnterBindingMode()
 
     // Binding uses 50Hz, and InvertIQ
     OtaCrcInitializer = OTA_VERSION_ID;
+    OtaCrcInitializer_v3 = OTA_VERSION_ID - 1;
     OtaNonce = 0;
     InBindingMode = true;
 
@@ -1705,6 +1707,7 @@ static void ExitBindingMode()
     config.Commit();
 
     OtaUpdateCrcInitFromUid();
+    OtaUpdateCrcInitFromUid_v3();
     FHSSrandomiseFHSSsequence(!ota_isLegacy ? uidMacSeedGet() : uidMacSeedGet_v3());
 
     webserverPreventAutoStart = true;

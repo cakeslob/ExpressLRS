@@ -38,14 +38,14 @@ and Gemini will not work, and any newer additions to OTA functionality will not 
 
 extern bool ota_isLegacy;
 extern uint32_t uidMacSeedGet_v3();
+extern void OtaUpdateCrcInitFromUid_v3();
 extern void ota_cntNewVersionPkts(); // call this when an non-legacy packet is validated
 extern void ota_resetPktVersionCounters(); // call this when switching radio configs/rates
 
 extern void debug_sync_packet(void* pkt, int len);
 
 extern uint16_t OtaCrcInitializer;
-#define OtaCrcInitializer_v3    (uint16_t)((OtaCrcInitializer ^ OTA_VERSION_ID) ^ (OTA_VERSION_ID - 1))
-// this provides a version of OtaCrcInitializer as if it was a previous version
+extern uint16_t OtaCrcInitializer_v3;
 
 #define OTA4_CRC_CALC_LEN_v3    offsetof(OTA_Packet4_v3_s, crcLow)
 #define OTA8_CRC_CALC_LEN_v3    offsetof(OTA_Packet8_v3_s, crc)

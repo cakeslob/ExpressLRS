@@ -17,6 +17,9 @@ static uint32_t consecutive_new_pkt_cnt = 0;
 
 extern bool OtaIsFullRes;
 extern Crc2Byte ota_crc;
+Crc2Byte ota_crc_v3_short;
+Crc2Byte ota_crc_v3_long;
+uint16_t OtaCrcInitializer_v3;
 
 extern bool ICACHE_RAM_ATTR ProcessRFPacket(SX12xxDriverCommon::rx_status const status, bool skip_crc);
 extern void SetRFLinkRate(uint8_t index, bool bindMode);
@@ -30,7 +33,7 @@ static void FHSSrandomiseFHSSsequence_v3(const uint32_t seed);
 
 bool ICACHE_RAM_ATTR ValidatePacketCrcFull_v3(OTA_Packet_v3_s * otaPktPtr)
 {
-    uint16_t const calculatedCRC = ota_crc.calc((uint8_t*)otaPktPtr, OTA8_CRC_CALC_LEN_v3, OtaCrcInitializer_v3);
+    uint16_t const calculatedCRC = ota_crc_v3_long.calc((uint8_t*)otaPktPtr, OTA8_CRC_CALC_LEN_v3, OtaCrcInitializer_v3);
     if (otaPktPtr->full.crc == calculatedCRC) {
         return true; 
     }
@@ -53,7 +56,7 @@ bool ICACHE_RAM_ATTR ValidatePacketCrcStd_v3(OTA_Packet_v3_s * otaPktPtr)
     {
         otaPktPtr->std.crcHigh = 0;
     }
-    uint16_t const calculatedCRC = ota_crc.calc((uint8_t*)otaPktPtr, OTA4_CRC_CALC_LEN_v3, OtaCrcInitializer_v3);
+    uint16_t const calculatedCRC = ota_crc_v3_short.calc((uint8_t*)otaPktPtr, OTA4_CRC_CALC_LEN_v3, OtaCrcInitializer_v3);
 
     if (inCRC == calculatedCRC) {
         return true;
@@ -74,14 +77,18 @@ bool ICACHE_RAM_ATTR ProcessRFPacket_v3(SX12xxDriverCommon::rx_status const stat
     // these CRC validation functions will also
     if (OtaIsFullRes) {
         if (!ValidatePacketCrcFull_v3(otaPktPtr)) {
+            DBGLN("CRC err v3 full");
             return false;
         }
     }
     else {
         if (!ValidatePacketCrcStd_v3(otaPktPtr)) {
+            DBGLN("CRC err v3 std");
             return false;
         }
     }
+
+    DBGLN("CRC v3 good");
 
     #if defined(PLATFORM_ESP32)
     esp_task_wdt_reset();
@@ -146,8 +153,18 @@ bool ICACHE_RAM_ATTR ProcessRFPacket_v3(SX12xxDriverCommon::rx_status const stat
     }
     #endif
 
-    bool ret = ProcessRFPacket(status, true);
+    bool ret = ProcessRFPacket(status, true); // use original packet processing, we've already checked the CRC so skip checking CRC again
     return ret;
+}
+
+void OtaUpdateCrcInitFromUid_v3()
+{
+    OtaCrcInitializer_v3 = (UID[4] << 8) | UID[5];
+    OtaCrcInitializer_v3 ^= 3;
+    DBGV("OTAv3 %u %u %u", UID[0], UID[1], UID[2]);
+    DBGVLN(" %u %u %u %u", UID[3], UID[4], UID[5], OtaCrcInitializer_v3);
+    ota_crc_v3_short.init(14, ELRS_CRC14_POLY);
+    ota_crc_v3_long.init(16, ELRS_CRC16_POLY);
 }
 
 static expresslrs_RFrates_e ICACHE_RAM_ATTR rateEnumXform_2G4(uint8_t x)
@@ -327,12 +344,12 @@ void debug_sync_packet(void* pkt, int len)
         uint8_t crcH = otaPktPtr->std.crcHigh;
         uint16_t const inCRC = ((uint16_t)otaPktPtr->std.crcHigh << 8) + otaPktPtr->std.crcLow;
         otaPktPtr->std.crcHigh = 0;
-        DBG("std %x=%x=%x ", inCRC, ota_crc.calc((uint8_t*)pkt, OTA4_CRC_CALC_LEN, OtaCrcInitializer), ota_crc.calc((uint8_t*)pkt, OTA4_CRC_CALC_LEN_v3, OtaCrcInitializer_v3));
+        DBG("std %x=%x=%x ", inCRC, ota_crc.calc((uint8_t*)pkt, OTA4_CRC_CALC_LEN, OtaCrcInitializer), ota_crc_v3_short.calc((uint8_t*)pkt, OTA4_CRC_CALC_LEN_v3, OtaCrcInitializer_v3));
         otaPktPtr->std.crcHigh = crcH;
         (void)inCRC;
     }
     else {
-        DBG("full %x=%x=%x ", otaPktPtr->full.crc, ota_crc.calc((uint8_t*)pkt, OTA8_CRC_CALC_LEN, OtaCrcInitializer), ota_crc.calc((uint8_t*)pkt, OTA8_CRC_CALC_LEN_v3, OtaCrcInitializer_v3));
+        DBG("full %x=%x=%x ", otaPktPtr->full.crc, ota_crc.calc((uint8_t*)pkt, OTA8_CRC_CALC_LEN, OtaCrcInitializer), ota_crc_v3_long.calc((uint8_t*)pkt, OTA8_CRC_CALC_LEN_v3, OtaCrcInitializer_v3));
     }
     DBG("uid %x=%x %x=%x ", syncPktPtr->UID4, UID[4], syncPktPtr->UID5, UID[5]);
     DBG("data ");
