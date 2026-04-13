@@ -10,6 +10,7 @@ class BindingPanel extends LitElement {
 
     @state() accessor uid = []
     @state() accessor bindType = 0
+    @state() accessor fixedPacketRate = 0
     @state() accessor uidData = {}
 
     originalUIDType = ''
@@ -23,6 +24,7 @@ class BindingPanel extends LitElement {
     firstUpdated(_changedProperties) {
         this.uid = elrsState.config.uid
         this.bindType = elrsState.config.vbind
+        this.fixedPacketRate = elrsState.config['fixed-packet-rate']
         this.originalUID = elrsState.config.uid
         this.originalUIDType = (elrsState.settings && elrsState.settings.uidtype) ? elrsState.settings.uidtype : ''
         this._updateUIDType(this.originalUIDType)
@@ -45,6 +47,52 @@ class BindingPanel extends LitElement {
                             </option>
                         </select>
                         <label>Binding storage</label>
+                    </div>
+                    <div class="mui-select">
+                        <select @change="${(e) => {this.fixedPacketRate = parseInt(e.target.value)}}" .value="${this.fixedPacketRate}" >
+                            <option value="-1">Not Locked, Automatic</option>
+                        <!-- FEATURE:HAS_SX127X -->
+                            <option value="21">Locked to DVDA_50HZ</option>
+                            <option value="20">Locked to LORA_25HZ</option>
+                            <option value="21">Locked to LORA_50HZ</option>
+                            <option value="22">Locked to LORA_100HZ</option>
+                            <option value="23">Locked to LORA_100HZ_FULL</option>
+                            <option value="25">Locked to LORA_200HZ</option>
+                        <!-- /FEATURE:HAS_SX127X -->
+                        <!-- FEATURE:HAS_SX128X -->
+                            <option value="21">Locked to LORA_50HZ</option>
+                            <option value="23">Locked to LORA_100HZ_FULL</option>
+                            <option value="24">Locked to LORA_150HZ</option>
+                            <option value="27">Locked to LORA_250HZ</option>
+                            <option value="28">Locked to LORA_333HZ_FULL</option>
+                            <option value="29">Locked to LORA_500HZ</option>
+                            <option value="30">Locked to DVDA_250HZ</option>
+                            <option value="31">Locked to DVDA_500HZ</option>
+                            <option value="32">Locked to FLRC_500HZ</option>
+                            <option value="33">Locked to FLRC_1000HZ</option>
+                        <!-- /FEATURE:HAS_SX128X -->
+                        <!-- FEATURE:HAS_LR1121 -->
+                            <option value="21">Locked to LORA_50HZ</option>
+                            <option value="23">Locked to LORA_100HZ_FULL</option>
+                            <option value="24">Locked to LORA_150HZ</option>
+                            <option value="27">Locked to LORA_250HZ</option>
+                            <option value="28">Locked to LORA_333HZ_FULL</option>
+                            <option value="29">Locked to LORA_500HZ</option>
+                            <option value="25">Locked to FSK_2G4_DVDA_500HZ (Nomad)</option>
+                        <!-- FEATURE:HAS_SUBGHZ -->
+                            <option value="0">Locked to LORA 25HZ (900MHz)</option>
+                            <option value="1">Locked to LORA 50HZ (900MHz)</option>
+                            <option value="2">Locked to LORA 100HZ (900MHz)</option>
+                            <option value="3">Locked to LORA 100HZ_8CH (900MHz)</option>
+                            <option value="5">Locked to LORA 200HZ (900MHz)</option>
+                            <option value="6">Locked to LORA 200HZ_8CH (900MHz)</option>
+                            <option value="7">Locked to LORA 250HZ (900MHz)</option>
+                            <option value="10">Locked to LORA 50HZ_DVDA (900MHz)</option>
+                            <option value="11">Locked to FSK 1000HZ_8CH (900MHz)</option>
+                        <!-- /FEATURE:HAS_SUBGHZ -->
+                        <!-- /FEATURE:HAS_LR1121 -->
+                        </select>
+                        <label>Fixed Packet Rate</label>
                     </div>
                     <!-- /FEATURE:NOT IS_TX -->
                     ${this.bindType !== 1 ? html`
@@ -173,7 +221,8 @@ class BindingPanel extends LitElement {
         // FEATURE:NOT IS_TX
         const rx_changes =  {
             uid: this.uid,
-            vbind: this.bindType
+            vbind: this.bindType,
+            'fixed-packet-rate': this.fixedPacketRate
         }
         saveConfig(rx_changes, () => {
             if (this.bindType !== 1) {
@@ -188,7 +237,7 @@ class BindingPanel extends LitElement {
     }
 
     checkChanged() {
-        return this.bindType !== elrsState.config.vbind || this.uidData.uidtype === 'Modified'
+        return this.bindType !== elrsState.config.vbind || this.uidData.uidtype === 'Modified' || this.fixedPacketRate !== elrsState.config['fixed-packet-rate']
     }
 
 }
