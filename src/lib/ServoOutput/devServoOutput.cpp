@@ -327,6 +327,109 @@ static int event()
     return DURATION_IMMEDIATELY;
 }
 
+void servos_singleWrite(int selected_pin, int us)
+{
+    for (int ch = 0; ch < GPIO_PIN_PWM_OUTPUTS_COUNT; ++ch)
+    {
+        // look through all the channels to find the correct pin
+        int8_t pin = GPIO_PIN_PWM_OUTPUTS[ch];
+        if (selected_pin != pin) { // not the correct pin
+            continue;
+        }
+        // found the correct pin, write the value to it
+        servoWrite(ch, us);
+        break;
+    }
+}
+
+bool servos_singleInit(int selected_pin)
+{
+    bool res = false;
+#if defined(PLATFORM_ESP32)
+    uint8_t rmtCH = 0;
+#endif
+    for (int ch = 0; ch < GPIO_PIN_PWM_OUTPUTS_COUNT; ++ch)
+    {
+        // look through all the channels to find the correct pin
+        pwmChannelValues[ch] = UINT16_MAX;
+        pwmChannels[ch] = -1;
+        int8_t pin = GPIO_PIN_PWM_OUTPUTS[ch];
+        if (selected_pin != pin) { // not the correct pin
+            continue;
+        }
+        // found the correct pin, get its channel configuration and act accordingly
+        const rx_config_pwm_t *chConfig = config.GetPwmChannel(ch);
+#if (defined(DEBUG_LOG) || defined(DEBUG_RCVR_LINKSTATS)) && (defined(PLATFORM_ESP8266) || defined(PLATFORM_ESP32))
+        // Disconnect the debug UART pins if DEBUG_LOG
+        if (pin == U0RXD_GPIO_NUM || pin == U0TXD_GPIO_NUM)
+        {
+            pin = UNDEF_PIN;
+        }
+#endif
+        // Mark servo pins that are being used for serial (or other purposes) as disconnected
+        auto mode = (eServoOutputMode)chConfig->val.mode;
+        if (mode >= somSerial)
+        {
+            pin = UNDEF_PIN;
+        }
+#if defined(PLATFORM_ESP32)
+        else if (mode == somDShot || mode == somDShot3D)
+        {
+            if (rmtCH < RMT_MAX_CHANNELS)
+            {
+                auto gpio = (gpio_num_t)pin;
+                auto rmtChannel = (rmt_channel_t)rmtCH;
+                DBGLN("Initializing DShot: gpio: %u, ch: %d, rmtChannel: %u", gpio, ch, rmtChannel);
+                pinMode(pin, OUTPUT);
+                dshotInstances[ch] = new DShotRMT(gpio, rmtChannel); // Initialize the DShotRMT instance
+                dshotInstances[ch]->begin(DSHOT600, false);
+                servoWrite(ch, 0);
+                res = true;
+                rmtCH++;
+            }
+            pin = UNDEF_PIN;
+        }
+#endif
+        servoPins[ch] = pin;
+        if (pin != UNDEF_PIN)
+        {
+            if (mode != somOnOff)
+            {
+                pinMode(pin, OUTPUT);
+                digitalWrite(pin, LOW);
+                auto frequency = servoOutputModeToFrequency((eServoOutputMode)chConfig->val.mode);
+                if (frequency && servoPins[ch] != UNDEF_PIN)
+                {
+                    pwmChannels[ch] = PWM.allocate(servoPins[ch], frequency);
+                    servoWrite(ch, 0);
+                    res = true;
+                }
+            }
+        }
+    }
+    return res;
+}
+
+void servos_deinitAll()
+{
+    for (int ch = 0; ch < GPIO_PIN_PWM_OUTPUTS_COUNT; ++ch)
+    {
+        if (pwmChannels[ch] != -1)
+        {
+            PWM.release(pwmChannels[ch]);
+            pwmChannels[ch] = -1;
+        }
+#if defined(PLATFORM_ESP32)
+        if (dshotInstances[ch] != nullptr)
+        {
+            delete dshotInstances[ch];
+            dshotInstances[ch] = nullptr;
+        }
+#endif
+        servoPins[ch] = UNDEF_PIN;
+    }
+}
+
 static int timeout()
 {
     servosUpdate(millis());
