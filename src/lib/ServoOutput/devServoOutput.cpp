@@ -197,6 +197,11 @@ static void servosUpdate(unsigned long now)
 {
     static uint32_t lastUpdate;
 
+    #if defined(PLATFORM_ESP32_C3)
+    // for ESP32-C3's implementation of DShotRMT, there's extra tasks to take care of even if no update is needed
+    DShotRMT::poll();
+    #endif
+
     if (newChannelsAvailable)
     {
         newChannelsAvailable = false;
