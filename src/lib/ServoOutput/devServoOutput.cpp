@@ -7,6 +7,7 @@
 #include "crsf_protocol.h"
 #include "logging.h"
 #include "rxtx_intf.h"
+#include "CustomMixer.h"
 
 static int8_t servoPins[PWM_MAX_CHANNELS];
 static pwm_channel_t pwmChannels[PWM_MAX_CHANNELS];
@@ -148,7 +149,7 @@ static void servoCalcAllChannels(servoWrite_fn write)
     for (int ch = 0 ; ch < GPIO_PIN_PWM_OUTPUTS_COUNT ; ++ch)
     {
         const rx_config_pwm_t *chConfig = config.GetPwmChannel(ch);
-        const unsigned crsfVal = ChannelData[chConfig->val.inputChannel];
+        const unsigned crsfVal = ChannelDataMixed[chConfig->val.inputChannel];
         // crsfVal might be unset if this is a switch channel, and it has not been
         // received yet. Delay initializing the servo until the channel is valid
         if (crsfVal == CRSF_CHANNEL_VALUE_UNSET)
@@ -200,7 +201,15 @@ static void servosUpdate(unsigned long now)
     {
         newChannelsAvailable = false;
         lastUpdate = now;
-        servoCalcAllChannels(&servoWrite);
+
+        custommixer_mix();
+
+        if (custommixer_isArmed()) {
+            servoCalcAllChannels(&servoWrite);
+        }
+        else {
+            servosFailsafe();
+        }
     }     /* if newChannelsAvailable */
 
     // LQ goes to 0 (100 packets missed in a row)
@@ -215,6 +224,8 @@ static void servosUpdate(unsigned long now)
 
 static bool initialize()
 {
+    custommixer_init(config.GetCustomMixer());
+
     if (!OPT_HAS_SERVO_OUTPUT)
     {
         return false;

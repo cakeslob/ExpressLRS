@@ -10,6 +10,8 @@
 #include <nvs.h>
 #endif
 
+#include "CustomMixer_types.h"
+
 // CONFIG_MAGIC is ORed with CONFIG_VERSION in the version field
 #define CONFIG_MAGIC_MASK   (0b11U << 30)
 #define TX_CONFIG_MAGIC     (0b01U << 30)
@@ -254,6 +256,8 @@ typedef struct __attribute__((packed)) {
                 teamracePitMode:1;  // FUTURE: Enable pit mode when disabling model
     uint8_t     targetSysId;
     uint8_t     sourceSysId;
+
+    custom_mixer_t custom_mixer;
 } rx_config_t;
 
 class RxConfig
@@ -291,6 +295,8 @@ public:
     rx_config_bindstorage_t GetBindStorage() const { return (rx_config_bindstorage_t)m_config.bindStorage; }
     bool IsOnLoan() const;
 
+    const custom_mixer_t* GetCustomMixer() const { return &(m_config.custom_mixer); }
+
     // Setters
     void SetUID(uint8_t* uid);
     void SetPowerOnCounter(uint8_t powerOnCounter);
@@ -314,6 +320,8 @@ public:
     void SetSourceSysId(uint8_t sysID);
     void SetBindStorage(rx_config_bindstorage_t value);
     void ReturnLoan();
+
+    void SetCustomMixer(const custom_mixer_t*);
 
 private:
     void CheckUpdateFlashedUid(bool skipDescrimCheck);
