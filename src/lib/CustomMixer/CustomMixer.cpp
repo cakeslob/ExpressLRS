@@ -70,7 +70,7 @@ static void custommixer_arcadetankmix()
     val_x = apply_offset   (val_x, custom_mixer->curve_steering.offset);
 
     // do the actual mixing
-    int32_t val_l  = val_y + val_x;
+    int32_t val_l = val_y + val_x;
     int32_t val_r = val_y - val_x;
 
     // apply output conditioning curves
@@ -83,7 +83,7 @@ static void custommixer_arcadetankmix()
     val_l = apply_kickstart(val_l, custom_mixer->curve_left .antideadzone);
     val_r = apply_kickstart(val_r, custom_mixer->curve_right.antideadzone);
     val_l = apply_offset   (val_l, custom_mixer->curve_left .offset);
-    val_r = apply_offset   (val_l, custom_mixer->curve_right.offset);
+    val_r = apply_offset   (val_r, custom_mixer->curve_right.offset);
 
     // back to original CRSF range
     val_l += CRSF_CHANNEL_VALUE_MID;
@@ -104,12 +104,13 @@ static void custommixer_arcadetankmix()
 
 static void custommixer_customarmswitch()
 {
-    uint16_t sw_ch = custom_mixer->ch_arm;
-    uint16_t sw_pos = custom_mixer->arming_range;
+    uint8_t sw_ch = custom_mixer->ch_arm;
+    uint8_t sw_pos = custom_mixer->arming_range;
 
     // if nothing configured, then assume armed
     if (sw_ch == 0) {
         armed_switch_armed = true;
+        return;
     }
 
     // something configured, so default to safe (unarmed)
@@ -158,7 +159,7 @@ static void custommixer_mixaux()
 static int32_t apply_deadzone(int32_t x, uint8_t dz)
 {
     int32_t dz32 = dz;
-    if (x <= dz32 || x >= -dz32) {
+    if (x <= dz32 && x >= -dz32) {
         return 0;
     }
     return x - (dz32 * ((x > 0) ? 1 : -1));
