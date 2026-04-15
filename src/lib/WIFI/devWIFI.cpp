@@ -40,6 +40,7 @@
 #include "WebContent.h"
 
 #include "config.h"
+#include "CustomMixer.h"
 
 #if defined(RADIO_LR1121)
 #include "lr1121.h"
@@ -361,6 +362,10 @@ static void GetConfiguration(AsyncWebServerRequest *request)
     cfg["modelid"] = config.GetModelId();
     cfg["force-tlm"] = config.GetForceTlmOff();
     cfg["vbind"] = config.GetBindStorage();
+
+    JsonObject mixerObj = cfg["custom-mixer"].to<JsonObject>();
+    custom_mixer_to_json(config.GetCustomMixer(), mixerObj);
+
     for (int ch=0; ch<GPIO_PIN_PWM_OUTPUTS_COUNT; ++ch)
     {
       const auto channel = cfg["pwm"][ch].to<JsonObject>();
@@ -566,6 +571,14 @@ static void UpdateConfiguration(AsyncWebServerRequest *request, JsonVariant &jso
     uint32_t val = pwm[channel];
     //DBGLN("PWMch(%u)=%u", channel, val);
     config.SetPwmChannelRaw(channel, val);
+  }
+
+  JsonObject mixerJson = json["custom-mixer"].as<JsonObject>();
+  if (!mixerJson.isNull())
+  {
+      custom_mixer_t mixer = {};   // start clean
+      json_to_custom_mixer(mixerJson, &mixer);
+      config.SetCustomMixer(&mixer);
   }
 
   config.Commit();

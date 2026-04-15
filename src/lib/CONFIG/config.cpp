@@ -1423,4 +1423,12 @@ void RxConfig::ReturnLoan()
     }
 }
 
+void RxConfig::SetCustomMixer(const custom_mixer_t* ptr)
+{
+    if (&(m_config.custom_mixer) != ptr) {
+        memcpy((void*)&(m_config.custom_mixer), (void*)ptr, sizeof(custom_mixer_t));
+    }
+    m_modified = EVENT_CONFIG_MODEL_CHANGED;
+}
+
 #endif
