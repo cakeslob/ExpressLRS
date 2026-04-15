@@ -369,6 +369,8 @@ static void GetConfiguration(AsyncWebServerRequest *request)
     JsonObject mixerObj = cfg["custom-mixer"].to<JsonObject>();
     custom_mixer_to_json(config.GetCustomMixer(), mixerObj);
 
+    cfg["fixed-packet-rate"] = config.GetFixedPacketRate();
+
     for (int ch=0; ch<GPIO_PIN_PWM_OUTPUTS_COUNT; ++ch)
     {
       const auto channel = cfg["pwm"][ch].to<JsonObject>();
@@ -567,6 +569,8 @@ static void UpdateConfiguration(AsyncWebServerRequest *request, JsonVariant &jso
 
   config.SetBindStorage((rx_config_bindstorage_t)(json["vbind"] | 0));
   JsonUidToConfig(json);
+
+  config.SetFixedPacketRate((json["fixed-packet-rate"] | -1));
 
   JsonArray pwm = json["pwm"].as<JsonArray>();
   for(uint32_t channel = 0 ; channel < pwm.size() ; channel++)

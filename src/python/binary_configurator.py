@@ -100,6 +100,11 @@ def patch_unified(args, options):
 
     json_flags['flash-discriminator'] = randint(1,2**32-1)
 
+    if args.administered_binding is not None:
+        json_flags['administered-binding'] = args.administered_binding
+    if args.fixed_packet_rate is not None:
+        json_flags['fixed-packet-rate'] = args.fixed_packet_rate
+
     UnifiedConfiguration.doConfiguration(
         args.file,
         JSONEncoder().encode(json_flags),
@@ -193,6 +198,10 @@ def main():
     parser.add_argument('--lock-on-first-connection', dest='lock_on_first_connection', action='store_true', help='Lock RF mode on first connection')
     parser.add_argument('--no-lock-on-first-connection', dest='lock_on_first_connection', action='store_false', help='Do not lock RF mode on first connection')
     parser.set_defaults(lock_on_first_connection=None)
+
+    parser.add_argument('--administered-binding', dest='administered_binding', action='store_true', help='Sets administered binding mode by default')
+    parser.add_argument('--fixed-packet-rate', dest='fixed_packet_rate', type=int, const=None, nargs='?', action='store', help='Fixed packet rate')
+
     # TX Params
     parser.add_argument('--tlm-report', type=int, const=240, nargs='?', action='store', help='The interval (in milliseconds) between telemetry packets')
     parser.add_argument('--fan-min-runtime', type=int, const=30, nargs='?', action='store', help='The minimum amount of time the fan should run for (in seconds) if it turns on')

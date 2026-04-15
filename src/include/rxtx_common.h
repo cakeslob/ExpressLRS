@@ -10,6 +10,7 @@
 #include "LBT.h"
 #include "LQCALC.h"
 #include "OTA.h"
+#include "OTA_Legacy.h"
 #include "POWERMGNT.h"
 #include "deferred.h"
 

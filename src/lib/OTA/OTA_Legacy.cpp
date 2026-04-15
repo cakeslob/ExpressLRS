@@ -1,0 +1,540 @@
+#include "OTA_Legacy.h"
+#include "OTA.h"
+#include "common.h"
+#include "logging.h"
+#include "options.h"
+#include "config.h"
+#include "stubborn_sender.h"
+#include "deferred.h"
+#include "FHSS.h"
+#include "LBT.h"
+#include <stdlib.h>
+#if defined(PLATFORM_ESP32)
+#include "esp_task_wdt.h"
+#endif
+
+bool ota_isLegacy = false;
+extern uint8_t ExpressLRS_nextAirRateIndex; // used to call SetRFLinkRate
+extern uint32_t RFmodeLastCycled; // reset the scan timer
+extern bool OtaIsFullRes;
+extern StubbornSender DataDlSender;
+extern uint8_t NextTelemetryType;
+extern uint8_t telemetryBurstCount;
+extern uint8_t telemetryBurstMax;
+extern uint8_t geminiMode;
+extern bool alreadyTLMresp;
+
+static uint32_t consecutive_old_pkt_cnt = 0;
+static uint32_t consecutive_new_pkt_cnt = 0;
+
+extern Crc2Byte ota_crc;
+Crc2Byte ota_crc_v3_short;
+Crc2Byte ota_crc_v3_long;
+uint16_t OtaCrcInitializer_v3;
+
+bool ICACHE_RAM_ATTR ValidatePacketCrcFull_v3(OTA_Packet_v3_s * otaPktPtr);
+bool ICACHE_RAM_ATTR ValidatePacketCrcStd_v3(OTA_Packet_v3_s * otaPktPtr);
+void ICACHE_RAM_ATTR GeneratePacketCrcFull_v3(OTA_Packet_v3_s * const otaPktPtr);
+void ICACHE_RAM_ATTR GeneratePacketCrcStd_v3(OTA_Packet_v3_s * const otaPktPtr);
+
+extern bool ICACHE_RAM_ATTR ProcessRFPacket(SX12xxDriverCommon::rx_status const status, bool skip_crc);
+extern void SetRFLinkRate(uint8_t index, bool bindMode);
+extern void FHSSrandomiseFHSSsequence(const uint32_t seed);
+extern void FHSSrandomiseFHSSsequenceBuild(const uint32_t seed, uint32_t freqCount, uint_fast8_t syncChannel, uint8_t *inSequence);
+extern void ICACHE_RAM_ATTR GeneratePacketCrcFull(OTA_Packet_s * const otaPktPtr);
+extern void ICACHE_RAM_ATTR GeneratePacketCrcStd(OTA_Packet_s * const otaPktPtr);
+extern void ICACHE_RAM_ATTR LinkStatsToOta(OTA_LinkStats_s * const ls);
+
+static uint8_t rateIdxXform(uint8_t x);
+static void FHSSrandomiseFHSSsequence_v3(const uint32_t seed);
+
+static void debug_sync_packet(void* pkt, int len);
+static void debug_generic_packet(uint8_t* data, int length, uint32_t crc_initializer);
+
+bool ICACHE_RAM_ATTR ProcessRFPacket_v3(SX12xxDriverCommon::rx_status const status)
+{
+    if (status != SX12xxDriverCommon::SX12XX_RX_OK)
+    {
+        return false;
+    }
+
+    OTA_Packet_v3_s * const otaPktPtr = (OTA_Packet_v3_s * const)Radio.RXdataBuffer;
+
+    // these CRC validation functions will also
+    if (OtaIsFullRes) {
+        if (!ValidatePacketCrcFull_v3(otaPktPtr)) {
+            DBGLN("CRC err v3 full");
+            return false;
+        }
+    }
+    else {
+        if (!ValidatePacketCrcStd_v3(otaPktPtr)) {
+            DBGLN("CRC err v3 std");
+            return false;
+        }
+    }
+
+    DBGLN("CRC v3 good");
+
+    #if defined(PLATFORM_ESP32)
+    // this code actually sometimes crashes due to WDT if debug is enabled
+    esp_task_wdt_reset();
+    #endif
+
+    consecutive_old_pkt_cnt++;
+    consecutive_new_pkt_cnt = 0;
+    if (consecutive_old_pkt_cnt >= 3) { // got enough packets passing CRC to think we might be hearing a transmitter running older firmware
+        if (ota_isLegacy == false) {
+            // time to switch over
+            DBGLN("many legacy packets detected");
+            ota_isLegacy = true;
+            // reset the search scan timer
+            RFmodeLastCycled = millis();
+            // regenerate the hop table so we know what the actual sync channel is
+            FHSSrandomiseFHSSsequence_v3(uidMacSeedGet_v3());
+            // reinitialize the radio with the new config
+            SetRFLinkRate(ExpressLRS_nextAirRateIndex, false);
+            Radio.RXnb();
+            // now we should be listening for sync on the correct sync channel since the hop table has been changed
+            return false;
+        }
+    }
+
+    OTA_Sync_s otaSync; // this is the new sync packet structure, we will copy the old sync packet parameters into the new one, field by field, with some translations
+    if (otaPktPtr->std.type == PACKET_TYPE_SYNC) {
+        if (OtaIsFullRes) {
+            memcpy(&otaSync, &otaPktPtr->full.sync.sync, sizeof(OTA_Sync_s));
+        }
+        else {
+            memcpy(&otaSync, &otaPktPtr->std.sync, sizeof(OTA_Sync_s));
+        }
+        // the old rate indices and the new rate indices are different, we transform this using a look-up table
+        otaSync.rfRateEnum = rateIdxXform(OtaIsFullRes ? otaPktPtr->full.sync.sync.rateIndex : otaPktPtr->std.sync.rateIndex);
+        #if 0
+        if (isDualRadio()) {
+            // unknown if packet is Gemini, so use Gemini if available
+            otaSync.geminiMode = (config.GetAntennaMode() || FHSSuseDualBand) ? 1 : 0;
+        }
+        #else
+        otaSync.geminiMode = 0; // TODO: I can't test this anyways
+        #endif
+        otaSync.otaProtocol = 0; // this bit forces change to MAVLink, but the user can also manually configure MAVLink
+        // now copy the temporary buffer into the original RX buffer
+        // as we will call ProcessRFPacket later
+        if (OtaIsFullRes) {
+            memcpy(&otaPktPtr->full.sync.sync, &otaSync, sizeof(OTA_Sync_s));
+        }
+        else {
+            memcpy(&otaPktPtr->std.sync, &otaSync, sizeof(OTA_Sync_s));
+        }
+    }
+
+    #if defined(PLATFORM_ESP32)
+    // this code actually sometimes crashes due to WDT if debug is enabled
+    esp_task_wdt_reset();
+    #endif
+
+    #if 0
+    // this will correct the CRC with the latest version salt
+    // this is inefficient, it's better to just skip CRC check in the later processing
+    if (OtaIsFullRes) {
+        GeneratePacketCrcFull((OTA_Packet_s*)otaPktPtr);
+    }
+    else {
+        GeneratePacketCrcStd((OTA_Packet_s*)otaPktPtr);
+    }
+    #endif
+
+    bool ret = ProcessRFPacket(status, true); // use original packet processing, we've already checked the CRC so skip checking CRC again
+    return ret;
+}
+
+bool ICACHE_RAM_ATTR HandleSendTelemetryResponse_v3()
+{
+    // this function tries to mimic the old telemetry sending function, and in v4 it is replaced with HandleSendDataDl
+    // this functionality doesn't work yet, TODO: fix me
+
+    uint8_t modresult = (OtaNonce + 1) % ExpressLRS_currTlmDenom;
+
+    if ((connectionState == disconnected) || (ExpressLRS_currTlmDenom == 1) || (alreadyTLMresp == true) || (modresult != 0) || !teamraceHasModelMatch)
+    {
+        return false; // don't bother sending tlm if disconnected or TLM is off
+    }
+
+    // ESP requires word aligned buffer
+    WORD_ALIGNED_ATTR OTA_Packet_v3_s otaPkt = {0};
+    alreadyTLMresp = true;
+    otaPkt.std.type = 0x03; // old PACKET_TYPE_TLM definition
+
+    bool tlmQueued = false;
+    //if (firmwareOptions.is_airport)
+    //{
+    //    tlmQueued = ((SerialAirPort *)serialIO)->isTlmQueued();
+    //}
+    //else
+    {
+        tlmQueued = DataDlSender.IsActive();
+    }
+
+    if (NextTelemetryType == PACKET_TYPE_LINKSTATS || !tlmQueued)
+    {
+        OTA_LinkStats_s * ls; // this struct did not change in v4
+        if (OtaIsFullRes)
+        {
+            otaPkt.full.tlm_dl.containsLinkStats = 1;
+            ls = &otaPkt.full.tlm_dl.ul_link_stats.stats;
+            // Include some advanced telemetry in the extra space
+            // Note the use of `ul_link_stats.payload` vs just `payload`
+            otaPkt.full.tlm_dl.packageIndex = DataDlSender.GetCurrentPayload(
+                otaPkt.full.tlm_dl.ul_link_stats.payload,
+                sizeof(otaPkt.full.tlm_dl.ul_link_stats.payload));
+        }
+        else
+        {
+            otaPkt.std.tlm_dl.type = 0x01; // ELRS_TELEMETRY_TYPE_LINK
+            ls = &otaPkt.std.tlm_dl.ul_link_stats.stats;
+        }
+        LinkStatsToOta(ls);
+
+        NextTelemetryType = PACKET_TYPE_DATA; // ELRS_TELEMETRY_TYPE_DATA
+        // Start the count at 1 because the next will be DATA and doing +1 before checking
+        // against Max below is for some reason 10 bytes more code
+        telemetryBurstCount = 1;
+    }
+    else
+    {
+        if (telemetryBurstCount < telemetryBurstMax)
+        {
+            telemetryBurstCount++;
+        }
+        else
+        {
+            NextTelemetryType = PACKET_TYPE_LINKSTATS; // ELRS_TELEMETRY_TYPE_LINK;
+        }
+
+        if (DataDlSender.IsActive())
+        {
+            if (OtaIsFullRes)
+            {
+                otaPkt.full.tlm_dl.packageIndex = DataDlSender.GetCurrentPayload(
+                    otaPkt.full.tlm_dl.payload,
+                    sizeof(otaPkt.full.tlm_dl.payload));
+            }
+            else
+            {
+                otaPkt.std.tlm_dl.type = 0x02; // ELRS_TELEMETRY_TYPE_DATA
+                otaPkt.std.tlm_dl.packageIndex = DataDlSender.GetCurrentPayload(
+                    otaPkt.std.tlm_dl.payload,
+                    sizeof(otaPkt.std.tlm_dl.payload));
+            }
+        }
+    }
+
+    if (OtaIsFullRes)
+    {
+        GeneratePacketCrcFull_v3(&otaPkt);
+    }
+    else
+    {
+        GeneratePacketCrcStd_v3(&otaPkt);
+    }
+
+    SX12XX_Radio_Number_t transmittingRadio;
+    if (config.GetForceTlmOff())
+    {
+        transmittingRadio = SX12XX_Radio_NONE;
+    }
+    else
+    {
+        transmittingRadio = LbtChannelIsClear(SX12XX_Radio_All);   // weed out the radio(s) if channel in use
+        if (isDualRadio() && !geminiMode && transmittingRadio == SX12XX_Radio_All) // If the receiver is in diversity mode, only send TLM on a single radio.
+        {
+            transmittingRadio = Radio.GetStrongestReceivingRadio(); // Pick the radio with best rf connection to the tx.
+        }
+    }
+
+    Radio.TXnb((uint8_t*)&otaPkt, false, nullptr, transmittingRadio);
+
+    if (transmittingRadio == SX12XX_Radio_NONE)
+    {
+        // No packet will be sent due to LBT / Telem forced off.
+        // Defer TXdoneCallback() to prepare for TLM when the IRQ is normally triggered.
+        deferExecutionMicros(ExpressLRS_currAirRate_RFperfParams->TOA, Radio.TXdoneCallback);
+    }
+
+    return true;
+}
+
+void OtaUpdateCrcInitFromUid_v3()
+{
+    OtaCrcInitializer_v3 = (UID[4] << 8) | UID[5];
+    OtaCrcInitializer_v3 ^= 3;
+    DBGV("OTAv3 %u %u %u", UID[0], UID[1], UID[2]);
+    DBGVLN(" %u %u %u %u", UID[3], UID[4], UID[5], OtaCrcInitializer_v3);
+    ota_crc_v3_short.init(14, ELRS_CRC14_POLY);
+    ota_crc_v3_long.init(16, ELRS_CRC16_POLY);
+}
+
+bool ICACHE_RAM_ATTR ValidatePacketCrcFull_v3(OTA_Packet_v3_s * otaPktPtr)
+{
+    uint16_t const calculatedCRC = ota_crc_v3_long.calc((uint8_t*)otaPktPtr, OTA8_CRC_CALC_LEN_v3, OtaCrcInitializer_v3);
+    if (otaPktPtr->full.crc == calculatedCRC) {
+        return true; 
+    }
+    return false;
+}
+
+bool ICACHE_RAM_ATTR ValidatePacketCrcStd_v3(OTA_Packet_v3_s * otaPktPtr)
+{
+    uint8_t preserveCrcHigh = otaPktPtr->std.crcHigh;
+    uint16_t const inCRC = ((uint16_t)otaPktPtr->std.crcHigh << 8) + otaPktPtr->std.crcLow;
+    // For smHybrid the CRC only has the packet type in byte 0
+    // For smWide the FHSS slot is added to the CRC in byte 0 on PACKET_TYPE_RCDATAs
+#if defined(TARGET_RX)
+    if (otaPktPtr->std.type == PACKET_TYPE_RCDATA && OtaSwitchModeCurrent == smWideOr8ch)
+    {
+        otaPktPtr->std.crcHigh = (OtaNonce % ExpressLRS_currAirRate_Modparams->FHSShopInterval) + 1;
+    }
+    else
+#endif
+    {
+        otaPktPtr->std.crcHigh = 0;
+    }
+    uint16_t const calculatedCRC = ota_crc_v3_short.calc((uint8_t*)otaPktPtr, OTA4_CRC_CALC_LEN_v3, OtaCrcInitializer_v3);
+
+    if (inCRC == calculatedCRC) {
+        return true;
+    }
+    otaPktPtr->std.crcHigh = preserveCrcHigh;
+    return false;
+}
+
+void ICACHE_RAM_ATTR GeneratePacketCrcFull_v3(OTA_Packet_v3_s * const otaPktPtr)
+{
+    otaPktPtr->full.crc = ota_crc_v3_long.calc((uint8_t*)otaPktPtr, OTA8_CRC_CALC_LEN_v3, OtaCrcInitializer_v3);
+}
+
+void ICACHE_RAM_ATTR GeneratePacketCrcStd_v3(OTA_Packet_v3_s * const otaPktPtr)
+{
+    uint16_t crc = ota_crc_v3_short.calc((uint8_t*)otaPktPtr, OTA4_CRC_CALC_LEN_v3, OtaCrcInitializer_v3);
+    otaPktPtr->std.crcHigh = (crc >> 8);
+    otaPktPtr->std.crcLow  = crc;
+}
+
+static expresslrs_RFrates_e ICACHE_RAM_ATTR rateEnumXform_2G4(uint8_t x)
+{
+    switch(x)
+    {
+        case RATE_v3_LORA_25HZ     : return RATE_LORA_2G4_25HZ;
+        case RATE_v3_LORA_50HZ     : return RATE_LORA_2G4_50HZ;
+        case RATE_v3_LORA_100HZ    : return RATE_LORA_2G4_100HZ;
+        case RATE_v3_LORA_100HZ_8CH: return RATE_LORA_2G4_100HZ_8CH;
+        case RATE_v3_LORA_150HZ    : return RATE_LORA_2G4_150HZ;
+        case RATE_v3_LORA_200HZ    : return RATE_LORA_2G4_200HZ;
+        case RATE_v3_LORA_250HZ    : return RATE_LORA_2G4_250HZ;
+        case RATE_v3_LORA_333HZ_8CH: return RATE_LORA_2G4_333HZ_8CH;
+        case RATE_v3_LORA_500HZ    : return RATE_LORA_2G4_500HZ;
+        case RATE_v3_DVDA_250HZ    : return RATE_FLRC_2G4_250HZ_DVDA;
+        case RATE_v3_DVDA_500HZ    : return RATE_FLRC_2G4_500HZ_DVDA;
+        case RATE_v3_FLRC_500HZ    : return RATE_FLRC_2G4_500HZ;
+        case RATE_v3_FLRC_1000HZ   : return RATE_FLRC_2G4_1000HZ;
+        case RATE_v3_LORA_200HZ_8CH: return RATE_LORA_2G4_200HZ_8CH;
+        case RATE_v3_FSK_2G4_DVDA_500HZ: return RATE_FSK_2G4_500HZ_DVDA;
+        case RATE_v3_FSK_2G4_1000HZ: return RATE_FSK_2G4_1000HZ;
+        default: return (expresslrs_RFrates_e)0xFF;
+    }
+}
+
+#if defined(RADIO_SX127X) || defined(RADIO_LR1121)
+static expresslrs_RFrates_e ICACHE_RAM_ATTR rateEnumXform_900(uint8_t x)
+{
+    switch(x)
+    {
+        case RATE_v3_LORA_25HZ     : return RATE_LORA_900_25HZ;
+        case RATE_v3_LORA_50HZ     : return RATE_LORA_900_50HZ;
+        case RATE_v3_LORA_100HZ    : return RATE_LORA_900_100HZ;
+        case RATE_v3_LORA_100HZ_8CH: return RATE_LORA_900_100HZ_8CH;
+        case RATE_v3_LORA_150HZ    : return RATE_LORA_900_150HZ;
+        case RATE_v3_LORA_200HZ    : return RATE_LORA_900_200HZ;
+        case RATE_v3_LORA_250HZ    : return RATE_LORA_900_250HZ;
+        case RATE_v3_LORA_333HZ_8CH: return RATE_LORA_900_333HZ_8CH;
+        case RATE_v3_LORA_500HZ    : return RATE_LORA_900_500HZ;
+        case RATE_v3_DVDA_50HZ     : return RATE_LORA_900_50HZ_DVDA;
+        case RATE_v3_LORA_200HZ_8CH: return RATE_LORA_900_200HZ_8CH;
+        case RATE_v3_FSK_900_1000HZ_8CH: return RATE_FSK_900_1000HZ_8CH;
+        default: return (expresslrs_RFrates_e)0xFF;
+    }
+}
+#endif
+
+#if defined(RADIO_SX127X)
+const static uint8_t rateXformTbl[RATE_MAX] = {
+    RATE_v3_LORA_200HZ,
+    RATE_v3_LORA_100HZ_8CH,
+    RATE_v3_LORA_100HZ,
+    RATE_v3_LORA_50HZ,
+    RATE_v3_LORA_25HZ,
+    RATE_v3_DVDA_50HZ,
+};
+
+#endif
+
+#if defined(RADIO_LR1121)
+const static uint8_t rateXformTbl[] = {
+    RATE_v3_LORA_200HZ,
+    RATE_v3_LORA_100HZ_8CH,
+    RATE_v3_LORA_100HZ,
+    RATE_v3_LORA_50HZ,
+    RATE_v3_LORA_500HZ,
+    RATE_v3_LORA_333HZ_8CH,
+    RATE_v3_LORA_250HZ,
+    RATE_v3_LORA_150HZ,
+    RATE_v3_LORA_100HZ_8CH,
+    RATE_v3_LORA_50HZ,
+    RATE_v3_LORA_150HZ,
+    RATE_v3_LORA_100HZ_8CH,
+    RATE_v3_LORA_250HZ,
+    RATE_v3_LORA_200HZ_8CH,
+    RATE_v3_FSK_2G4_DVDA_500HZ,
+    RATE_v3_FSK_900_1000HZ_8CH,
+};
+#endif
+
+#if defined(RADIO_SX128X)
+const uint8_t rateXformTbl[] = {
+    RATE_v3_FLRC_1000HZ,   
+    RATE_v3_FLRC_500HZ,    
+    RATE_v3_DVDA_500HZ,    
+    RATE_v3_DVDA_250HZ,    
+    RATE_v3_LORA_500HZ,    
+    RATE_v3_LORA_333HZ_8CH,
+    RATE_v3_LORA_250HZ,    
+    RATE_v3_LORA_150HZ,    
+    RATE_v3_LORA_100HZ_8CH,
+    RATE_v3_LORA_50HZ,      };
+#endif
+
+static uint8_t ICACHE_RAM_ATTR rateIdxXform(uint8_t x)
+{
+    #if defined(RADIO_SX127X)
+    return rateEnumXform_900(rateXformTbl[x]);
+    #elif defined(RADIO_LR1121)
+    uint8_t ret = rateEnumXform_2G4(rateXformTbl[x]);
+    if (ret == 0xFF) {
+        ret = rateEnumXform_900(rateXformTbl[x]);
+    }
+    return ret;
+    #elif defined(RADIO_SX128X)
+    return rateEnumXform_2G4(rateXformTbl[x]);
+    #endif
+}
+
+void ota_cntNewVersionPkts()
+{
+    consecutive_new_pkt_cnt++;
+    consecutive_old_pkt_cnt = 0;
+    if (consecutive_new_pkt_cnt >= 5) { // enough packets with correct CRC
+        if (ota_isLegacy != false) {
+            // switch over to "normal" mode
+            ota_isLegacy = false;
+            // reset the search scan timer
+            RFmodeLastCycled = millis();
+            // regenerate the hop table with the correct seed
+            FHSSrandomiseFHSSsequence(uidMacSeedGet());
+            // reinitialize all radio parameters
+            SetRFLinkRate(ExpressLRS_nextAirRateIndex, false);
+            Radio.RXnb();
+            // now when we hop we will be at the sync channel and actually get a sync packet
+            DBGLN("ret to normal pkts");
+        }
+    }
+}
+
+void ota_resetPktVersionCounters()
+{
+    consecutive_old_pkt_cnt = 0;
+    consecutive_new_pkt_cnt = 0;
+}
+
+uint32_t uidMacSeedGet_v3()
+{
+    const uint32_t macSeed = ((uint32_t)UID[2] << 24) + ((uint32_t)UID[3] << 16) +
+                             ((uint32_t)UID[4] << 8) + (UID[5]^(OTA_VERSION_ID - 1));
+    return macSeed;
+}
+
+void FHSSrandomiseFHSSsequence_v3(const uint32_t seed)
+{
+    sync_channel = (FHSSconfig->freq_count / 2) + 1;
+    freq_spread = (FHSSconfig->freq_stop - FHSSconfig->freq_start) * FREQ_SPREAD_SCALE / (FHSSconfig->freq_count - 1);
+    primaryBandCount = (FHSS_SEQUENCE_LEN / FHSSconfig->freq_count) * FHSSconfig->freq_count;
+    FHSSrandomiseFHSSsequenceBuild(seed, FHSSconfig->freq_count, sync_channel, FHSSsequence);
+
+#if defined(RADIO_LR1121)
+    sync_channel_DualBand = (FHSSconfigDualBand->freq_count / 2) + 1;
+    freq_spread_DualBand = (FHSSconfigDualBand->freq_stop - FHSSconfigDualBand->freq_start) * FREQ_SPREAD_SCALE / (FHSSconfigDualBand->freq_count - 1);
+    secondaryBandCount = (FHSS_SEQUENCE_LEN / FHSSconfigDualBand->freq_count) * FHSSconfigDualBand->freq_count;
+    FHSSusePrimaryFreqBand = false;
+    FHSSrandomiseFHSSsequenceBuild(seed, FHSSconfigDualBand->freq_count, sync_channel_DualBand, FHSSsequence_DualBand);
+    FHSSusePrimaryFreqBand = true;
+#endif
+}
+
+static void debug_sync_packet(void* pkt, int len)
+{
+    OTA_Packet_v3_s * const otaPktPtr = (OTA_Packet_v3_s * const)pkt;
+    if (otaPktPtr->std.type != PACKET_TYPE_SYNC) {
+        return;
+    }
+    OTA_Sync_v3_s * const syncPktPtr = ((len == sizeof(OTA_Packet4_v3_s)) ? &(otaPktPtr->std.sync) : &(otaPktPtr->full.sync.sync));
+    if (syncPktPtr->UID4 != UID[4]) {
+        return;
+    }
+    if ((syncPktPtr->UID5 & ~MODELMATCH_MASK) != (UID[5] & ~MODELMATCH_MASK)) {
+        return;
+    }
+    DBG("SYNC ");
+    if (len == sizeof(OTA_Packet4_v3_s)) {
+        uint8_t crcH = otaPktPtr->std.crcHigh;
+        uint16_t const inCRC = ((uint16_t)otaPktPtr->std.crcHigh << 8) + otaPktPtr->std.crcLow;
+        otaPktPtr->std.crcHigh = 0;
+        DBG("std %x=%x=%x ", inCRC, ota_crc.calc((uint8_t*)pkt, OTA4_CRC_CALC_LEN, OtaCrcInitializer), ota_crc_v3_short.calc((uint8_t*)pkt, OTA4_CRC_CALC_LEN_v3, OtaCrcInitializer_v3));
+        otaPktPtr->std.crcHigh = crcH;
+        (void)inCRC;
+    }
+    else {
+        DBG("full %x=%x=%x ", otaPktPtr->full.crc, ota_crc.calc((uint8_t*)pkt, OTA8_CRC_CALC_LEN, OtaCrcInitializer), ota_crc_v3_long.calc((uint8_t*)pkt, OTA8_CRC_CALC_LEN_v3, OtaCrcInitializer_v3));
+    }
+    DBG("uid %x=%x %x=%x ", syncPktPtr->UID4, UID[4], syncPktPtr->UID5, UID[5]);
+    DBG("data ");
+    for (int i = 0; i < len; i++) {
+        DBG("%x ", ((uint8_t*)pkt)[i]);
+    }
+    DBGCR;
+}
+
+static void debug_generic_packet(uint8_t* data, int length, uint32_t crc_initializer)
+{
+    static uint32_t last_dbg_time = 0;
+    uint32_t now = millis();
+
+    if ((now - last_dbg_time) < 200) {
+        return;
+    }
+    last_dbg_time = now;
+
+    OTA_Packet_v3_s * otaPktPtr = (OTA_Packet_v3_s *)data;
+    bool is_short = length <= sizeof(OTA_Packet4_v3_s);
+
+    uint8_t preserveCrcHigh = otaPktPtr->std.crcHigh;
+    uint16_t inCRC = is_short ? (((uint16_t)otaPktPtr->std.crcHigh << 8) + otaPktPtr->std.crcLow) : otaPktPtr->full.crc;
+
+    uint16_t calculatedCRC = is_short ? ota_crc_v3_short.calc((uint8_t*)data, OTA4_CRC_CALC_LEN_v3, OtaCrcInitializer_v3) : ota_crc_v3_long.calc((uint8_t*)data, OTA8_CRC_CALC_LEN_v3, OtaCrcInitializer_v3);
+    DBGV("OTA DBG [%u]: ", length);
+    for (int i = 0; i < length + 2; i++) {
+        DBGV(" %x", data[i]);
+    }
+    DBGVLN(" # CRC [%x] %x ? %x", OtaCrcInitializer_v3, inCRC, calculatedCRC);
+
+    otaPktPtr->std.crcHigh = preserveCrcHigh;
+}

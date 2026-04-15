@@ -134,13 +134,13 @@ SerialIO *serialIO = nullptr;
 
 StubbornSender DataDlSender;
 uint8_t DataDlBuffer[CRSF_MAX_PACKET_LEN];
-static uint8_t telemetryBurstCount;
-static uint8_t telemetryBurstMax;
+uint8_t telemetryBurstCount;
+uint8_t telemetryBurstMax;
 
 StubbornReceiver DataUlReceiver;
 uint8_t DataUlBuffer[ELRS_DATA_UL_BUFFER];
 
-static uint8_t NextTelemetryType = PACKET_TYPE_LINKSTATS;
+uint8_t NextTelemetryType = PACKET_TYPE_LINKSTATS;
 static bool telemBurstValid;
 /// PFD Filters ////////////////
 LPF LPF_Offset(2);
@@ -166,7 +166,7 @@ bool doStartTimer = false;
 
 ///////////////////////////////////////////////
 
-static bool alreadyTLMresp = false;
+bool alreadyTLMresp = false;
 
 //////////////////////////////////////////////////////////////
 
@@ -302,6 +302,10 @@ void ICACHE_RAM_ATTR getRFlinkInfo()
 
 void SetRFLinkRate(uint8_t index, bool bindMode) // Set speed of RF link
 {
+    if (bindMode == false && config.GetFixedPacketRate() >= 0) {
+        index = enumRatetoIndex((expresslrs_RFrates_e)config.GetFixedPacketRate());
+    }
+
     expresslrs_mod_settings_s *const ModParams = get_elrs_airRateConfig(index);
     expresslrs_rf_pref_params_s *const RFperf = get_elrs_RFperfParams(index);
 
@@ -321,7 +325,7 @@ void SetRFLinkRate(uint8_t index, bool bindMode) // Set speed of RF link
     Radio.Config(ModParams->bw, ModParams->sf, ModParams->cr, FHSSgetInitialFreq(),
                  ModParams->PreambleLen, invertIQ, ModParams->PayloadLength
 #if defined(RADIO_SX128X)
-                 , uidMacSeedGet(), OtaCrcInitializer, (ModParams->radio_type == RADIO_TYPE_SX128x_FLRC)
+                 , !ota_isLegacy ? uidMacSeedGet() : uidMacSeedGet_v3(), !ota_isLegacy ? OtaCrcInitializer : OtaCrcInitializer_v3, (ModParams->radio_type == RADIO_TYPE_SX128x_FLRC)
 #endif
 #if defined(RADIO_LR1121)
                , ModParams->radio_type == RADIO_TYPE_LR1121_GFSK_900 || ModParams->radio_type == RADIO_TYPE_LR1121_GFSK_2G4, (uint8_t)UID[5], (uint8_t)UID[4]
@@ -357,6 +361,8 @@ void SetRFLinkRate(uint8_t index, bool bindMode) // Set speed of RF link
     ExpressLRS_currAirRate_RFperfParams = RFperf;
     ExpressLRS_nextAirRateIndex = index; // presumably we just handled this
     telemBurstValid = false;
+
+    ota_resetPktVersionCounters();
 
     LbtEnableIfRequired();
 }
@@ -785,7 +791,7 @@ void ICACHE_RAM_ATTR HWtimerCallbackTock()
     OtaNonce++;
     HandleFHSS();
     updateDiversity();
-    bool tlmSent = HandleSendDataDl();
+    bool tlmSent = !ota_isLegacy ? HandleSendDataDl() : HandleSendTelemetryResponse_v3();
     updatePhaseLock();
 
     #if defined(DEBUG_RX_SCOREBOARD)
@@ -1009,14 +1015,16 @@ static void ICACHE_RAM_ATTR updateSwitchModePendingFromOta(uint8_t newSwitchMode
 static bool ICACHE_RAM_ATTR ProcessRfPacket_SYNC(uint32_t const now, OTA_Sync_s const * const otaSync)
 {
     // Verify the first byte of the binding ID, which should always match
-    if (otaSync->UID4 != UID[4])
+    if (otaSync->UID4 != UID[4]) {
         return false;
+    }
 
     // The third byte will be XORed with inverse of the ModelId if ModelMatch is on
     // Only require the first 18 bits of the UID to match to establish a connection
     // but the last 6 bits must modelmatch before sending any data to the FC
-    if ((otaSync->UID5 & ~MODELMATCH_MASK) != (UID[5] & ~MODELMATCH_MASK))
+    if ((otaSync->UID5 & ~MODELMATCH_MASK) != (UID[5] & ~MODELMATCH_MASK)) {
         return false;
+    }
 
     LastSyncPacket = now;
 #if defined(DEBUG_RX_SCOREBOARD)
@@ -1081,7 +1089,9 @@ static bool ICACHE_RAM_ATTR ProcessRfPacket_SYNC(uint32_t const now, OTA_Sync_s 
     return false;
 }
 
-bool ICACHE_RAM_ATTR ProcessRFPacket(SX12xxDriverCommon::rx_status const status)
+extern bool ICACHE_RAM_ATTR ProcessRFPacket_v3(SX12xxDriverCommon::rx_status const status);
+
+bool ICACHE_RAM_ATTR ProcessRFPacket(SX12xxDriverCommon::rx_status const status, bool skip_crc)
 {
     if (status != SX12xxDriverCommon::SX12XX_RX_OK)
     {
@@ -1096,13 +1106,16 @@ bool ICACHE_RAM_ATTR ProcessRFPacket(SX12xxDriverCommon::rx_status const status)
     OTA_Packet_s * const otaPktPtr = (OTA_Packet_s * const)Radio.RXdataBuffer;
     OTA_Packet_s * const otaPktPtrSecond = (OTA_Packet_s * const)Radio.RXdataBufferSecond;
 
-    if (!OtaValidatePacketCrc(otaPktPtr))
+    if (skip_crc == false)
     {
-        DBGVLN("CRC error");
-        #if defined(DEBUG_RX_SCOREBOARD)
-            lastPacketCrcError = true;
-        #endif
-        return false;
+        if (!OtaValidatePacketCrc(otaPktPtr))
+        {
+            DBGVLN("CRC error");
+            #if defined(DEBUG_RX_SCOREBOARD)
+                lastPacketCrcError = true;
+            #endif
+            return false;
+        }
     }
 
     // The extEvent defines where TOCK timer ISR is to be synced to, i.e. where the packet period begins.
@@ -1192,7 +1205,15 @@ bool ICACHE_RAM_ATTR RXdoneISR(SX12xxDriverCommon::rx_status const status)
         return false; // Already received a packet, do not run ProcessRFPacket() again.
     }
 
-    if (ProcessRFPacket(status))
+    bool success = ProcessRFPacket(status, false);
+    if (!success) {
+        success = ProcessRFPacket_v3(status);
+    }
+    else {
+        ota_cntNewVersionPkts(); // we are more sure that this is a v4 packet
+    }
+
+    if (success)
     {
         if (doStartTimer)
         {
@@ -1552,6 +1573,7 @@ static void setupBindingFromConfig()
         UID[0], UID[1], UID[2], UID[3], UID[4], UID[5], config.GetModelId());
 
     OtaUpdateCrcInitFromUid();
+    OtaUpdateCrcInitFromUid_v3();
 }
 
 static void setupRadio()
@@ -1658,6 +1680,7 @@ static void EnterBindingMode()
 
     // Binding uses 50Hz, and InvertIQ
     OtaCrcInitializer = OTA_VERSION_ID;
+    OtaCrcInitializer_v3 = OTA_VERSION_ID - 1;
     OtaNonce = 0;
     InBindingMode = true;
 
@@ -1688,7 +1711,8 @@ static void ExitBindingMode()
     config.Commit();
 
     OtaUpdateCrcInitFromUid();
-    FHSSrandomiseFHSSsequence(uidMacSeedGet());
+    OtaUpdateCrcInitFromUid_v3();
+    FHSSrandomiseFHSSsequence(!ota_isLegacy ? uidMacSeedGet() : uidMacSeedGet_v3());
 
     webserverPreventAutoStart = true;
 
