@@ -72,6 +72,11 @@ export class App extends LitElement {
                             ${elrsState.config['custom-mixer'] ? html`
                                 <li><a id="menu-custom-mixer" href="#custom-mixer"><span class="mui--align-middle icon--symbols icon--symbols--shuffle"></span>Custom Mixer</a></li>
                             ` : ''}
+                            <!-- FEATURE:NOT IS_TX -->
+                            <!-- FEATURE:NOT IS_8285 -->
+                            <li><a id="menu-am32" href="#am32"><span class="mui--align-middle icon--symbols icon--symbols--motor"></span>AM32 Configurator</a></li>
+                            <!-- /FEATURE:NOT IS_8285 -->
+                            <!-- /FEATURE:NOT IS_TX -->
                             <!-- FEATURE:HAS_LR1121 -->
                             <li><a id="menu-lr1121" href="#lr1121"><span class="mui--align-middle icon--symbols icon--symbols--lr1121"></span>LR1121 Firmware</a></li>
                             <!-- /FEATURE:HAS_LR1121 -->
@@ -179,6 +184,8 @@ export class App extends LitElement {
                 return elrsState.config['custom-mixer'] ? '<custom-mixer-panel></custom-mixer-panel>' : ''
             case 'lr1121':
                 return FEATURES.HAS_LR1121 ? '<lr1121-updater></lr1121-updater>' : ''
+            case 'am32':
+                return (!FEATURES.IS_TX && !FEATURES.IS_8285) ? '<am32-panel></am32-panel>' : ''
             default:
                 return ''
         }
@@ -206,6 +213,9 @@ export class App extends LitElement {
             imports.push(import('./pages/rx-options-panel.js'))
             imports.push(import('./pages/connections-panel.js'))
             imports.push(import('./pages/serial-panel.js'))
+            // FEATURE:NOT IS_8285
+            imports.push(import('./pages/am32-panel.js'))
+            // /FEATURE:NOT IS_8285
             // /FEATURE:NOT IS_TX
             await Promise.all(imports)
         } finally {
@@ -232,7 +242,8 @@ export class App extends LitElement {
 
     async ensureLoadedForRoute(route) {
         const generalRoutes = ['binding', 'options', 'wifi', 'update', 'connections', 'serial', 'buttons', 'models']
-        const advancedRoutes = ['hardware', 'cw', 'custom-mixer', 'lr1121']
+        const advancedRoutes = ['hardware', 'cw', 'custom-mixer', 'am32', 'lr1121']
+
         if (generalRoutes.includes(route)) {
             await this.loadGeneralGroup()
         } else if (advancedRoutes.includes(route)) {

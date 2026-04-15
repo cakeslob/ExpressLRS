@@ -13,6 +13,9 @@
 #include <esp_partition.h>
 #include <esp_ota_ops.h>
 #include <soc/uart_pins.h>
+#ifdef BUILD_AM32CONFIG
+#include "AM32.h"
+#endif
 #else
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
@@ -138,7 +141,7 @@ static bool captivePortal(AsyncWebServerRequest *request)
   return false;
 }
 
-static void WebUpdateSendContent(AsyncWebServerRequest *request)
+void WebUpdateSendContent(AsyncWebServerRequest *request)
 {
   for (size_t i=0 ; i<WEB_ASSETS_COUNT ; i++) {
     if (request->url().equals(WEB_ASSETS[i].path)) {
@@ -1134,6 +1137,10 @@ static void startServices()
 
   addCaptivePortalHandlers();
 
+  #ifdef BUILD_AM32CONFIG
+  am32_setupServer(&server);
+  #endif
+
   server.onNotFound(WebUpdateHandleNotFound);
 
   server.begin();
@@ -1285,6 +1292,10 @@ static int event()
 
 static int timeout()
 {
+  #ifdef BUILD_AM32CONFIG
+  am32_tick();
+  #endif
+
   if (wifiStarted)
   {
     HandleWebUpdate();
