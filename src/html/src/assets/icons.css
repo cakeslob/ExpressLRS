@@ -60,3 +60,7 @@
 .icon--symbols--lr1121 {
     --svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='%23000' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5'%3E%3Cpath d='M6.75 8.25v-3m3 3v-3m-6 6h-3m3 6h-3m3-3h-3m9 9v-3m9-3h-3m-9 6v-3m6 3v-3m3-6v4.5a1.5 1.5 0 0 1-1.5 1.5h-9a1.5 1.5 0 0 1-1.5-1.5v-9a1.5 1.5 0 0 1 1.5-1.5h7.5'/%3E%3Cpath d='M6.75 11.25h6v6h-6zM17.25.75h6L21 4.5h2.25l-6 6.75L18 6h-2.25z'/%3E%3C/g%3E%3C/svg%3E");
 }
+
+.icon--symbols--motor {
+    --svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -14.1 122.9 122.9'%3E%3Cpath fill='%23000' fill-rule='evenodd' clip-rule='evenodd' d='M43.6 92.2L31.9 80.5h-8c-2.8 0-5.1-2.3-5.1-5.1v-8.7h-4.9v10.2c0 2.2-1.8 4-4 4H4c-2.2 0-4-1.8-4-4V42.4c0-2.2 1.8-4 4-4h6c2.2 0 4 1.8 4 4v10.2h4.9v-9.4c0-2.8 2.3-5.1 5.1-5.1h8.5l12.1-12.8c1.4-1.2 3.3-1.7 5.4-1.6h49.7c1.7.2 3 .9 3.8 2.1c.8 1.2.7 1.9.7 3.3v23.5h4.9V42.4c0-2.2 1.8-4 4-4h6c2.2 0 4 1.8 4 4v34.5c0 2.2-1.8 4-4 4h-6c-2.2 0-4-1.8-4-4V66.7h-4.9v.9c0 2.7.1 4.4-1.7 6.6c-.3.4-.7.8-1.1 1.2L83.5 93c-.9 1-2.2 1.5-4 1.6H49.1c-2.3-.1-4.1-.9-5.5-2.4M63.7 61.8l-12.6-1.2l10.5-23h14.3l-8.1 13.2l14.6 1.6L55.5 84.6zM52 0h34.5c2.2 0 4 1.8 4 4v6c0 2.2-1.8 4-4 4H76.3v5H62.2v-5H52c-2.2 0-4-1.8-4-4V4c0-2.2 1.8-4 4-4'/%3E%3C/svg%3E");
+}
