@@ -27,6 +27,7 @@
 #include "rx-serial/SerialSmartAudio.h"
 #include "rx-serial/SerialDisplayport.h"
 #include "rx-serial/SerialGPS.h"
+#include "rx-serial/SerialVESC.h"
 
 #include "devAnalogVbat.h"
 #include "devBaro.h"
@@ -1272,6 +1273,7 @@ static void setupSerial()
 	bool sumdSerialOutput = false;
     bool mavlinkSerialOutput = false;
     bool hottTlmSerial = false;
+    bool vescSerialOutput = false;
 
     if (OPT_CRSF_RCVR_NO_SERIAL)
     {
@@ -1321,6 +1323,11 @@ static void setupSerial()
     }
     else if (config.GetSerialProtocol() == PROTOCOL_GPS)
     {
+        serialBaud = 115200;
+    }
+    else if (config.GetSerialProtocol() == PROTOCOL_VESC)
+    {
+        vescSerialOutput = true;
         serialBaud = 115200;
     }
     bool invert = config.GetSerialProtocol() == PROTOCOL_SBUS || config.GetSerialProtocol() == PROTOCOL_INVERTED_CRSF || config.GetSerialProtocol() == PROTOCOL_DJI_RS_PRO;
@@ -1390,6 +1397,11 @@ static void setupSerial()
     else if (hottTlmSerial)
     {
         serialIO = new SerialHoTT_TLM(SERIAL_PROTOCOL_TX, SERIAL_PROTOCOL_RX);
+    }
+    else if (vescSerialOutput)
+    {
+        serialIO = new SerialVESC(SERIAL_PROTOCOL_TX, SERIAL_PROTOCOL_RX);
+        ((SerialVESC*)serialIO)->begin(GPIO_PIN_RCSIGNAL_TX);
     }
     else
     {
@@ -1490,6 +1502,11 @@ static void setupSerial1()
         case PROTOCOL_SERIAL1_GPS:
             Serial1.begin(115200, SERIAL_8N1, serial1RXpin, serial1TXpin, false);
             serial1IO = new SerialGPS(SERIAL1_PROTOCOL_TX, SERIAL1_PROTOCOL_RX);
+            break;
+        case PROTOCOL_SERIAL1_VESC:
+            Serial1.begin(115200, SERIAL_8N1, -1, serial1TXpin, false);
+            serial1IO = new SerialVESC(SERIAL1_PROTOCOL_TX, SERIAL1_PROTOCOL_RX);
+            ((SerialVESC*)serial1IO)->begin(serial1TXpin);
             break;
     }
 }
