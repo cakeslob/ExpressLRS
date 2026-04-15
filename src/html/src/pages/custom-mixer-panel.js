@@ -15,7 +15,7 @@ const MIXER_CURVE_FIELDS = [
     },
     {
         key: 'curve',
-        label: 'Curve',
+        label: 'Expo Curve',
         minimum: -127,
         maximum: 127,
     },
@@ -66,27 +66,38 @@ class CustomMixerPanel extends LitElement {
 
                 <div class="mui-divider" style="margin-top: 20px;"></div>
                 <div style="margin-top: 16px;">
-                    <h4>How to use Custom Mixer</h4>
+                    <h3>How to use Custom Mixer</h3>
                     <ul>
                         <li>
                             <b>Arcade tank drive:</b> assign throttle and steering input channels plus left and right
                             output channels. Use each curve row to shape behavior before and after the mixer sum.
                         </li>
                         <li>
-                            <b>Aux curves:</b> assign a channel for AUX 1 and/or AUX 2 if you want an inline response
+                            <b>Aux curves:</b> assign a channel for AUX 1 and/or AUX 2 if you want a response
                             curve on those channels.
                         </li>
                         <li>
-                            <b>Scale (%):</b> this field is displayed in percent, but it is stored as an int8 value in
-                            steps of ${SCALE_STEP_PERCENT}%. The panel converts between percent and int8 automatically.
-                        </li>
-                        <li>
                             <b>Custom arming switch:</b> choose a channel and enable one or more switch positions
-                            (Up/Mid/Down) that should count as armed.
+                            (Up/Mid/Down) that should count as armed. When not armed, the failsafe setting will be used for all channels.
+                        </li>
+                    </ul>
+                    <h4>Curve Parameters</h4>
+                    <ul>
+                        <li>
+                            <b>Deadzone:</b> Ignores small stick movements near the center so the output stays 0 still until you move it far enough.
                         </li>
                         <li>
-                            Every value is clamped explicitly to valid uint8_t or int8_t limits before sending it to the
-                            device.
+                            <b>Scale (%):</b> Also known as gain or weight, a multiplier for the value as a percentage. 
+                            Use a negative percentage to reverse the channel.
+                        </li>
+                        <li>
+                            <b>Expo Curve:</b> Changes how sensitive the control feels, making it softer near the center and more responsive as you move further. 0 means no expo curve at all.
+                        </li>
+                        <li>
+                            <b>Antideadzone:</b> Adds a small boost when you start moving so the signal overcomes other devices’ deadzones and responds immediately.
+                        </li>
+                        <li>
+                            <b>Offset:</b> Simply shifts the output up or down.
                         </li>
                     </ul>
                 </div>
@@ -190,29 +201,26 @@ class CustomMixerPanel extends LitElement {
                         <td>${this.renderChannelSelect('ch_arm')}</td>
                     </tr>
                     <tr>
-                        <th>Armed when Up</th>
+                        <th><label for="arming-up">Armed when Up</label></th>
                         <td>
                             <div class="mui-checkbox">
                                 <input id="arming-up" type="checkbox" ?checked="${this.getArmingRangeBit(0)}" @change="${(event) => this.updateArmingRangeBit(0, event.target.checked)}">
-                                <label for="arming-up">Armed when Up</label>
                             </div>
                         </td>
                     </tr>
                     <tr>
-                        <th>Armed when Mid</th>
+                        <th><label for="arming-mid">Armed when Mid</label></th>
                         <td>
                             <div class="mui-checkbox">
                                 <input id="arming-mid" type="checkbox" ?checked="${this.getArmingRangeBit(1)}" @change="${(event) => this.updateArmingRangeBit(1, event.target.checked)}">
-                                <label for="arming-mid">Armed when Mid</label>
                             </div>
                         </td>
                     </tr>
                     <tr>
-                        <th>Armed when Down</th>
+                        <th><label for="arming-down">Armed when Down</label></th>
                         <td>
                             <div class="mui-checkbox">
                                 <input id="arming-down" type="checkbox" ?checked="${this.getArmingRangeBit(2)}" @change="${(event) => this.updateArmingRangeBit(2, event.target.checked)}">
-                                <label for="arming-down">Armed when Down</label>
                             </div>
                         </td>
                     </tr>
