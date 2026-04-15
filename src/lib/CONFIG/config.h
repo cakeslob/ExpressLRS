@@ -324,8 +324,9 @@ public:
     void SetSourceSysId(uint8_t sysID);
     void SetBindStorage(rx_config_bindstorage_t value);
     void ReturnLoan();
-    void SetFixedPacketRate(int8_t x);
 
+    void SetOtherDefaults();
+    void SetFixedPacketRate(int8_t x);
     void SetCustomMixer(const custom_mixer_t*);
 
 private:
