@@ -70,7 +70,7 @@ export class App extends LitElement {
                             <li><a id="menu-cw" href="#cw"><span class="mui--align-middle icon--symbols icon--symbols--wave"></span>Continuous Wave</a></li>
                             <!-- FEATURE:NOT IS_TX -->
                             <!-- FEATURE:NOT IS_8285 -->
-                            <li><a id="menu-am32" href="#am32"><span class="mui--align-middle icon--symbols icon--symbols--serial"></span>AM32 Configurator</a></li>
+                            <li><a id="menu-am32" href="#am32"><span class="mui--align-middle icon--symbols icon--symbols--motor"></span>AM32 Configurator</a></li>
                             <!-- /FEATURE:NOT IS_8285 -->
                             <!-- /FEATURE:NOT IS_TX -->
                             <!-- FEATURE:HAS_LR1121 -->
