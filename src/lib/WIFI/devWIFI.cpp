@@ -13,9 +13,7 @@
 #include <esp_partition.h>
 #include <esp_ota_ops.h>
 #include <soc/uart_pins.h>
-#ifdef BUILD_AM32CONFIG
 #include "AM32.h"
-#endif
 #else
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
