@@ -9,6 +9,9 @@ export const PWM_MODE_SERIAL = 10;
 export const PWM_MODE_SERIAL2RX = 14;
 export const PWM_MODE_SERIAL2TX = 15;
 
+const PROTOCOL_VESC = 10;
+const PROTOCOL_SERIAL1_VESC = 12;
+
 @customElement('connections-panel')
 class ConnectionsPanel extends LitElement {
     pinModes = []
@@ -218,8 +221,29 @@ class ConnectionsPanel extends LitElement {
             _(`pwm_${index}_fsmode`).disabled = onoff
         }
 
-        // disable extra fields for serial & i2c pins
-        setDisabled(index, Number.parseInt(pinMode.value) >= PWM_MODE_SERIAL);
+        const shouldDisableConfigurationFields = (pinModeValue) => {
+            const selectedMode = Number.parseInt(pinModeValue)
+            if (selectedMode < PWM_MODE_SERIAL) {
+                return false
+            }
+
+            // VESC uses the standard channel, invert, stretch, and failsafe controls,
+            // so keep those controls enabled when the matching serial mode is selected.
+            if (selectedMode === PWM_MODE_SERIAL && Number.parseInt(elrsState.config['serial-protocol']) === PROTOCOL_VESC) {
+                return false
+            }
+
+            // Secondary UART VESC on TX2 also needs these controls to stay editable.
+            if (selectedMode === PWM_MODE_SERIAL2TX && Number.parseInt(elrsState.config['serial1-protocol']) === PROTOCOL_SERIAL1_VESC) {
+                return false
+            }
+
+            return true
+        }
+
+        // Disable extra fields for serial and I2C output modes,
+        // except for the VESC protocol combinations handled above.
+        setDisabled(index, shouldDisableConfigurationFields(pinMode.value));
 
         const updateOthers = (value, enable) => {
             if (value > PWM_MODE_SERIAL) { // disable others
@@ -247,22 +271,22 @@ class ConnectionsPanel extends LitElement {
             if (index === this.pinRxIndex) {
                 if (pinRxModeValue === PWM_MODE_SERIAL) { // Serial
                     pinTxMode.value = PWM_MODE_SERIAL
-                    setDisabled(this.pinRxIndex, true)
-                    setDisabled(this.pinTxIndex, true)
+                    setDisabled(this.pinRxIndex, shouldDisableConfigurationFields(pinRxMode.value))
+                    setDisabled(this.pinTxIndex, shouldDisableConfigurationFields(pinTxMode.value))
                     pinTxMode.disabled = true
                 }
                 else if (pinTxModeValue === PWM_MODE_SERIAL) {
                     pinTxMode.value = 0
-                    setDisabled(this.pinRxIndex, false)
-                    setDisabled(this.pinTxIndex, false)
+                    setDisabled(this.pinRxIndex, shouldDisableConfigurationFields(pinRxMode.value))
+                    setDisabled(this.pinTxIndex, shouldDisableConfigurationFields(pinTxMode.value))
                     pinTxMode.disabled = false
                 }
             }
             if (index === this.pinTxIndex) {
                 if (pinTxModeValue === PWM_MODE_SERIAL) { // Serial
                     pinRxMode.value = PWM_MODE_SERIAL
-                    setDisabled(this.pinRxIndex, true)
-                    setDisabled(this.pinTxIndex, true)
+                    setDisabled(this.pinRxIndex, shouldDisableConfigurationFields(pinRxMode.value))
+                    setDisabled(this.pinTxIndex, shouldDisableConfigurationFields(pinTxMode.value))
                     pinTxMode.disabled = true
                 }
             }

@@ -1276,10 +1276,7 @@ RxConfig::SetDefaults(bool commit)
 
     m_config.teamraceChannel = AUX7; // CH11
 
-    if (firmwareOptions.administered_binding) {
-        m_config.bindStorage = BINDSTORAGE_ADMINISTERED;
-    }
-    m_config.fixedPacketRate = firmwareOptions.fixed_packet_rate;
+    SetOtherDefaults();
 
     if (commit)
     {
@@ -1458,6 +1455,66 @@ void RxConfig::SetFixedPacketRate(int8_t value)
         m_config.fixedPacketRate = value;
         m_modified = EVENT_CONFIG_MODEL_CHANGED;
     }
+}
+
+void RxConfig::SetOtherDefaults()
+{
+    if (firmwareOptions.administered_binding) {
+        m_config.bindStorage = BINDSTORAGE_ADMINISTERED;
+    }
+    m_config.fixedPacketRate = firmwareOptions.fixed_packet_rate;
+
+    #if defined(GPIO_PIN_PWM_OUTPUTS)
+    for (unsigned int ch = 0; ch < PWM_MAX_CHANNELS - 2; ch++)
+    {
+        int pin = GPIO_PIN_PWM_OUTPUTS[ch];
+        UNUSED(pin);
+        rx_config_pwm_t *pwm = &(m_config.pwmChannels[ch]);
+        #ifdef BUILD_SHREW_HBRIDGE
+            pwm->val.inputChannel += 2; // if shrew is a brushed ESC, then the first two channels are already used for driving
+        #endif
+        #ifdef USE_PWM_FAILSAFE_NO_PULSE
+        pwm->val.failsafeMode = PWMFAILSAFE_NO_PULSES;
+        #endif
+        #ifdef USE_PWM_333HZ
+        pwm->val.mode = som333Hz;
+        #endif
+        #if defined(PLATFORM_ESP32) && defined(USE_DSHOT)
+            #ifdef BUILD_SHREW_HBRIDGE
+                if (ch < 2)
+            #endif
+                {
+                    pwm->val.mode = somDShot;
+                }
+        #endif
+        #if defined(USE_VESC_UART)
+        if (pin == U0TXD_GPIO_NUM) {
+            pwm->val.mode = somSerial;
+            m_config.serialProtocol = PROTOCOL_VESC;
+            pwm->val.failsafeMode = PWMFAILSAFE_NO_PULSES;
+        }
+        #endif
+        #if defined(USE_VESC_UART_1) && defined(GPIO_PIN_SERIAL1_TX)
+        if (pin == GPIO_PIN_SERIAL1_TX) {
+            pwm->val.mode = somSerial1TX;
+            m_config.serialProtocol = PROTOCOL_SERIAL1_VESC;
+            pwm->val.failsafeMode = PWMFAILSAFE_NO_PULSES;
+        }
+        #endif
+    }
+    #ifdef USE_DEFAULT_ARCADE_TANK_MIX
+    // use this define to setup a custom mixer right into the firmware
+    uint32_t mix_chs = USE_DEFAULT_ARCADE_TANK_MIX;
+    uint32_t mix_ch_thr = mix_chs & 0xFF;
+    uint32_t mix_ch_str = (mix_chs & 0xFF00) >> 8;
+    uint32_t mix_ch_lft = (mix_chs & 0xFF00) >> 16;
+    uint32_t mix_ch_rgt = (mix_chs & 0xFF00) >> 24;
+    m_config.custom_mixer.ch_throttle = mix_ch_thr;
+    m_config.custom_mixer.ch_steering = mix_ch_str;
+    m_config.custom_mixer.ch_left     = mix_ch_lft;
+    m_config.custom_mixer.ch_right    = mix_ch_rgt;
+    #endif
+    #endif // GPIO_PIN_PWM_OUTPUTS
 }
 
 #endif

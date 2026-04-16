@@ -72,7 +72,7 @@ uint32_t SerialVESC::sendRCFrame(bool frameAvailable, bool frameMissed, uint32_t
     packet.stop_byte = 0x03;
     packet.payload_length = 5;
     packet.command_byte = COMM_SET_DUTY;
-    packet.value = i32map(val, CRSF_CHANNEL_VALUE_MIN, CRSF_CHANNEL_VALUE_MAX, -100000, 100000);
+    packet.value = __builtin_bswap32((uint32_t)i32map(val, CRSF_CHANNEL_VALUE_MIN, CRSF_CHANNEL_VALUE_MAX, -100000, 100000));
     packet.crc = __builtin_bswap16(crc16(&(packet.command_byte), 5));
 
     _outputPort->write((const uint8_t *)&packet, sizeof(vesc_i32_packet_t));

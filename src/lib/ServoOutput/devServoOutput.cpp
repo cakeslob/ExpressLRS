@@ -8,6 +8,7 @@
 #include "logging.h"
 #include "rxtx_intf.h"
 #include "CustomMixer.h"
+#include "ShrewHBridge.h"
 
 static int8_t servoPins[PWM_MAX_CHANNELS];
 static pwm_channel_t pwmChannels[PWM_MAX_CHANNELS];
@@ -125,6 +126,10 @@ static void servoWrite(uint8_t ch, uint16_t us)
 
 static void servosFailsafe()
 {
+    #ifdef BUILD_SHREW_HBRIDGE
+    hbridge_failsafe();
+    #endif
+
     for (int ch = 0 ; ch < GPIO_PIN_PWM_OUTPUTS_COUNT ; ++ch)
     {
         const rx_config_pwm_t *chConfig = config.GetPwmChannel(ch);
@@ -208,6 +213,9 @@ static void servosUpdate(unsigned long now)
         lastUpdate = now;
 
         custommixer_mix();
+        #ifdef BUILD_SHREW_HBRIDGE
+        hbridge_update(now);
+        #endif
 
         if (custommixer_isArmed()) {
             servoCalcAllChannels(&servoWrite);
@@ -230,6 +238,9 @@ static void servosUpdate(unsigned long now)
 static bool initialize()
 {
     custommixer_init(config.GetCustomMixer());
+    #ifdef BUILD_SHREW_HBRIDGE
+    hbridge_init();
+    #endif
 
     if (!OPT_HAS_SERVO_OUTPUT)
     {
