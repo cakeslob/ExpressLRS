@@ -523,5 +523,6 @@ void rgbled_dynamicUpdate()
         #endif
 
         WS281BsetLED(HsvToRgb(blinkyColor));
+        blinkyColor.s = 255; // reset
     }
 }
