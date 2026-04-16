@@ -94,6 +94,8 @@ static uint32_t totalSize;
 
 static const char VERSION[] = {LATEST_VERSION, 0};
 
+static const char* makeUniqueSsid();
+
 void setWifiUpdateMode()
 {
   // No need to ExitBindingMode(), the radio will be stopped stopped when start the Wifi service.
@@ -637,7 +639,7 @@ static void sendResponse(AsyncWebServerRequest *request, const String &msg, WiFi
 static void WebUpdateAccessPoint(AsyncWebServerRequest *request)
 {
   DBGLN("Starting Access Point");
-  String msg = String("Access Point starting, please connect to access point '") + wifi_ap_ssid + "' with password '" + wifi_ap_password + "'";
+  String msg = String("Access Point starting, please connect to access point '") + makeUniqueSsid() + "' with password '" + wifi_ap_password + "'";
   sendResponse(request, msg, WIFI_AP);
 }
 
@@ -677,7 +679,7 @@ static void WebUpdateForget(AsyncWebServerRequest *request)
   saveOptions();
   station_ssid[0] = 0;
   station_password[0] = 0;
-  String msg = String("Home network forgotten, please connect to access point '") + wifi_ap_ssid + "' with password '" + wifi_ap_password + "'";
+  String msg = String("Home network forgotten, please connect to access point '") + makeUniqueSsid() + "' with password '" + wifi_ap_password + "'";
   sendResponse(request, msg, WIFI_AP);
 }
 
@@ -1211,7 +1213,7 @@ static void HandleWebUpdate()
         WiFi.setTxPower(WIFI_POWER_19_5dBm);
         #endif
         WiFi.softAPConfig(ipAddress, ipAddress, netMsk);
-        WiFi.softAP(wifi_ap_ssid, wifi_ap_password);
+        WiFi.softAP(makeUniqueSsid(), wifi_ap_password);
         startServices();
         break;
       case WIFI_STA:
@@ -1263,6 +1265,25 @@ static void HandleWebUpdate()
       WifiJoystick::Loop(now);
     #endif
   }
+}
+
+static const char* makeUniqueSsid()
+{
+    static char ssid[13];
+    uint8_t mac[6];
+
+    WiFi.macAddress(mac);
+    snprintf(ssid, sizeof(ssid), "ELRS-"
+    #if defined(TARGET_RX)
+      "RX"
+    #elif defined(TARGET_TX)
+      "TX"
+    #else
+      "XX"
+    #endif
+    "-%02X%02X", mac[4], mac[5]);
+
+    return ssid;
 }
 
 static int start()
