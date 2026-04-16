@@ -179,5 +179,10 @@ void hbridge_update(unsigned long now)
     }
 }
 
+bool hbridge_isArmed()
+{
+    return hbridge_armed;
+}
+
 #endif
 #endif

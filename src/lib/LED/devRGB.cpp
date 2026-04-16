@@ -2,9 +2,7 @@
 #include "common.h"
 #include "devLED.h"
 
-#if defined(TARGET_TX)
 #include "config.h"
-#endif
 
 #include "crsf_protocol.h"
 #include "POWERMGNT.h"
@@ -27,6 +25,8 @@ static ESP32S3LedDriverRGB *striprgb;
 static NeoPixelBus<NeoGrbFeature, METHOD> *stripgrb;
 static NeoPixelBus<NeoRgbFeature, METHOD> *striprgb;
 #endif
+
+void rgbled_dynamicUpdate();
 
 void WS281Binit()
 {
@@ -422,11 +422,8 @@ static int timeout()
             return flashLED(blinkyColor, 192, 0, LEDSEQ_MODEL_MISMATCH, sizeof(LEDSEQ_MODEL_MISMATCH));
         }
 #endif
-        // Set the color and we're done!
-        blinkyColor.h = ExpressLRS_currAirRate_Modparams->index * 256 / RATE_MAX;
-        blinkyColor.v = fmap(POWERMGNT::currPower(), 0, PWR_COUNT-1, 10, 128);
-        WS281BsetLED(HsvToRgb(blinkyColor));
-        return DURATION_NEVER;
+        rgbled_dynamicUpdate();
+        return NORMAL_UPDATE_INTERVAL;
     case tentative:
         // Set the color and we're done!
         blinkyColor.h = ExpressLRS_currAirRate_Modparams->index * 256 / RATE_MAX;
@@ -469,3 +466,62 @@ device_t RGB_device = {
     .timeout = timeout,
     .subscribe = EVENT_CONNECTION_CHANGED | EVENT_ENTER_BIND_MODE | EVENT_EXIT_BIND_MODE
 };
+
+
+extern bool hbridge_isArmed();
+
+void rgbled_dynamicUpdate()
+{
+    static uint32_t last_time = 0;
+    static uint32_t accum = 0;
+    static uint16_t prev[CRSF_NUM_CHANNELS];
+
+    if (blinkyState == STARTUP && connectionState < FAILURE_STATES) {
+        return;
+    }
+
+    for (int i = 0; i < CRSF_NUM_CHANNELS; i++) {
+        uint32_t cd = ChannelData[i];
+        uint32_t pd = prev[i];
+        accum += (cd >= pd) ? (cd - pd) : (pd - cd);
+        prev[i] = ChannelData[i];
+    }
+
+    uint32_t now = millis();
+    if ((now - last_time) < 100) {
+        return;
+    }
+    last_time = now;
+
+    bool use_dynamic_led = false;
+    #ifdef USE_DYNAMIC_RGB_LED
+    use_dynamic_led |= true;
+    #else
+    use_dynamic_led |= (config.GetFixedPacketRate() >= 0);
+    #endif
+
+    if (connectionState == connected || connectionState == tentative) {
+        blinkyColor.s = 255;
+        blinkyColor.v = 128;
+        if (use_dynamic_led)
+        {
+            blinkyColor.h = (accum / 32) & 0xFF;
+        }
+        else {
+            blinkyColor.h = ExpressLRS_currAirRate_Modparams->index * 256 / RATE_MAX;
+            blinkyColor.v = fmap(POWERMGNT::currPower(), 0, PWR_COUNT-1, 10, 128);
+        }
+
+        #ifdef BUILD_SHREW_HBRIDGE
+        // blink the LED white if the H-bridge is not armed
+        if (hbridge_isArmed() == false) {
+            if (((millis() / 200) % 2) == 0) {
+                blinkyColor.s = 32;
+                blinkyColor.v = 64;
+            }
+        }
+        #endif
+
+        WS281BsetLED(HsvToRgb(blinkyColor));
+    }
+}
