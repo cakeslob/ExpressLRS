@@ -1984,6 +1984,15 @@ void resetConfigAndReboot()
 
 void setup()
 {
+    #if defined(BUILD_SHREW_HBRIDGE_MEGA)
+    pinMode(4, OUTPUT);
+    digitalWrite(4, HIGH);
+    #endif
+    #if defined(BUILD_SHREW_HBRIDGE_PRO)
+    pinMode(21, OUTPUT);
+    digitalWrite(21, HIGH);
+    #endif
+
     if (!options_init())
     {
         // In the failure case we set the logging to the null logger so nothing crashes
