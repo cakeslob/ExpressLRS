@@ -181,7 +181,7 @@ bool ICACHE_RAM_ATTR HandleSendTelemetryResponse_v3()
     // this function tries to mimic the old telemetry sending function, and in v4 it is replaced with HandleSendDataDl
     // this functionality doesn't work yet, TODO: fix me
 
-    uint8_t modresult = (OtaNonce + 1) % ExpressLRS_currTlmDenom;
+    uint8_t modresult = OtaNonce % ExpressLRS_currTlmDenom;
 
     if ((connectionState == disconnected) || (ExpressLRS_currTlmDenom == 1) || (alreadyTLMresp == true) || (modresult != 0) || !teamraceHasModelMatch)
     {
