@@ -4,7 +4,9 @@
 #include "logging.h"
 #include "options.h"
 #include "config.h"
+#include "CRSFRouter.h"
 #include "stubborn_sender.h"
+#include "stubborn_receiver.h"
 #include "deferred.h"
 #include "FHSS.h"
 #include "LBT.h"
@@ -14,6 +16,7 @@
 #endif
 
 bool ota_isLegacy = false;
+uint32_t ota_legacySyncHoldUntilMs = 0;
 extern uint8_t ExpressLRS_nextAirRateIndex; // used to call SetRFLinkRate
 extern uint32_t RFmodeLastCycled; // reset the scan timer
 extern bool OtaIsFullRes;
@@ -23,6 +26,7 @@ extern uint8_t telemetryBurstCount;
 extern uint8_t telemetryBurstMax;
 extern uint8_t geminiMode;
 extern bool alreadyTLMresp;
+extern StubbornReceiver DataUlReceiver;
 
 static uint32_t consecutive_old_pkt_cnt = 0;
 static uint32_t consecutive_new_pkt_cnt = 0;
@@ -47,9 +51,30 @@ extern void ICACHE_RAM_ATTR LinkStatsToOta(OTA_LinkStats_s * const ls);
 
 static uint8_t rateIdxXform(uint8_t x);
 static void FHSSrandomiseFHSSsequence_v3(const uint32_t seed);
+static bool isMatchingSyncPacket_v3(const OTA_Packet_v3_s * const otaPktPtr);
+static bool mapSyncPacketV3ToV4(OTA_Packet_v3_s * const otaPktPtr);
+static void rewriteDataUplinkHeaderV3ToV4(OTA_Packet_v3_s * const otaPktPtr);
+static void LinkStatsToOta_v3(OTA_LinkStats_v3_s * const ls);
 
 static void debug_sync_packet(void* pkt, int len);
 static void debug_generic_packet(uint8_t* data, int length, uint32_t crc_initializer);
+static constexpr uint32_t LEGACY_SYNC_HOLD_TIMEOUT_MS = 2000U;
+
+bool ota_isLegacySyncHoldActive()
+{
+    if (ota_legacySyncHoldUntilMs == 0)
+    {
+        return false;
+    }
+
+    if ((millis() - ota_legacySyncHoldUntilMs) < LEGACY_SYNC_HOLD_TIMEOUT_MS)
+    {
+        return true;
+    }
+
+    ota_legacySyncHoldUntilMs = 0;
+    return false;
+}
 
 bool ICACHE_RAM_ATTR ProcessRFPacket_v3(SX12xxDriverCommon::rx_status const status)
 {
@@ -83,7 +108,7 @@ bool ICACHE_RAM_ATTR ProcessRFPacket_v3(SX12xxDriverCommon::rx_status const stat
 
     consecutive_old_pkt_cnt++;
     consecutive_new_pkt_cnt = 0;
-    if (consecutive_old_pkt_cnt >= 3) { // got enough packets passing CRC to think we might be hearing a transmitter running older firmware
+    if (consecutive_old_pkt_cnt >= 3U) { // got enough evidence to conclude we are hearing a V3 transmitter
         if (ota_isLegacy == false) {
             // time to switch over
             DBGLN("many legacy packets detected");
@@ -94,39 +119,41 @@ bool ICACHE_RAM_ATTR ProcessRFPacket_v3(SX12xxDriverCommon::rx_status const stat
             FHSSrandomiseFHSSsequence_v3(uidMacSeedGet_v3());
             // reinitialize the radio with the new config
             SetRFLinkRate(ExpressLRS_nextAirRateIndex, false);
+            // Enter a temporary hold state: stay on sync channel to lock quickly before hopping starts.
+            ota_legacySyncHoldUntilMs = millis();
+            Radio.SetFrequencyReg(FHSSgetInitialFreq(), SX12XX_Radio_1, false);
+#if defined(RADIO_LR1121)
+            if (FHSSuseDualBand)
+            {
+                Radio.SetFrequencyReg(FHSSgetInitialGeminiFreq(), SX12XX_Radio_2, false);
+            }
+#endif
             Radio.RXnb();
             // now we should be listening for sync on the correct sync channel since the hop table has been changed
             return false;
         }
     }
 
-    OTA_Sync_s otaSync; // this is the new sync packet structure, we will copy the old sync packet parameters into the new one, field by field, with some translations
     if (otaPktPtr->std.type == PACKET_TYPE_SYNC) {
-        if (OtaIsFullRes) {
-            memcpy(&otaSync, &otaPktPtr->full.sync.sync, sizeof(OTA_Sync_s));
+        // Translate the sync packet explicitly so field packing changes between V3/V4
+        // cannot corrupt switch mode / tlm ratio information.
+        if (!mapSyncPacketV3ToV4(otaPktPtr))
+        {
+            return false;
         }
-        else {
-            memcpy(&otaSync, &otaPktPtr->std.sync, sizeof(OTA_Sync_s));
+
+        // Sync found, leave the temporary hold state and allow normal hopping/scanning behaviour.
+        if (ota_legacySyncHoldUntilMs != 0)
+        {
+            DBGLN("legacy sync acquired, resume normal hopping");
+            ota_legacySyncHoldUntilMs = 0;
         }
-        // the old rate indices and the new rate indices are different, we transform this using a look-up table
-        otaSync.rfRateEnum = rateIdxXform(OtaIsFullRes ? otaPktPtr->full.sync.sync.rateIndex : otaPktPtr->std.sync.rateIndex);
-        #if 0
-        if (isDualRadio()) {
-            // unknown if packet is Gemini, so use Gemini if available
-            otaSync.geminiMode = (config.GetAntennaMode() || FHSSuseDualBand) ? 1 : 0;
-        }
-        #else
-        otaSync.geminiMode = 0; // TODO: I can't test this anyways
-        #endif
-        otaSync.otaProtocol = 0; // this bit forces change to MAVLink, but the user can also manually configure MAVLink
-        // now copy the temporary buffer into the original RX buffer
-        // as we will call ProcessRFPacket later
-        if (OtaIsFullRes) {
-            memcpy(&otaPktPtr->full.sync.sync, &otaSync, sizeof(OTA_Sync_s));
-        }
-        else {
-            memcpy(&otaPktPtr->std.sync, &otaSync, sizeof(OTA_Sync_s));
-        }
+    }
+    else if (otaPktPtr->std.type == PACKET_TYPE_DATA)
+    {
+        // PACKET_TYPE_DATA on V3 is MSP uplink. Standard-mode bit layout is compatible,
+        // but full-resolution bitfield order is different and must be translated.
+        rewriteDataUplinkHeaderV3ToV4(otaPktPtr);
     }
 
     #if defined(PLATFORM_ESP32)
@@ -178,7 +205,7 @@ bool ICACHE_RAM_ATTR HandleSendTelemetryResponse_v3()
 
     if (NextTelemetryType == PACKET_TYPE_LINKSTATS || !tlmQueued)
     {
-        OTA_LinkStats_s * ls; // this struct did not change in v4
+        OTA_LinkStats_v3_s * ls;
         if (OtaIsFullRes)
         {
             otaPkt.full.tlm_dl.containsLinkStats = 1;
@@ -194,7 +221,7 @@ bool ICACHE_RAM_ATTR HandleSendTelemetryResponse_v3()
             otaPkt.std.tlm_dl.type = 0x01; // ELRS_TELEMETRY_TYPE_LINK
             ls = &otaPkt.std.tlm_dl.ul_link_stats.stats;
         }
-        LinkStatsToOta(ls);
+        LinkStatsToOta_v3(ls);
 
         NextTelemetryType = PACKET_TYPE_DATA; // ELRS_TELEMETRY_TYPE_DATA
         // Start the count at 1 because the next will be DATA and doing +1 before checking
@@ -288,25 +315,51 @@ bool ICACHE_RAM_ATTR ValidatePacketCrcStd_v3(OTA_Packet_v3_s * otaPktPtr)
 {
     uint8_t preserveCrcHigh = otaPktPtr->std.crcHigh;
     uint16_t const inCRC = ((uint16_t)otaPktPtr->std.crcHigh << 8) + otaPktPtr->std.crcLow;
-    // For smHybrid the CRC only has the packet type in byte 0
-    // For smWide the FHSS slot is added to the CRC in byte 0 on PACKET_TYPE_RCDATAs
+    bool crcValid = false;
+
+    // For smHybrid the CRC only has packet type in byte 0.
+    // For smWide standard RC packets, the FHSS slot is mixed into byte 0 before CRC.
+    // During initial acquisition (before sync), OtaNonce is unknown and using only one
+    // slot value causes many false negatives. To improve reliability, try all possible
+    // slot values for this mode.
 #if defined(TARGET_RX)
     if (otaPktPtr->std.type == PACKET_TYPE_RCDATA && OtaSwitchModeCurrent == smWideOr8ch)
     {
-        otaPktPtr->std.crcHigh = (OtaNonce % ExpressLRS_currAirRate_Modparams->FHSShopInterval) + 1;
+        uint8_t const fhssHopInterval = ExpressLRS_currAirRate_Modparams->FHSShopInterval;
+        if (fhssHopInterval > 0)
+        {
+            // First try the expected value from current OtaNonce (fast path when already in sync).
+            otaPktPtr->std.crcHigh = (OtaNonce % fhssHopInterval) + 1;
+            uint16_t const calculatedCRC = ota_crc_v3_short.calc((uint8_t*)otaPktPtr, OTA4_CRC_CALC_LEN_v3, OtaCrcInitializer_v3);
+            crcValid = (inCRC == calculatedCRC);
+
+            // If not matched, brute-force the slot contribution 1..FHSShopInterval.
+            if (!crcValid)
+            {
+                for (uint8_t slot = 1; slot <= fhssHopInterval; ++slot)
+                {
+                    otaPktPtr->std.crcHigh = slot;
+                    uint16_t const slotCrc = ota_crc_v3_short.calc((uint8_t*)otaPktPtr, OTA4_CRC_CALC_LEN_v3, OtaCrcInitializer_v3);
+                    if (inCRC == slotCrc)
+                    {
+                        crcValid = true;
+                        DBGVLN("legacy std CRC matched via slot search: slot=%u", slot);
+                        break;
+                    }
+                }
+            }
+        }
     }
     else
 #endif
     {
         otaPktPtr->std.crcHigh = 0;
+        uint16_t const calculatedCRC = ota_crc_v3_short.calc((uint8_t*)otaPktPtr, OTA4_CRC_CALC_LEN_v3, OtaCrcInitializer_v3);
+        crcValid = (inCRC == calculatedCRC);
     }
-    uint16_t const calculatedCRC = ota_crc_v3_short.calc((uint8_t*)otaPktPtr, OTA4_CRC_CALC_LEN_v3, OtaCrcInitializer_v3);
 
-    if (inCRC == calculatedCRC) {
-        return true;
-    }
     otaPktPtr->std.crcHigh = preserveCrcHigh;
-    return false;
+    return crcValid;
 }
 
 void ICACHE_RAM_ATTR GeneratePacketCrcFull_v3(OTA_Packet_v3_s * const otaPktPtr)
@@ -402,31 +455,133 @@ const static uint8_t rateXformTbl[] = {
 
 #if defined(RADIO_SX128X)
 const uint8_t rateXformTbl[] = {
-    RATE_v3_FLRC_1000HZ,   
-    RATE_v3_FLRC_500HZ,    
-    RATE_v3_DVDA_500HZ,    
-    RATE_v3_DVDA_250HZ,    
-    RATE_v3_LORA_500HZ,    
+    RATE_v3_FLRC_1000HZ,
+    RATE_v3_FLRC_500HZ,
+    RATE_v3_DVDA_500HZ,
+    RATE_v3_DVDA_250HZ,
+    RATE_v3_LORA_500HZ,
     RATE_v3_LORA_333HZ_8CH,
-    RATE_v3_LORA_250HZ,    
-    RATE_v3_LORA_150HZ,    
+    RATE_v3_LORA_250HZ,
+    RATE_v3_LORA_150HZ,
     RATE_v3_LORA_100HZ_8CH,
-    RATE_v3_LORA_50HZ,      };
+    RATE_v3_LORA_50HZ,
+};
 #endif
 
 static uint8_t ICACHE_RAM_ATTR rateIdxXform(uint8_t x)
 {
+    // Legacy rateIndex is translated through a target-specific lookup table first,
+    // then converted to the active V4 enum.
+    if (x >= (sizeof(rateXformTbl) / sizeof(rateXformTbl[0])))
+    {
+        DBGLN("legacy sync rate index out of bounds: %u", x);
+        return 0xFF;
+    }
+
+    uint8_t const rateV3 = rateXformTbl[x];
+
     #if defined(RADIO_SX127X)
-    return rateEnumXform_900(rateXformTbl[x]);
+    return rateEnumXform_900(rateV3);
     #elif defined(RADIO_LR1121)
-    uint8_t ret = rateEnumXform_2G4(rateXformTbl[x]);
+    uint8_t ret = rateEnumXform_2G4(rateV3);
     if (ret == 0xFF) {
-        ret = rateEnumXform_900(rateXformTbl[x]);
+        ret = rateEnumXform_900(rateV3);
     }
     return ret;
     #elif defined(RADIO_SX128X)
-    return rateEnumXform_2G4(rateXformTbl[x]);
+    return rateEnumXform_2G4(rateV3);
     #endif
+}
+
+static bool ICACHE_RAM_ATTR isMatchingSyncPacket_v3(const OTA_Packet_v3_s * const otaPktPtr)
+{
+    if (otaPktPtr->std.type != PACKET_TYPE_SYNC)
+    {
+        return false;
+    }
+
+    OTA_Sync_v3_s const * const syncPktPtr = OtaIsFullRes ? &otaPktPtr->full.sync.sync : &otaPktPtr->std.sync;
+    if (syncPktPtr->UID4 != UID[4])
+    {
+        return false;
+    }
+
+    return (syncPktPtr->UID5 & ~MODELMATCH_MASK) == (UID[5] & ~MODELMATCH_MASK);
+}
+
+static bool ICACHE_RAM_ATTR mapSyncPacketV3ToV4(OTA_Packet_v3_s * const otaPktPtr)
+{
+    OTA_Sync_v3_s const * const syncV3 = OtaIsFullRes ? &otaPktPtr->full.sync.sync : &otaPktPtr->std.sync;
+    OTA_Sync_s syncV4 = {};
+    uint8_t const transformedRateEnum = rateIdxXform(syncV3->rateIndex);
+    if (transformedRateEnum == 0xFF)
+    {
+        DBGLN("legacy sync rate unsupported: %u", syncV3->rateIndex);
+        return false;
+    }
+    DBGLN("legacy sync rate map v3=%u v4=%u tlm=%u sw=%u", syncV3->rateIndex, transformedRateEnum, syncV3->newTlmRatio, syncV3->switchEncMode);
+
+    syncV4.fhssIndex = syncV3->fhssIndex;
+    syncV4.nonce = syncV3->nonce;
+    syncV4.rfRateEnum = transformedRateEnum;
+    syncV4.switchEncMode = syncV3->switchEncMode;
+    syncV4.newTlmRatio = syncV3->newTlmRatio;
+    syncV4.geminiMode = 0; // V3 packet has no Gemini flag.
+    syncV4.otaProtocol = 0; // Keep serial mode controlled by receiver configuration.
+    syncV4.free = 0;
+    syncV4.UID4 = syncV3->UID4;
+    syncV4.UID5 = syncV3->UID5;
+
+    // Write the converted sync structure into the same RX buffer, but through the V4 packet view.
+    // ProcessRFPacket() is called later and interprets this memory as OTA_Packet_s.
+    OTA_Packet_s * const otaPktV4Ptr = (OTA_Packet_s * const)otaPktPtr;
+    if (OtaIsFullRes)
+    {
+        otaPktV4Ptr->full.sync.sync = syncV4;
+    }
+    else
+    {
+        otaPktV4Ptr->std.sync = syncV4;
+    }
+    return true;
+}
+
+static void ICACHE_RAM_ATTR rewriteDataUplinkHeaderV3ToV4(OTA_Packet_v3_s * const otaPktPtr)
+{
+    if (!OtaIsFullRes)
+    {
+        // Standard packet mode uses compatible bit placement:
+        // V3 msp_ul { packageIndex:7, tlmFlag:1 } and V4 data_ul { packageIndex:7, stubbornAck:1 }.
+        return;
+    }
+
+    // Full-res V3 uplink data layout:
+    //   packetType:2, packageIndex:5, tlmFlag:1
+    // Full-res V4 uplink data layout:
+    //   packetType:2, stubbornAck:1, packageIndex:5
+    // Repack byte 0 so ProcessRFPacket() sees correct V4 field positions.
+    uint8_t const packetType = otaPktPtr->full.msp_ul.packetType;
+    uint8_t const packageIndex = otaPktPtr->full.msp_ul.packageIndex;
+    uint8_t const stubbornAck = otaPktPtr->full.msp_ul.tlmFlag;
+
+    // Re-interpret as V4 packet view and rewrite only the first byte fields needed by V4 parser.
+    OTA_Packet_s * const otaPktV4Ptr = (OTA_Packet_s * const)otaPktPtr;
+    otaPktV4Ptr->full.data_ul.packetType = packetType;
+    otaPktV4Ptr->full.data_ul.stubbornAck = stubbornAck;
+    otaPktV4Ptr->full.data_ul.packageIndex = packageIndex;
+
+    DBGVLN("legacy full uplink hdr remap pidx=%u ack=%u", packageIndex, stubbornAck);
+}
+
+static void ICACHE_RAM_ATTR LinkStatsToOta_v3(OTA_LinkStats_v3_s * const ls)
+{
+    ls->uplink_RSSI_1 = linkStats.uplink_RSSI_1;
+    ls->uplink_RSSI_2 = linkStats.uplink_RSSI_2;
+    ls->antenna = linkStats.active_antenna;
+    ls->modelMatch = connectionHasModelMatch;
+    ls->lq = linkStats.uplink_Link_quality;
+    ls->mspConfirm = DataUlReceiver.GetCurrentConfirm() ? 1 : 0;
+    ls->SNR = linkStats.uplink_SNR;
 }
 
 void ota_cntNewVersionPkts()
