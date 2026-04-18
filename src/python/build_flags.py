@@ -157,6 +157,7 @@ if '-DRADIO_SX127X=1' in build_flags or '-DRADIO_LR1121=1' in build_flags:
     if not fnmatch.filter(build_flags, '*-DRegulatory_Domain*'):
         #print_error('Please define a Regulatory_Domain in user_defines.txt')
         json_flags['domain'] = 1
+        build_flags.append("-DRegulatory_Domain_FCC_915")
         print("Please define a Regulatory_Domain in user_defines.txt, currently using the default Regulatory_Domain_FCC_915")
 
     if fnmatch.filter(build_flags, '*-DRegulatory_Domain_AU_915'):
