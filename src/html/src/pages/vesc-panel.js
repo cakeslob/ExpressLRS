@@ -4,7 +4,15 @@ import "../assets/mui.js"
 import FEATURES from "../features.js"
 import {elrsState, saveConfig} from "../utils/state.js"
 
-const INT32_MAX = 2147483647
+const DUTY_RANGE_SNAP_TO_MAX = 99500 // 99.5%
+const POSITION_RANGE_SNAP_TO = 360000000 // 360 deg
+const POSITION_RANGE_SNAP_MIN = POSITION_RANGE_SNAP_TO - 500000
+const POSITION_RANGE_SNAP_MAX = POSITION_RANGE_SNAP_TO + 500000
+// 1073741823 is the practical technical limit because the receiver keeps VESC
+// range values below that to avoid signed int32 overflow in bidirectional math.
+// We intentionally use 1000000000 instead so the configured ceiling is a clean
+// round number instead of looking like random digits.
+const VESC_RANGE_MAX = 1000000000
 const PROTOCOL_VESC = 10
 const PROTOCOL_SERIAL1_VESC = 12
 
@@ -42,49 +50,44 @@ function defaultRow() {
     }
 }
 
-function mapU16ToI32Curved(value) {
-    const x = clamp(Number(value) || 0, 0, 0xFFFF)
-    if (x === 0) {
+function decode_ufloat16(value) {
+    const transport = clamp(Number(value) || 0, 0, 0xFFFF)
+    const exponent = (transport >>> 11) & 0x1F
+    const mantissa = transport & 0x7FF
+
+    if (mantissa === 0) {
         return 0
     }
 
-    const xf = x / 65536.0
-    const exponent = 10.0 * (xf - 1.0)
-    const y = x * 32768.0 * Math.exp(exponent)
+    const decoded = mantissa * (2 ** exponent)
 
-    if (y > INT32_MAX) {
-        return INT32_MAX
+    if (decoded > VESC_RANGE_MAX) {
+        return VESC_RANGE_MAX
     }
 
-    return Math.trunc(y)
+    return decoded
 }
 
-function mapI32ToU16Curved(value) {
-    const target = clamp(Math.trunc(Number(value) || 0), 0, INT32_MAX)
-    if (target <= 0) {
+function encode_ufloat16(value) {
+    let mantissa = clamp(Math.trunc(Number(value) || 0), 0, VESC_RANGE_MAX)
+    if (mantissa === 0) {
         return 0
     }
 
-    let low = 0
-    let high = 0xFFFF
+    let exponent = 0
 
-    while (low < high) {
-        const mid = Math.floor((low + high) / 2)
-        const mapped = mapU16ToI32Curved(mid)
-        if (mapped < target) {
-            low = mid + 1
-        } else {
-            high = mid
-        }
+    while (mantissa > 0x7FF) {
+        mantissa = (mantissa + 1) >> 1
+        exponent++
     }
 
-    if (low === 0) {
-        return 0
+    if (exponent > 0x1F) {
+        exponent = 0x1F
+        mantissa = 0x7FF
     }
 
-    const current = mapU16ToI32Curved(low)
-    const previous = mapU16ToI32Curved(low - 1)
-    return Math.abs(previous - target) <= Math.abs(current - target) ? low - 1 : low
+    let r = ((exponent << 11) | (mantissa & 0x7FF)) >>> 0
+    return r
 }
 
 function normalizeCommand(value) {
@@ -95,9 +98,12 @@ function normalizeCommand(value) {
 function decodeRow(rawValue) {
     const raw = Number(rawValue) >>> 0
     const cmd = normalizeCommand((raw >>> 1) & 0x7F)
-    let range = mapU16ToI32Curved((raw >>> 16) & 0xFFFF)
-    if (cmd === 5 && range >= 99990) {
+    let range = decode_ufloat16((raw >>> 16) & 0xFFFF)
+    if (cmd === 5 && range >= DUTY_RANGE_SNAP_TO_MAX) {
         range = 100000
+    }
+    else if (cmd === 9 && range >= POSITION_RANGE_SNAP_MIN && range <= POSITION_RANGE_SNAP_MAX) {
+        range = POSITION_RANGE_SNAP_TO
     }
     return {
         cmd,
@@ -113,8 +119,8 @@ function encodeRow(row) {
     const channelX = clamp(Number(row.channelX) || 0, 0, 8)
     const channelY = clamp(Number(row.channelY) || 0, 0, 8)
     const bidirectional = row.bidirectional ? 1 : 0
-    const rangeValue = clamp(Math.trunc(Number(row.range) || 0), 0, INT32_MAX)
-    const transportRange = mapI32ToU16Curved(rangeValue)
+    const rangeValue = clamp(Math.trunc(Number(row.range) || 0), 0, VESC_RANGE_MAX)
+    const transportRange = encode_ufloat16(rangeValue)
 
     return (
         (((transportRange & 0xFFFF) << 16) |
@@ -284,9 +290,9 @@ class VescPanel extends LitElement {
                             class="vesc-inline-input"
                             type="number"
                             min="0"
-                            max="${INT32_MAX}"
+                            max="${VESC_RANGE_MAX}"
                             .value="${String(row.range)}"
-                            @input="${(e) => this._updateRow(index, {range: clamp(Number(e.target.value || 0), 0, INT32_MAX)})}"
+                            @input="${(e) => this._updateRow(index, {range: clamp(Number(e.target.value || 0), 0, VESC_RANGE_MAX)})}"
                         />
                     </div>
                 </td>

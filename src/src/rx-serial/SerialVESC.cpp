@@ -5,10 +5,18 @@
 #include "config.h"
 #include "CustomMixer.h"
 
-constexpr unsigned SERVO_FAILSAFE_MIN = 988U;
+constexpr int32_t DUTY_RANGE_SNAP_TO_MAX = 99500; // 99.5%
+constexpr int32_t POSITION_RANGE_SNAP_TO = 360000000; // 360 deg
+constexpr int32_t POSITION_RANGE_SNAP_MIN = POSITION_RANGE_SNAP_TO - 500000;
+constexpr int32_t POSITION_RANGE_SNAP_MAX = POSITION_RANGE_SNAP_TO + 500000;
+// 1073741823 (0x3FFFFFFF) is the practical technical limit here because larger
+// decoded values can overflow the signed int32 math used by i32map() in
+// bidirectional mode. We intentionally cap at a cleaner 1000000000 so the
+// limit is easier to read and reason about.
+constexpr int32_t VESC_RANGE_MAX = 1000000000;
 static unsigned short crc16(unsigned char *buf, unsigned int len);
 static int32_t i32map(int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, int32_t out_max);
-static int32_t map_u16_to_i32_curved(uint16_t x);
+static int32_t decode_ufloat16(uint16_t v);
 static int32_t xy_to_vesc_pos_offset(int16_t x, int16_t y, bool invert);
 static int16_t xy_magnitude(int16_t x, int16_t y);
 
@@ -26,7 +34,7 @@ void SerialVESC::begin(uint8_t idx, int8_t pin)
     int copy_idx = (this->idx == 0) ? 0 : 3;
     memcpy((void*)this->cfg, (void*)&(cfg_int_ptr[copy_idx]), sizeof(vesc_cfg_t) * 3);
     for (int i = 0; i < 3; i++) {
-        this->range[i] = map_u16_to_i32_curved(this->cfg[i].range);
+        this->range[i] = decode_ufloat16(this->cfg[i].range);
     }
 
     this->configed = true;
@@ -65,8 +73,14 @@ uint32_t SerialVESC::sendRCFrame(bool frameAvailable, bool frameMissed, uint32_t
 
         // for duty cycle, limit the duty to a max of 100%, and also account for the loss of precision from user settings
         if (pcfg->cmd == COMM_SET_DUTY) {
-            if (range >= 99990) {
+            if (range >= DUTY_RANGE_SNAP_TO_MAX) {
                 range = 100000;
+            }
+        }
+        else if (pcfg->cmd == COMM_SET_POS) {
+            // for position, because we can't represent 360 exactly, if it's close enough, snap to 360
+            if (range >= POSITION_RANGE_SNAP_MIN && range <= POSITION_RANGE_SNAP_MAX) {
+                range = POSITION_RANGE_SNAP_TO;
             }
         }
 
@@ -156,27 +170,21 @@ static int32_t i32map(int32_t x, int32_t in_min, int32_t in_max, int32_t out_min
     return out_min + q * out_range + (r * out_range) / in_range;
 }
 
-static int32_t map_u16_to_i32_curved(uint16_t x)
+static int32_t decode_ufloat16(uint16_t v)
 {
-    if (x == 0) {
+    const uint32_t exponent = (v >> 11) & 0x1F;
+    const uint32_t mantissa = v & 0x7FF;
+
+    if (mantissa == 0) {
         return 0;
     }
 
-    // Normalize x to [0, 1)
-    float xf = (float)x / 65536.0f;
-
-    // Compute exponent: 10 * (xf - 1)
-    float exponent = 10.0f * (xf - 1.0f);
-
-    // Compute result
-    float y = (float)x * 32768.0f * expf(exponent);
-
-    // Clamp just in case (safety against float rounding)
-    if (y > 2147483647.0f) {
-        return 2147483647;
+    const uint64_t decoded = (uint64_t)mantissa << exponent;
+    if (decoded > VESC_RANGE_MAX) {
+        return VESC_RANGE_MAX;
     }
 
-    return (int32_t)(y);
+    return (int32_t)decoded;
 }
 
 #if 0
