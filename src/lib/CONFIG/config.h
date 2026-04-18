@@ -262,7 +262,7 @@ typedef struct __attribute__((packed)) {
     uint8_t     sourceSysId;
 
     custom_mixer_t custom_mixer;
-    uint32_t vesc_cfg[6]; // 3x per VESC, so up to 6 needed, each uint32_t is actually a vesc_cfg_t
+    uint32_t vesc_cfg[6] __attribute__((aligned(4))); // 3x per VESC, so up to 6 needed, each uint32_t is actually a vesc_cfg_t
 
 } rx_config_t;
 

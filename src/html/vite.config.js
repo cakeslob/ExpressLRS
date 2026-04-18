@@ -120,6 +120,7 @@ function viteEsp32HeaderPlugin(options = {}) {
   const headerName = options.headerName || 'esp32_fs.h'
   const expectedHeaderName = options.expectedHeaderName || headerName
   const includeMaps = options.includeMaps ?? false // whether to include source maps
+  const excludePrefixes = options.excludePrefixes || []
 
   let outDir = 'dist'
   let root = process.cwd()
@@ -147,6 +148,8 @@ function viteEsp32HeaderPlugin(options = {}) {
       for await (const filePath of walk(distDir)) {
         // Optionally skip .map files
         if (!includeMaps && filePath.endsWith('.map')) continue
+        const rel = path.relative(distDir, filePath).split(path.sep).join('/')
+        if (excludePrefixes.some((prefix) => rel.startsWith(prefix))) continue
         files.push(filePath)
       }
 
@@ -204,12 +207,13 @@ export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const is8285 = flagEnabled(env.VITE_FEATURE_IS_8285)
   const expectedHeaderName = inferExpectedHeaderName(env, 'esp32_fs.h')
+  const excludePrefixes = is8285 ? ['am32/'] : []
   return {
     plugins: [
       htmlFeatureBlocksPlugin(env),
       minifyTemplateLiterals(),
       pruneAm32AssetsPlugin({ enabled: is8285 }),
-      viteEsp32HeaderPlugin({ expectedHeaderName }),
+      viteEsp32HeaderPlugin({ expectedHeaderName, excludePrefixes }),
       babel({
         babelConfig: {
           babelrc: false,
