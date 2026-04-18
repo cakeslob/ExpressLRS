@@ -51,8 +51,11 @@ def compressFirmware(source, target, env):
         source_file = os.path.join(build_dir, image_name + ".bin")
         target_file = source_file + ".gz"
         binary_compress(target_file, source_file)
-        os.remove(source_file)
-        os.rename(target_file, source_file)
+
+        is_esp8285 = 'ESP8285' in env.get('PIOENV', '').upper() or env.get('BOARD', '') == 'esp8285-8285'
+        if not is_esp8285:
+            os.remove(source_file)
+            os.rename(target_file, source_file)
 
 
 def compress_files(source, target, env):
