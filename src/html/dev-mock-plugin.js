@@ -56,9 +56,17 @@ export function devMockPlugin() {
             // RX config
             modelid: 62,
             'force-tlm': true,
-            'serial-protocol': 1,
-            'serial1-protocol': 0,
+            'serial-protocol': 10,
+            'serial1-protocol': 12,
             'sbus-failsafe': 0,
+            'vesc-cfg': [
+                1312139,
+                1969576,
+                0,
+                2627333,
+                3282722,
+                0
+            ],
             "pwm": [
                 {"config": 0, "pin": 0, "features": 12},
                 {"config": 1536, "pin": 4, "features": 12 + 16},
