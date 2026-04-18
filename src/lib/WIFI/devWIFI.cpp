@@ -5,6 +5,7 @@
 #include <AsyncJson.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
+#include <EEPROM.h>
 
 #if defined(PLATFORM_ESP32)
 #include <WiFi.h>
@@ -91,6 +92,9 @@ static String target_found;
 static bool target_complete = false;
 static bool force_update = false;
 static uint32_t totalSize;
+static uint32_t sketchSize = 0;
+static size_t firmwareOffset = 0;
+const size_t firmwareTrailerSize = 4096;  // max number of bytes for the options/hardware layout json
 
 static const char VERSION[] = {LATEST_VERSION, 0};
 
@@ -718,6 +722,29 @@ static void WebUploadResponseHandler(AsyncWebServerRequest *request) {
   if (target_seen || Update.hasError()) {
     String msg;
     if (!Update.hasError() && Update.end()) {
+
+#if defined(TARGET_RX) && (defined(PLATFORM_ESP32) || defined(PLATFORM_ESP8266))
+      // look at all the data that was written, if there's a EEPROM attached, then apply it to current EEPROM
+      unsigned int trailerAdr = totalSize - firmwareTrailerSize;
+      unsigned int eeAdr = trailerAdr + ELRSOPTS_PRODUCTNAME_SIZE + ELRSOPTS_DEVICENAME_SIZE + ELRSOPTS_OPTIONS_SIZE + ELRSOPTS_HARDWARE_SIZE;
+      #if defined(PLATFORM_ESP32)
+      const esp_partition_t *data_partition = esp_ota_get_boot_partition();
+      if (data_partition) {
+          firmwareOffset = data_partition->address;
+      }
+      #endif
+      uint8_t eeBuff[ELRSOPTS_EEPROM_SIZE];
+      ESP.flashRead(firmwareOffset + eeAdr, (uint32_t*)eeBuff, (size_t)ELRSOPTS_EEPROM_SIZE);
+      if (memcmp(eeBuff, "EEPROM", 6) == 0) { // contains the header
+        for (unsigned int i = 6; i < ELRSOPTS_EEPROM_SIZE; i++) {
+          EEPROM.write(i - 6, eeBuff[i]);
+        }
+        EEPROM.commit();
+        DBGLN("Updated the EEPROM using trailing data");
+      }
+#endif
+
+
       DBGLN("Update complete, rebooting");
       msg = String("{\"status\": \"ok\", \"msg\": \"Update complete. ");
       #if defined(TARGET_RX)
@@ -841,7 +868,6 @@ static void WebUdpControl(AsyncWebServerRequest *request)
 }
 #endif
 
-static size_t firmwareOffset = 0;
 static size_t getFirmwareChunk(uint8_t *data, size_t len, size_t pos)
 {
   uint8_t *dst;
@@ -861,6 +887,77 @@ static size_t getFirmwareChunk(uint8_t *data, size_t len, size_t pos)
 
   ESP.flashRead(firmwareOffset + pos, (uint32_t *)dst, len);
 
+#if defined(TARGET_RX) && (defined(PLATFORM_ESP32) || defined(PLATFORM_ESP8266))
+  if (sketchSize <= 0) {
+    // check the sketch size if we have not before
+    sketchSize = ESP.getSketchSize();
+  }
+  // if this chunk is beyond the sketch itself, then it means we are in the region where we can pack metadata
+  // we want to pack in the options json first, then the hardware json, then the eeprom (which represents config)
+  if (pos >= sketchSize || (pos + len) >= sketchSize) {
+    File file1 = LittleFS.open("/options.json", "r");
+    File file2 = LittleFS.open("/hardware.json", "r");
+    for (unsigned int i = 0; i < len; i++) { // for all in this chunk, one byte at a time
+      unsigned int adr = pos + i;
+      if (adr >= sketchSize + ELRSOPTS_PRODUCTNAME_SIZE + ELRSOPTS_DEVICENAME_SIZE) // if within the trailing region
+      {
+        unsigned int metaAdr1 = adr - (sketchSize + ELRSOPTS_PRODUCTNAME_SIZE + ELRSOPTS_DEVICENAME_SIZE);
+        unsigned int metaAdr2 = metaAdr1 - ELRSOPTS_OPTIONS_SIZE;
+        unsigned int metaAdr3 = metaAdr2 - ELRSOPTS_HARDWARE_SIZE;
+        if (metaAdr1 < ELRSOPTS_OPTIONS_SIZE && file1 && !file1.isDirectory()) { // if writing options file region and the file exists
+          if (metaAdr1 < file1.size()) { // if we are within the actual file size
+            file1.seek(metaAdr1, SeekSet);
+            if (file1.available()) {
+              // take the byte from the file, one at a time
+              uint8_t fdata = file1.read();
+              dst[i] = fdata;
+            }
+          }
+          else {
+            dst[i] = 0; // blank out the rest of the file
+          }
+        }
+        if (metaAdr2 < ELRSOPTS_HARDWARE_SIZE && file2 && !file2.isDirectory()) { // if writing hardware file region and the file exists
+          if (metaAdr2 < file2.size()) { // if we are within the actual file size
+            file2.seek(metaAdr2, SeekSet);
+            if (file2.available()) {
+              // take the byte from the file, one at a time
+              uint8_t fdata = file2.read();
+              dst[i] = fdata;
+            }
+          }
+          else {
+            dst[i] = 0; // blank out the rest of the file
+          }
+        }
+        if (metaAdr3 < ELRSOPTS_EEPROM_SIZE) {
+          switch (metaAdr3) { // first 6 characters are used to indicate that the EEPROM exists, this is checked during file upload
+            case 0: dst[i] = 'E'; break;
+            case 1: dst[i] = 'E'; break;
+            case 2: dst[i] = 'P'; break;
+            case 3: dst[i] = 'R'; break;
+            case 4: dst[i] = 'O'; break;
+            case 5: dst[i] = 'M'; break;
+            default:
+            {
+              // rest of the space is the actual EEPROM data
+              dst[i] = EEPROM.read(metaAdr3 - 6);
+            }
+            break;
+          }
+        }
+      }
+    }
+    // close the files to be clean, they will be re-opened on the next chunk request
+    if (file1) {
+      file1.close();
+    }
+    if (file2) {
+      file2.close();
+    }
+  }
+#endif
+
   // If using local stack buffer, move the 4 bytes into the passed buffer
   // data is known to not be aligned so it is moved byte-by-byte instead of as uint32_t*
   if ((void *)dst != (void *)data)
@@ -878,7 +975,6 @@ static void WebUpdateGetFirmware(AsyncWebServerRequest *request) {
       firmwareOffset = running->address;
   }
   #endif
-  const size_t firmwareTrailerSize = 4096;  // max number of bytes for the options/hardware layout json
   AsyncWebServerResponse *response = request->beginResponse("application/octet-stream", (size_t)ESP.getSketchSize() + firmwareTrailerSize, &getFirmwareChunk);
   String filename = String("attachment; filename=\"") + (const char *)&target_name[4] + "_" + VERSION + ".bin\"";
   response->addHeader("Content-Disposition", filename);
