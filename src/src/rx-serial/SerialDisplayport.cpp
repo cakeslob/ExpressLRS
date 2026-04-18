@@ -20,6 +20,13 @@ CONSEQUENTIAL DAMAGES, FOR ANY REASON WHATSOEVER.
 
 void SerialDisplayport::send(uint8_t messageID, void * payload, uint8_t size, Stream * _stream)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)messageID;
+    (void)payload;
+    (void)size;
+    (void)_stream;
+    return;
+#else
     _stream->write('$');
     _stream->write('M');
     _stream->write('>');
@@ -34,10 +41,17 @@ void SerialDisplayport::send(uint8_t messageID, void * payload, uint8_t size, St
     }
     _stream->write((uint8_t*)payload, size);
     _stream->write(checksum);
+#endif
 }
 
 uint32_t SerialDisplayport::sendRCFrame(bool frameAvailable, bool frameMissed, uint32_t *channelData)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)frameAvailable;
+    (void)frameMissed;
+    (void)channelData;
+    return MSP_MSG_PERIOD_MS;
+#else
     bool armed = getArmedState();
 
     msp_status_t status;
@@ -60,10 +74,16 @@ uint32_t SerialDisplayport::sendRCFrame(bool frameAvailable, bool frameMissed, u
     send(MSP_STATUS_EX, &status, sizeof(status), _outputPort);
 
     return MSP_MSG_PERIOD_MS;   // Send MSP msgs to DJI at 10Hz
+#endif
 }
 
 void SerialDisplayport::processBytes(uint8_t *bytes, u_int16_t size)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)bytes;
+    (void)size;
+    return;
+#else
     // Super-basic air-unit detection:
     // Wait for at least 6 bytes to be received (minimum MSP msg length)
     // before we decide we are connected to a DJI air unit
@@ -71,10 +91,14 @@ void SerialDisplayport::processBytes(uint8_t *bytes, u_int16_t size)
     {
       m_receivedBytes += size;
     }
+#endif
 }
 
 bool SerialDisplayport::getArmedState()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return false;
+#else
     if (firmwareOptions.dji_permanently_armed)
     {
         // If we are using permanent arming then we need to make sure the air-unti is connected
@@ -100,6 +124,7 @@ bool SerialDisplayport::getArmedState()
         // The arm channel will provide the required state change to arm the O3
         return isArmed;
     }
+#endif
 }
 
 #endif // defined(TARGET_RX)

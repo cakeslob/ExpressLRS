@@ -51,6 +51,11 @@ static const uint16_t lookup_theta[NUMBER_OF_CORDIC_ITERATIONS] = {46080, 27203,
  */
 int32_t diff_longitude(int32_t lon1, int32_t lon2)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)lon1;
+    (void)lon2;
+    return 0;
+#else
     int32_t dlon = 0;
     if (((((uint32_t) lon1) ^ ((uint32_t) lon2)) & 0x80000000U) > 0U){
         // special case, unequal signs
@@ -68,6 +73,7 @@ int32_t diff_longitude(int32_t lon1, int32_t lon2)
         dlon = lon1 - lon2;
     }
     return dlon;
+#endif
 }
 
 /**
@@ -76,6 +82,11 @@ int32_t diff_longitude(int32_t lon1, int32_t lon2)
  * at the equator, the West to East distance is full while towards the poles, it converges to 0.
  */
 int32_t scale_longitude(int32_t latitude, int32_t dlon){
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)latitude;
+    (void)dlon;
+    return 0;
+#else
     uint32_t dlon_calc = 0U;
     int32_t dlon_scaled = 0;
     int32_t x = 64; // we aim for a correction factor accuracy of ~1% ~= 1/64 = 1.5625% error
@@ -128,6 +139,7 @@ int32_t scale_longitude(int32_t latitude, int32_t dlon){
         dlon_scaled = ((int32_t) dlon_calc);
     }
     return dlon_scaled;
+#endif
 }
 
 
@@ -139,6 +151,13 @@ int32_t scale_longitude(int32_t latitude, int32_t dlon){
  */
 void cartesian_to_polar_coordinates(int32_t dlat, int32_t dlon, uint32_t *out_phi_deg, uint32_t *out_radius_m)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)dlat;
+    (void)dlon;
+    *out_phi_deg = 0;
+    *out_radius_m = 0;
+    return;
+#else
     // loop values
     int32_t theta = 0;
 
@@ -215,6 +234,7 @@ void cartesian_to_polar_coordinates(int32_t dlat, int32_t dlon, uint32_t *out_ph
     *out_phi_deg = phi;
     *out_radius_m = radius;
     return;
+#endif
 }
 
 
@@ -224,6 +244,12 @@ void cartesian_to_polar_coordinates(int32_t dlat, int32_t dlon, uint32_t *out_ph
  */
 uint16_t prep_number(int32_t number, uint8_t digits, uint8_t power)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)number;
+    (void)digits;
+    (void)power;
+    return 0;
+#else
     uint16_t res = 0;
     uint32_t abs_number = abs(number);
 
@@ -287,6 +313,7 @@ uint16_t prep_number(int32_t number, uint8_t digits, uint8_t power)
         }
     }
     return res;
+#endif
 }
 
 
@@ -301,6 +328,13 @@ uint16_t prep_number(int32_t number, uint8_t digits, uint8_t power)
  */
 uint32_t format_ap_status(uint8_t base_mode, uint32_t custom_mode, uint8_t system_status, uint16_t throttle)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)base_mode;
+    (void)custom_mode;
+    (void)system_status;
+    (void)throttle;
+    return 0;
+#else
 #define AP_CONTROL_MODE_LIMIT       0x1F
 #define AP_FLYING_OFFSET            7
 #define AP_ARMED_OFFSET             8
@@ -324,6 +358,7 @@ uint32_t format_ap_status(uint8_t base_mode, uint32_t custom_mode, uint8_t syste
     // signed throttle [-100,100] scaled down to [-63,63] on 7 bits, MSB for sign + 6 bits for 0-63
     ap_status |= prep_number(throttle*63/100, 2, 0)<<AP_THROTTLE_OFFSET;
     return ap_status;
+#endif
 }
 
 
@@ -333,6 +368,13 @@ uint32_t format_ap_status(uint8_t base_mode, uint32_t custom_mode, uint8_t syste
  */
 uint32_t format_gps_status(uint8_t fix_type, int32_t alt_msl_mm, uint16_t eph, uint8_t satellites_visible)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)fix_type;
+    (void)alt_msl_mm;
+    (void)eph;
+    (void)satellites_visible;
+    return 0;
+#else
 #define GPS_SATS_LIMIT              0xF
 #define GPS_STATUS_LIMIT            0x3
 #define GPS_STATUS_OFFSET           4
@@ -350,6 +392,7 @@ uint32_t format_gps_status(uint8_t fix_type, int32_t alt_msl_mm, uint16_t eph, u
     // Altitude MSL in dm
     gps_status |= prep_number(MAX(0,alt_msl_mm / 100),2,2)<<GPS_ALTMSL_OFFSET;
     return gps_status;
+#endif
 }
 
 
@@ -360,6 +403,12 @@ uint32_t format_gps_status(uint8_t fix_type, int32_t alt_msl_mm, uint16_t eph, u
  */
 uint32_t format_batt1(uint16_t voltage_mv, int16_t current_ca, int32_t current_consumed)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)voltage_mv;
+    (void)current_ca;
+    (void)current_consumed;
+    return 0;
+#else
 #define BATT_VOLTAGE_LIMIT          0x1FF
 #define BATT_CURRENT_OFFSET         9
 #define BATT_TOTALMAH_LIMIT         0x7FFF
@@ -375,6 +424,7 @@ uint32_t format_batt1(uint16_t voltage_mv, int16_t current_ca, int32_t current_c
         batt |= ((current_consumed < BATT_TOTALMAH_LIMIT) ? (current_consumed & BATT_TOTALMAH_LIMIT) : BATT_TOTALMAH_LIMIT)<<BATT_TOTALMAH_OFFSET;
     }
     return batt;
+#endif
 }
 
 
@@ -384,6 +434,12 @@ uint32_t format_batt1(uint16_t voltage_mv, int16_t current_ca, int32_t current_c
  */
 uint32_t format_home(uint32_t distance_to_home_m, uint32_t altitude_above_home_dm, uint32_t bearing_to_home_deg)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)distance_to_home_m;
+    (void)altitude_above_home_dm;
+    (void)bearing_to_home_deg;
+    return 0;
+#else
 #define HOME_ALT_OFFSET             12
 #define HOME_BEARING_LIMIT          0x7F
 #define HOME_BEARING_OFFSET         25
@@ -394,6 +450,7 @@ uint32_t format_home(uint32_t distance_to_home_m, uint32_t altitude_above_home_d
     // altitude between vehicle and home_loc in 0.1 meters.
     home |= prep_number(altitude_above_home_dm, 3, 2)<<HOME_ALT_OFFSET;
     return home;
+#endif
 }
 
 
@@ -403,6 +460,13 @@ uint32_t format_home(uint32_t distance_to_home_m, uint32_t altitude_above_home_d
  */
 uint32_t format_velandyaw(float climb_mps, float airspeed_mps, float groundspeed_mps, int16_t heading)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)climb_mps;
+    (void)airspeed_mps;
+    (void)groundspeed_mps;
+    (void)heading;
+    return 0;
+#else
     static bool send_airspeed = false;
     float speed_mps = groundspeed_mps;
 #define VELANDYAW_XYVEL_OFFSET      9
@@ -426,6 +490,7 @@ uint32_t format_velandyaw(float climb_mps, float airspeed_mps, float groundspeed
     // idiotic scaling from int to int*5
     velandyaw |= ((heading * 5) & VELANDYAW_YAW_LIMIT)<<VELANDYAW_YAW_OFFSET;
     return velandyaw;
+#endif
 }
 
 
@@ -436,6 +501,11 @@ uint32_t format_velandyaw(float climb_mps, float airspeed_mps, float groundspeed
  */
 uint32_t format_attiandrng(float pitch_rad, float roll_rad)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)pitch_rad;
+    (void)roll_rad;
+    return 0;
+#else
 #define ATTIANDRNG_ROLL_LIMIT       0x7FF
 #define ATTIANDRNG_PITCH_LIMIT      0x3FF
 #define ATTIANDRNG_PITCH_OFFSET     11
@@ -443,6 +513,7 @@ uint32_t format_attiandrng(float pitch_rad, float roll_rad)
     uint32_t attiandrng = ((((uint16_t)(roll_rad * 286.0f)) + 900) & ATTIANDRNG_ROLL_LIMIT);
     attiandrng |= ((((uint16_t)(pitch_rad * 286.0f)) + 450) & ATTIANDRNG_PITCH_LIMIT)<<ATTIANDRNG_PITCH_OFFSET;
     return attiandrng;
+#endif
 }
 
 
@@ -452,10 +523,16 @@ uint32_t format_attiandrng(float pitch_rad, float roll_rad)
  */
 uint32_t format_param(uint8_t param_id, uint32_t param_value)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)param_id;
+    (void)param_value;
+    return 0;
+#else
 #define PARAM_ID_OFFSET             24
 #define PARAM_VALUE_LIMIT           0xFFFFFF
     uint32_t param_data = ((param_id << PARAM_ID_OFFSET) | (param_value & PARAM_VALUE_LIMIT));
     return param_data;
+#endif
 }
 
 /*
@@ -464,8 +541,13 @@ uint32_t format_param(uint8_t param_id, uint32_t param_value)
  */
 uint32_t format_terrain(uint32_t altitude_terrain)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)altitude_terrain;
+    return 0;
+#else
     uint32_t value = prep_number(altitude_terrain * 10, 3, 2);
     return value;
+#endif
 }
 
 
@@ -475,6 +557,12 @@ uint32_t format_terrain(uint32_t altitude_terrain)
  */
 uint32_t format_waypoint(uint8_t heading, uint16_t distance, uint16_t number)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)heading;
+    (void)distance;
+    (void)number;
+    return 0;
+#else
 #define WP_NUMBER_LIMIT             2047
 #define WP_DISTANCE_LIMIT           1023000
 #define WP_DISTANCE_OFFSET          11
@@ -485,5 +573,6 @@ uint32_t format_waypoint(uint8_t heading, uint16_t distance, uint16_t number)
     // bearing encoded in 3 degrees increments
     value |= (heading * 2 / 3) << WP_BEARING_OFFSET;
     return value;
+#endif
 }
 

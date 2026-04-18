@@ -5,12 +5,21 @@
 
 void SerialGPS::sendQueuedData(uint32_t maxBytesToSend)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)maxBytesToSend;
+    return;
+#endif
 }
 
 // Parses a decimal string with optional decimal point and returns the value scaled by the given factor as an integer
 // Ex: "0.442" with scale 100 returns 44
 // Ex: "123.456" with scale 1000 returns 123456
 int32_t parseDecimalToScaled(const char* str, int32_t scale) {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)str;
+    (void)scale;
+    return 0;
+#else
     char *end;
     int32_t whole = strtol(str, &end, 10);
     int32_t result = whole * scale;
@@ -44,6 +53,7 @@ int32_t parseDecimalToScaled(const char* str, int32_t scale) {
         }
     }
     return result;
+#endif
 }
 
 /***
@@ -52,6 +62,10 @@ int32_t parseDecimalToScaled(const char* str, int32_t scale) {
  */
 int32_t nmeaDdmToDd(const char *field)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)field;
+    return 0;
+#else
     // Latitude is DDMM.MMMMM, Longitude is DDDMM.MMMM
     // Start by getting the part before the decimal, and divide by 100 to remove the MM part
     int32_t degrees = atoi(field) / 100;
@@ -63,10 +77,16 @@ int32_t nmeaDdmToDd(const char *field)
     int32_t minutesPart = parseDecimalToScaled(minutes - 2, 10000000) / 60;
 
     return degrees * 10000000 + minutesPart;
+#endif
 }
 
 bool SerialGPS::isValidChecksum(char *sentence, uint8_t size)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)sentence;
+    (void)size;
+    return false;
+#else
     // Could also check for the \r\n but we know it at least has the \n to get here
     if (size < 6 || sentence[0] != '$' || sentence[size-5] != '*')
     {
@@ -89,10 +109,17 @@ bool SerialGPS::isValidChecksum(char *sentence, uint8_t size)
     }
 
     return true;
+#endif
 }
 
 void SerialGPS::splitSentenceFields(char *sentence, uint8_t size, gpsFieldParser_t callback)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)sentence;
+    (void)size;
+    (void)callback;
+    return;
+#else
     uint8_t fieldIdx = 0;
     char *fieldStart = sentence;
 
@@ -107,10 +134,17 @@ void SerialGPS::splitSentenceFields(char *sentence, uint8_t size, gpsFieldParser
             ++fieldIdx;
         }
     }
+#endif
 }
 
 void SerialGPS::fieldParseGGA(SerialGPS *ctx, uint8_t fieldIdx, char *field)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)ctx;
+    (void)fieldIdx;
+    (void)field;
+    return;
+#else
     const bool blank = (field[0] == '\0');
 
     switch (fieldIdx)
@@ -137,10 +171,17 @@ void SerialGPS::fieldParseGGA(SerialGPS *ctx, uint8_t fieldIdx, char *field)
             break;
 
     }
+#endif
 }
 
 void SerialGPS::fieldParseVTG(SerialGPS *ctx, uint8_t fieldIdx, char *field)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)ctx;
+    (void)fieldIdx;
+    (void)field;
+    return;
+#else
     const bool blank = (field[0] == '\0');
 
     switch (fieldIdx)
@@ -152,10 +193,16 @@ void SerialGPS::fieldParseVTG(SerialGPS *ctx, uint8_t fieldIdx, char *field)
             ctx->gpsData.speed = (blank) ? 0 : parseDecimalToScaled(field, 100);
             break;
     }
+#endif
 }
 
 void SerialGPS::processSentence(char *sentence, uint8_t size)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)sentence;
+    (void)size;
+    return;
+#else
     if (sentence[3] == 'G' && sentence[4] == 'G' && sentence[5] == 'A') {
         splitSentenceFields(sentence, size, &fieldParseGGA);
         sendTelemetryFrame();
@@ -165,10 +212,16 @@ void SerialGPS::processSentence(char *sentence, uint8_t size)
         // VTG usually comes before GGA, only generate one telemetry frame with both combined
         //sendTelemetryFrame();
     }
+#endif
 }
 
 void SerialGPS::processBytes(uint8_t *bytes, uint16_t size)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)bytes;
+    (void)size;
+    return;
+#else
     for (uint16_t i = 0; i < size; i++) {
         char c = bytes[i];
         if (nmeaBufferIndex < sizeof(nmeaBuffer)) {
@@ -181,10 +234,14 @@ void SerialGPS::processBytes(uint8_t *bytes, uint16_t size)
             nmeaBufferIndex = 0;
         }
     }
+#endif
 }
 
 void SerialGPS::sendTelemetryFrame()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return;
+#else
     CRSF_MK_FRAME_T(crsf_sensor_gps_t) crsfgps = { 0 };
     crsfgps.p.latitude = htobe32(gpsData.lat);
     crsfgps.p.longitude = htobe32(gpsData.lon);
@@ -194,4 +251,5 @@ void SerialGPS::sendTelemetryFrame()
     crsfgps.p.gps_heading = htobe16(gpsData.heading);
     crsfRouter.SetHeaderAndCrc((crsf_header_t *)&crsfgps, CRSF_FRAMETYPE_GPS, CRSF_FRAME_SIZE(sizeof(crsf_sensor_gps_t)));
     crsfRouter.deliverMessageTo(CRSF_ADDRESS_RADIO_TRANSMITTER, &crsfgps.h);
+#endif
 }

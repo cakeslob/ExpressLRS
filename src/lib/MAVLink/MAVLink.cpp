@@ -12,6 +12,12 @@
  */
 static void ap_send_crsf_passthrough_single(crsf_addr_e destination, uint16_t appid, uint32_t data)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)destination;
+    (void)appid;
+    (void)data;
+    return;
+#else
 #define CRSF_AP_CUSTOM_TELEM_SINGLE_PACKET_PASSTHROUGH (0xF0)
     struct PACKED ap_crsf_passthrough_single_t {
         uint8_t sub_type;
@@ -26,6 +32,7 @@ static void ap_send_crsf_passthrough_single(crsf_addr_e destination, uint16_t ap
 
     crsfRouter.SetHeaderAndCrc((crsf_header_t *)&crsfpassthrough, CRSF_FRAMETYPE_ARDUPILOT_RESP, CRSF_FRAME_SIZE(sizeof(crsfpassthrough)));
     crsfRouter.deliverMessageTo(destination, &crsfpassthrough.h);
+#endif
 }
 
 /*
@@ -34,6 +41,12 @@ static void ap_send_crsf_passthrough_single(crsf_addr_e destination, uint16_t ap
  */
 static void ap_send_crsf_passthrough_text(crsf_addr_e destination, const char *text, uint8_t severity)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)destination;
+    (void)text;
+    (void)severity;
+    return;
+#else
 #define CRSF_AP_CUSTOM_TELEM_STATUS_TEXT (0xF1)
     struct PACKED ap_crsf_status_text_t {
         uint8_t sub_type;
@@ -48,6 +61,7 @@ static void ap_send_crsf_passthrough_text(crsf_addr_e destination, const char *t
 
     crsfRouter.SetHeaderAndCrc((crsf_header_t *)&crsftext, CRSF_FRAMETYPE_ARDUPILOT_RESP, CRSF_FRAME_SIZE(sizeof(crsftext)));
     crsfRouter.deliverMessageTo(destination, &crsftext.h);
+#endif
 }
 
 /*
@@ -56,6 +70,14 @@ static void ap_send_crsf_passthrough_text(crsf_addr_e destination, const char *t
  */
 static void ap_send_crsf_passthrough_multi(crsf_addr_e destination, uint16_t appid, uint32_t data, uint16_t appid2, uint32_t data2)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)destination;
+    (void)appid;
+    (void)data;
+    (void)appid2;
+    (void)data2;
+    return;
+#else
 #define CRSF_AP_CUSTOM_TELEM_MULTI_PACKET_PASSTHROUGH (0xF2)
     struct PACKED ap_crsf_passthrough_tuple_t {
         uint16_t appid;
@@ -77,10 +99,17 @@ static void ap_send_crsf_passthrough_multi(crsf_addr_e destination, uint16_t app
 
     crsfRouter.SetHeaderAndCrc((crsf_header_t *)&crsfpassthrough, CRSF_FRAMETYPE_ARDUPILOT_RESP, CRSF_FRAME_SIZE(sizeof(crsfpassthrough)));
     crsfRouter.deliverMessageTo(destination, &crsfpassthrough.h);
+#endif
 }
 
 void convert_mavlink_to_crsf_telem(crsf_addr_e destination, uint8_t *CRSFinBuffer, uint8_t count)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)destination;
+    (void)CRSFinBuffer;
+    (void)count;
+    return;
+#else
     // Store the relative altitude for GPS altitude
     static int32_t relative_alt_mm = 0;
 
@@ -282,10 +311,16 @@ void convert_mavlink_to_crsf_telem(crsf_addr_e destination, uint8_t *CRSFinBuffe
             }
         }
     }
+#endif
 }
 
 bool isThisAMavPacket(uint8_t *buffer, uint16_t bufferSize)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)buffer;
+    (void)bufferSize;
+    return false;
+#else
     for (uint8_t i = 0; i < bufferSize; ++i)
     {
         uint8_t c = buffer[i];
@@ -301,10 +336,16 @@ bool isThisAMavPacket(uint8_t *buffer, uint16_t bufferSize)
         }
     }
     return false;
+#endif
 }
 
 uint16_t buildMAVLinkELRSModeChange(uint8_t mode, uint8_t *buffer)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)mode;
+    (void)buffer;
+    return 0;
+#else
     constexpr uint8_t ELRS_MODE_CHANGE = 0x8;
     mavlink_command_int_t commandMsg{};
     commandMsg.target_system = 255;
@@ -316,4 +357,5 @@ uint16_t buildMAVLinkELRSModeChange(uint8_t mode, uint8_t *buffer)
     mavlink_msg_command_int_encode(255, MAV_COMP_ID_TELEMETRY_RADIO, &msg, &commandMsg);
     uint16_t len = mavlink_msg_to_send_buffer(buffer, &msg);
     return len;
+#endif
 }

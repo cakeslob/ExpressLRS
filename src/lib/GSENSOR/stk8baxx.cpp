@@ -10,20 +10,30 @@ uint8_t stk8xxx_pid_list[PID_SIZE] = {STK8xxx_CHIPID_VAL, STK8BA50_X_CHIPID_VAL,
 
 void STK8xxx::ReadAccRegister(uint8_t reg, uint8_t *data)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)reg;
+    *data = 0;
+#else
     Wire.beginTransmission(STK8xxx_SLAVE_ADDRESS);
     Wire.write(reg);
     Wire.endTransmission();
 
     Wire.requestFrom(STK8xxx_SLAVE_ADDRESS, 1);    // request 1 bytes from slave device
     *data = Wire.read(); // receive a byte
+#endif
 }
 
 void STK8xxx::WriteAccRegister(uint8_t reg, uint8_t data)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)reg;
+    (void)data;
+#else
     Wire.beginTransmission(STK8xxx_SLAVE_ADDRESS);
     Wire.write(reg);
     Wire.write(data);
     Wire.endTransmission();
+#endif
 }
 
 /*
@@ -33,6 +43,9 @@ void STK8xxx::WriteAccRegister(uint8_t reg, uint8_t data)
  */
 void STK8xxx::STK8xxx_Anymotion_init()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return;
+#else
 	unsigned char ARegAddr, ARegWriteValue;
 
 	/* Enable X Y Z-axis any-motion (slope) interrupt */
@@ -54,6 +67,7 @@ void STK8xxx::STK8xxx_Anymotion_init()
     ARegAddr       = STK8xxx_REG_INTMAP1;
     ARegWriteValue = STK8xxx_VAL_ANYMOT2INT1;
     WriteAccRegister(ARegAddr, ARegWriteValue);
+#endif
 }
 
 /*
@@ -63,6 +77,9 @@ void STK8xxx::STK8xxx_Anymotion_init()
  */
 void STK8xxx::STK8xxx_Sigmotion_init()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return;
+#else
 	unsigned char SRegAddr, SRegWriteValue;
 
 	/* Enable X Y Z-axis sig-motion (slope) interrupt */
@@ -84,6 +101,7 @@ void STK8xxx::STK8xxx_Sigmotion_init()
     SRegAddr       = STK8xxx_REG_INTMAP1;
     SRegWriteValue = STK8xxx_VAL_SIGMOT2INT1;
     WriteAccRegister(SRegAddr, SRegWriteValue);
+#endif
 }
 
 /*
@@ -93,6 +111,9 @@ void STK8xxx::STK8xxx_Sigmotion_init()
  */
 void STK8xxx::STK8xxx_Disable_Motion()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return;
+#else
 	unsigned char ARegAddr, ARegWriteValue;
 
 	/* Disable X Y Z-axis motion (slope) interrupt */
@@ -104,22 +125,30 @@ void STK8xxx::STK8xxx_Disable_Motion()
     ARegAddr       = STK8xxx_REG_SIGMOT2;
     ARegWriteValue = 0x00;
     WriteAccRegister(ARegAddr, ARegWriteValue);
+#endif
 }
 
 
 /* Disable Gsensor */
 void STK8xxx::STK8xxx_Suspend_mode()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return;
+#else
 	unsigned char RegAddr, RegWriteValue;
 
     /* suspend mode enable */
 	RegAddr       = STK8xxx_REG_POWMODE;
     RegWriteValue = STK8xxx_VAL_SUSPEND;
     WriteAccRegister(RegAddr, RegWriteValue);
+#endif
 }
 
 bool STK8xxx::STK8xxx_Check_chipid()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return false;
+#else
 	uint8_t RegAddr = STK_REG_CHIPID;
     int i = 0, pid_num = (sizeof(stk8xxx_pid_list) / sizeof(stk8xxx_pid_list[0]));
 
@@ -134,6 +163,7 @@ bool STK8xxx::STK8xxx_Check_chipid()
     }
 	ERRLN("read stkchip id fail!");
     return false;
+#endif
 }
 
 /*
@@ -144,6 +174,9 @@ bool STK8xxx::STK8xxx_Check_chipid()
  */
 int STK8xxx::STK8xxx_Initialization()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return -1;
+#else
     unsigned char RegAddr, RegWriteValue;
 
 	if(!STK8xxx_Check_chipid())
@@ -186,10 +219,14 @@ int STK8xxx::STK8xxx_Initialization()
     WriteAccRegister(RegAddr, RegWriteValue);
 
 	return chipid_temp;
+#endif
 }
 
 int STK8xxx::STK8xxx_Get_Sensitivity()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return 1;
+#else
     int sensitivity = 0;
 	if(0x86 == chipid_temp)
 	{
@@ -204,11 +241,17 @@ int STK8xxx::STK8xxx_Get_Sensitivity()
     //range = +/-4g
     sensitivity = sensitivity / 4;
     return sensitivity;
+#endif
 }
 
 /* Read data from registers */
 void STK8xxx::STK8xxx_Getregister_data(float *X_DataOut, float *Y_DataOut, float *Z_DataOut)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    *X_DataOut = 0.0f;
+    *Y_DataOut = 0.0f;
+    *Z_DataOut = 0.0f;
+#else
     uint8_t RegAddr, RegReadValue[2];
     int16_t x, y, z;
 
@@ -260,4 +303,5 @@ void STK8xxx::STK8xxx_Getregister_data(float *X_DataOut, float *Y_DataOut, float
         z >>= 4;
         *Z_DataOut = (float) z / STK8xxx_Get_Sensitivity();
 	}
+#endif
 }

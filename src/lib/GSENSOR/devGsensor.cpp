@@ -23,20 +23,31 @@ static int system_quiet_pre_state = GSENSOR_SYSTEM_STATE_MOVING;
 
 static bool initialize()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return false;
+#else
     if (OPT_HAS_GSENSOR)
     {
         return gsensor.init();
     }
     return false;
+#endif
 }
 
 static int start()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return DURATION_NEVER;
+#else
     return DURATION_IMMEDIATELY;
+#endif
 }
 
 static int timeout()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return DURATION_NEVER;
+#else
     static unsigned long lastIdleCheckMs = 0;
     unsigned long now = millis();
     if (now - lastIdleCheckMs > GSENSOR_SYSTEM_IDLE_INTERVAL)
@@ -60,6 +71,7 @@ static int timeout()
         lastIdleCheckMs = now;
     }
     return GSENSOR_DURATION;
+#endif
 }
 
 device_t Gsensor_device = {
