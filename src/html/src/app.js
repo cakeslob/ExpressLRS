@@ -68,7 +68,6 @@ export class App extends LitElement {
                         <strong>Advanced</strong>
                         <ul>
                             <li><a id="menu-hardware" href="#hardware"><span class="mui--align-middle icon--symbols icon--symbols--hardware"></span>Hardware Layout</a></li>
-                            <li><a id="menu-cw" href="#cw"><span class="mui--align-middle icon--symbols icon--symbols--wave"></span>Continuous Wave</a></li>
                             ${elrsState.config['custom-mixer'] ? html`
                                 <li><a id="menu-custom-mixer" href="#custom-mixer"><span class="mui--align-middle icon--symbols icon--symbols--shuffle"></span>Custom Mixer</a></li>
                             ` : ''}
@@ -177,8 +176,9 @@ export class App extends LitElement {
                 return FEATURES.IS_TX ? '<buttons-panel></buttons-panel>' : ''
             case 'hardware':
                 return '<hardware-layout></hardware-layout>'
-            case 'cw':
-                return '<continuous-wave></continuous-wave>'
+            // Continuous Wave page disabled to keep it out of the bundled WebUI.
+            // case 'cw':
+            //     return '<continuous-wave></continuous-wave>'
             case 'models':
                 return '<models-panel></models-panel>'
             case 'custom-mixer':
@@ -232,7 +232,8 @@ export class App extends LitElement {
         try {
             const imports = [
                 import('./pages/hardware-layout.js'),
-                import('./pages/continuous-wave.js'),
+                // Continuous Wave page disabled to keep it out of the bundled WebUI.
+                // import('./pages/continuous-wave.js'),
                 import('./pages/custom-mixer-panel.js')
             ]
             // FEATURE:HAS_LR1121
@@ -246,7 +247,7 @@ export class App extends LitElement {
 
     async ensureLoadedForRoute(route) {
         const generalRoutes = ['binding', 'options', 'wifi', 'update', 'connections', 'serial', 'buttons', 'models']
-        const advancedRoutes = ['hardware', 'cw', 'custom-mixer', 'am32', 'vesc', 'lr1121']
+        const advancedRoutes = ['hardware', 'custom-mixer', 'am32', 'vesc', 'lr1121']
 
         if (generalRoutes.includes(route)) {
             await this.loadGeneralGroup()

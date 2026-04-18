@@ -4,16 +4,25 @@
 
 uint8_t MSP2CROSSFIRE::getSeqNumberBits(const uint8_t seqNumber)
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     return seqNumber & 0b1111; // constrain to bounds
+    #else
+    return 0;
+    #endif
 }
 
 uint8_t MSP2CROSSFIRE::getNewFrameBits(bool isNewFrame)
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     return isNewFrame ? bit(4) : 0;
+    #else
+    return 0;
+    #endif
 }
 
 uint8_t MSP2CROSSFIRE::getVersionBits(const MSPframeType_e version)
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     if (version == MSP_FRAME_V1 || version == MSP_FRAME_V1_JUMBO)
     {
         return 1 << 5;
@@ -23,10 +32,14 @@ uint8_t MSP2CROSSFIRE::getVersionBits(const MSPframeType_e version)
         return 2 << 5;
     }
     return bit(7);  // Set the error bit for invalid MSP versions
+    #else
+    return 0;
+    #endif
 }
 
 crsf_frame_type_e MSP2CROSSFIRE::getHeaderDir(const uint8_t headerDir)
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     if (headerDir == '<')
     {
         return CRSF_FRAMETYPE_MSP_REQ;
@@ -35,11 +48,13 @@ crsf_frame_type_e MSP2CROSSFIRE::getHeaderDir(const uint8_t headerDir)
     {
         return CRSF_FRAMETYPE_MSP_RESP;
     }
+    #endif
     return (crsf_frame_type_e)0;
 }
 
 uint32_t MSP2CROSSFIRE::getFrameLen(const uint32_t payloadLen, const uint8_t mspVersion)
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     uint32_t frameLen = 0;
     switch (mspVersion)
     {
@@ -61,10 +76,14 @@ uint32_t MSP2CROSSFIRE::getFrameLen(const uint32_t payloadLen, const uint8_t msp
         }
     }
     return frameLen;
+    #else
+    return 0;
+    #endif
 }
 
 uint32_t MSP2CROSSFIRE::getPayloadLen(const uint8_t *data, const MSPframeType_e mspVersion)
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     uint32_t packetLen = 0;
     uint8_t lowByte;
     uint8_t highByte;
@@ -91,10 +110,14 @@ uint32_t MSP2CROSSFIRE::getPayloadLen(const uint8_t *data, const MSPframeType_e 
         break;
     }
     return packetLen;
+    #else
+    return 0;
+    #endif
 }
 
 MSPframeType_e MSP2CROSSFIRE::getVersion(const uint8_t *data)
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     if (data[1] == 'M') // detect if V1 or V2
     {
         if (data[3] == 0xFF)
@@ -107,11 +130,13 @@ MSPframeType_e MSP2CROSSFIRE::getVersion(const uint8_t *data)
     {
         return MSP_FRAME_V2;
     }
+    #endif
     return MSP_FRAME_UNKNOWN;
 }
 
 void MSP2CROSSFIRE::parse(CRSFConnector *connector, const uint8_t *data, uint32_t frameLen, const crsf_addr_e src, const crsf_addr_e dest)
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     const MSPframeType_e mspVersion = getVersion(data);
     const uint32_t mspPayloadLen = getPayloadLen(data, mspVersion);
     const uint32_t MSPframeLen = getFrameLen(mspPayloadLen, mspVersion);
@@ -130,11 +155,16 @@ void MSP2CROSSFIRE::parse(CRSFConnector *connector, const uint8_t *data, uint32_
         crsfRouter.SetExtendedHeaderAndCrc((crsf_ext_header_t *)packet, getHeaderDir(data[CRSF_MSP_TYPE_IDX]), CRSFpktLen + CRSF_EXT_FRAME_PAYLOAD_LEN_SIZE_OFFSET, dest, src);
         crsfRouter.processMessage(connector, (crsf_header_t *)packet);
     }
+    #endif
 }
 
 bool MSP2CROSSFIRE::validate(const uint8_t *data, const uint32_t expectLen)
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     const MSPframeType_e version = getVersion(data);
     const uint32_t FrameLen = getFrameLen(getPayloadLen(data, version), version) + 4; // +3 header, +1 crc;
     return expectLen == FrameLen;
+    #else
+    return false;
+    #endif
 }

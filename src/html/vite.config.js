@@ -258,7 +258,7 @@ export default defineConfig(({ command, mode }) => {
             // Group Advanced route modules
             if (
               is('hardware-layout') ||
-              is('continuous-wave') ||
+              //is('continuous-wave') ||
               is('lr1121-updater')
             ) {
               return 'advanced';
