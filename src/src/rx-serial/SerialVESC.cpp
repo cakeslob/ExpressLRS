@@ -7,41 +7,28 @@
 constexpr unsigned SERVO_FAILSAFE_MIN = 988U;
 static unsigned short crc16(unsigned char *buf, unsigned int len);
 static int32_t i32map(int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, int32_t out_max);
+static int32_t map_u16_to_i32_curved(uint16_t x);
+static int32_t xy_to_vesc_pos_offset(int16_t x, int16_t y, bool invert);
+static int16_t xy_magnitude(int16_t x, int16_t y);
 
 int8_t vesc_pins_configured[2] = {-1, -1};
 
-void SerialVESC::begin(int8_t pin)
+void SerialVESC::begin(uint8_t idx, int8_t pin)
 {
-    DBGVLN("SerialVESC::begin %d", pin);
+    DBGVLN("SerialVESC::begin %u %d", idx, pin);
 
+    this->idx = idx;
     this->pin = pin;
-    // borrows configuration from the PWM pin table
-    // this avoids having to have a dedicated selection for which channel is mapped to the VESC
-    for (int ch = 0; ch < GPIO_PIN_PWM_OUTPUTS_COUNT; ++ch)
-    {
-        const rx_config_pwm_t *chConfig = config.GetPwmChannel(ch);
-        eServoOutputMode pinmode = ((eServoOutputMode)chConfig->val.mode);
-        //auto frequency = servoOutputModeToFrequency((eServoOutputMode)chConfig->val.mode);
-        int8_t ch_pin = GPIO_PIN_PWM_OUTPUTS[ch];
-        if ((ch_pin == this->pin || this->pin < 0) && (pinmode == somSerial
-            #if defined(PLATFORM_ESP32)
-             || pinmode == somSerial1TX
-            #endif
-            ))
-        {
-            DBGLN("SerialVESC configed");
 
-            this->configed = true;
-            this->ch = chConfig->val.inputChannel;
-            this->failsafe_mode = chConfig->val.failsafeMode;
-            this->failsafe_val = fmap(chConfig->val.failsafe + SERVO_FAILSAFE_MIN, 1000, 2000, CRSF_CHANNEL_VALUE_MIN, CRSF_CHANNEL_VALUE_MAX);
-            this->last_val = failsafe_val;
-            break;
-        }
-        else {
-            DBGVLN("SerialVESC not right pin %d", ch_pin);
-        }
+    // cache the configuration, depending on which serial port we are
+    const uint32_t* cfg_int_ptr = config.GetVescCfg();
+    int copy_idx = (this->idx == 0) ? 0 : 3;
+    memcpy((void*)this->cfg, (void*)&(cfg_int_ptr[copy_idx]), sizeof(vesc_cfg_t) * 3);
+    for (int i = 0; i < 3; i++) {
+        this->range[i] = map_u16_to_i32_curved(this->cfg[i].range);
     }
+
+    this->configed = true;
 }
 
 uint32_t SerialVESC::sendRCFrame(bool frameAvailable, bool frameMissed, uint32_t *channelData)
@@ -50,32 +37,54 @@ uint32_t SerialVESC::sendRCFrame(bool frameAvailable, bool frameMissed, uint32_t
         return DURATION_IMMEDIATELY;
     }
 
-    uint32_t val = channelData[this->ch]; // grab the data from the right channel
-
-    // no data from transmitter, do the failsafe action
+    // no data from transmitter, send nothing, the VESC must be configured with the right failsafe behavior
     if (!frameAvailable) {
-        if (this->failsafe_mode == PWMFAILSAFE_NO_PULSES) {
-            return DURATION_IMMEDIATELY;
-        }
-        else if (this->failsafe_mode == PWMFAILSAFE_LAST_POSITION) {
-            val = this->last_val;
-        }
-        else if (this->failsafe_mode == PWMFAILSAFE_SET_POSITION) {
-            val = this->failsafe_val;
-        }
+        return DURATION_IMMEDIATELY;
     }
 
-    this->last_val = val;
+    for (int i = 0; i < 3; i++)
+    {
+        const vesc_cfg_t* pcfg = &(this->cfg[i]);
 
-    vesc_i32_packet_t packet;
-    packet.start_byte = 0x02;
-    packet.stop_byte = 0x03;
-    packet.payload_length = 5;
-    packet.command_byte = COMM_SET_DUTY;
-    packet.value = __builtin_bswap32((uint32_t)i32map(val, CRSF_CHANNEL_VALUE_MIN, CRSF_CHANNEL_VALUE_MAX, -100000, 100000));
-    packet.crc = __builtin_bswap16(crc16(&(packet.command_byte), 5));
+        // check if it is actually configured to do anything
+        if (pcfg->channel_x == 0 || pcfg->cmd == 0) {
+            continue;
+        }
 
-    _outputPort->write((const uint8_t *)&packet, sizeof(vesc_i32_packet_t));
+        vesc_i32_packet_t packet;
+        packet.start_byte = 0x02;
+        packet.stop_byte = 0x03;
+        packet.payload_length = 5;
+        packet.command_byte = pcfg->cmd;
+
+        int32_t val = 0;
+        int32_t range = this->range[i];
+
+        // for duty cycle, limit the duty to a max of 100%, and also account for the loss of precision from user settings
+        if (pcfg->cmd == COMM_SET_DUTY) {
+            if (range >= 99990) {
+                range = 100000;
+            }
+        }
+
+        if (pcfg->cmd != COMM_SET_POS || pcfg->channel_y == 0)
+        {
+            val = i32map(channelData[pcfg->channel_x - 1], CRSF_CHANNEL_VALUE_MIN, CRSF_CHANNEL_VALUE_MAX, pcfg->bidirectional ? -range : 0, range);
+        }
+        else
+        {
+            int16_t x = channelData[pcfg->channel_x - 1] - CRSF_CHANNEL_VALUE_MID;
+            int16_t y = channelData[pcfg->channel_y - 1] - CRSF_CHANNEL_VALUE_MID;
+            if (xy_magnitude(x, y) <= ((CRSF_CHANNEL_VALUE_MAX - CRSF_CHANNEL_VALUE_MIN) / 8)) { // must exceed deadzone to actually be considered valid
+                continue; // send nothing
+            }
+            val = xy_to_vesc_pos_offset(x, y, pcfg->bidirectional != 0);
+        }
+
+        packet.value = __builtin_bswap32((uint32_t)val);
+        packet.crc = __builtin_bswap16(crc16(&(packet.command_byte), 5));
+        _outputPort->write((const uint8_t *)&packet, sizeof(vesc_i32_packet_t));
+    }
 
     return DURATION_IMMEDIATELY;
 }
@@ -142,4 +151,71 @@ static int32_t i32map(int32_t x, int32_t in_min, int32_t in_max, int32_t out_min
 
     // Combine safely
     return out_min + q * out_range + (r * out_range) / in_range;
+}
+
+static int32_t map_u16_to_i32_curved(uint16_t x)
+{
+    if (x == 0) {
+        return 0;
+    }
+
+    // Normalize x to [0, 1)
+    float xf = (float)x / 65536.0f;
+
+    // Compute exponent: 10 * (xf - 1)
+    float exponent = 10.0f * (xf - 1.0f);
+
+    // Compute result
+    float y = (float)x * 32768.0f * expf(exponent);
+
+    // Clamp just in case (safety against float rounding)
+    if (y > 2147483647.0f) {
+        return 2147483647;
+    }
+
+    return (int32_t)(y);
+}
+
+#if 0
+static float xy_magnitude(int16_t x, int16_t y)
+{
+    return sqrtf((float)x * (float)x + (float)y * (float)y);
+}
+#else
+static int16_t xy_magnitude(int16_t x, int16_t y)
+{
+    return abs(x) + abs(y);
+}
+#endif
+
+static int32_t xy_to_vesc_pos_offset(int16_t x, int16_t y, bool invert)
+{
+    if (x == 0 && y == 0) {
+        return 0;
+    }
+
+    double angle_rad = atan2((double)y, (double)x);
+    double angle_deg = angle_rad * (180.0 / M_PI);
+
+    if (angle_deg < 0.0) {
+        angle_deg += 360.0;
+    }
+
+    int32_t pos = (int32_t)(angle_deg * 1000000.0 + 0.5);
+
+    if (invert) {
+        pos = 360000000 - pos;
+        if (pos == 360000000) {
+            pos = 0;
+        }
+    }
+
+    while (pos < 0) {
+        pos += 360000000;
+    }
+    while (pos >= 360000000) {
+        pos -= 360000000;
+    }
+
+    return pos;
 }

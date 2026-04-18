@@ -1448,6 +1448,14 @@ void RxConfig::SetCustomMixer(const custom_mixer_t* ptr)
     m_modified = EVENT_CONFIG_MODEL_CHANGED;
 }
 
+void RxConfig::SetVescCfg(const uint32_t* ptr)
+{
+    if (m_config.vesc_cfg != ptr) {
+        memcpy((void*)(m_config.vesc_cfg), (void*)ptr, sizeof(uint32_t) * 6);
+    }
+    m_modified = EVENT_CONFIG_MODEL_CHANGED;
+}
+
 void RxConfig::SetFixedPacketRate(int8_t value)
 {
     if (m_config.fixedPacketRate != value)
@@ -1487,20 +1495,6 @@ void RxConfig::SetOtherDefaults()
                     pwm->val.mode = somDShot;
                 }
         #endif
-        #if defined(USE_VESC_UART)
-        if (pin == U0TXD_GPIO_NUM) {
-            pwm->val.mode = somSerial;
-            m_config.serialProtocol = PROTOCOL_VESC;
-            pwm->val.failsafeMode = PWMFAILSAFE_NO_PULSES;
-        }
-        #endif
-        #if defined(USE_VESC_UART_1) && defined(GPIO_PIN_SERIAL1_TX)
-        if (pin == GPIO_PIN_SERIAL1_TX) {
-            pwm->val.mode = somSerial1TX;
-            m_config.serialProtocol = PROTOCOL_SERIAL1_VESC;
-            pwm->val.failsafeMode = PWMFAILSAFE_NO_PULSES;
-        }
-        #endif
     }
     #ifdef USE_DEFAULT_ARCADE_TANK_MIX
     // use this define to setup a custom mixer right into the firmware
@@ -1515,6 +1509,17 @@ void RxConfig::SetOtherDefaults()
     m_config.custom_mixer.ch_right    = mix_ch_rgt;
     #endif
     #endif // GPIO_PIN_PWM_OUTPUTS
+
+    #if defined(USE_VESC_UART)
+    m_config.serialProtocol = PROTOCOL_VESC;
+    #endif
+    #if defined(USE_VESC_UART_1) && defined(GPIO_PIN_SERIAL1_TX)
+    m_config.serialProtocol = PROTOCOL_SERIAL1_VESC;
+    #endif
+
+    #if defined(USE_VESC_UART_JEFF)
+    
+    #endif
 }
 
 #endif

@@ -375,6 +375,14 @@ static void GetConfiguration(AsyncWebServerRequest *request)
 
     cfg["fixed-packet-rate"] = config.GetFixedPacketRate();
 
+    // save the 6x uint32_t numbers as an array to be passed to the web ui
+    const uint32_t *vescCfg = config.GetVescCfg();
+    JsonArray vescCfgJson = cfg["vesc-cfg"].to<JsonArray>();
+    for (int i = 0; i < 6; ++i)
+    {
+      vescCfgJson.add(vescCfg[i]);
+    }
+
     for (int ch=0; ch<GPIO_PIN_PWM_OUTPUTS_COUNT; ++ch)
     {
       const auto channel = cfg["pwm"][ch].to<JsonObject>();
@@ -575,6 +583,17 @@ static void UpdateConfiguration(AsyncWebServerRequest *request, JsonVariant &jso
   JsonUidToConfig(json);
 
   config.SetFixedPacketRate((json["fixed-packet-rate"] | -1));
+
+  JsonArray vescCfgJson = json["vesc-cfg"].as<JsonArray>();
+  if (!vescCfgJson.isNull())
+  {
+    uint32_t vescCfg[6] = {};
+    for (uint32_t i = 0; i < 6 && i < vescCfgJson.size(); ++i)
+    {
+      vescCfg[i] = vescCfgJson[i] | 0U;
+    }
+    config.SetVescCfg(vescCfg);
+  }
 
   JsonArray pwm = json["pwm"].as<JsonArray>();
   for(uint32_t channel = 0 ; channel < pwm.size() ; channel++)
