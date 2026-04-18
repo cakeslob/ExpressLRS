@@ -3,6 +3,7 @@
 #include "OTA.h"
 #include "device.h"
 #include "config.h"
+#include "CustomMixer.h"
 
 constexpr unsigned SERVO_FAILSAFE_MIN = 988U;
 static unsigned short crc16(unsigned char *buf, unsigned int len);
@@ -42,6 +43,8 @@ uint32_t SerialVESC::sendRCFrame(bool frameAvailable, bool frameMissed, uint32_t
         return DURATION_IMMEDIATELY;
     }
 
+    custommixer_mix();
+
     for (int i = 0; i < 3; i++)
     {
         const vesc_cfg_t* pcfg = &(this->cfg[i]);
@@ -69,12 +72,12 @@ uint32_t SerialVESC::sendRCFrame(bool frameAvailable, bool frameMissed, uint32_t
 
         if (pcfg->cmd != COMM_SET_POS || pcfg->channel_y == 0)
         {
-            val = i32map(channelData[pcfg->channel_x - 1], CRSF_CHANNEL_VALUE_MIN, CRSF_CHANNEL_VALUE_MAX, pcfg->bidirectional ? -range : 0, range);
+            val = i32map(ChannelDataMixed[pcfg->channel_x - 1], CRSF_CHANNEL_VALUE_MIN, CRSF_CHANNEL_VALUE_MAX, pcfg->bidirectional ? -range : 0, range);
         }
         else
         {
-            int16_t x = channelData[pcfg->channel_x - 1] - CRSF_CHANNEL_VALUE_MID;
-            int16_t y = channelData[pcfg->channel_y - 1] - CRSF_CHANNEL_VALUE_MID;
+            int16_t x = ChannelDataMixed[pcfg->channel_x - 1] - CRSF_CHANNEL_VALUE_MID;
+            int16_t y = ChannelDataMixed[pcfg->channel_y - 1] - CRSF_CHANNEL_VALUE_MID;
             if (xy_magnitude(x, y) <= ((CRSF_CHANNEL_VALUE_MAX - CRSF_CHANNEL_VALUE_MIN) / 8)) { // must exceed deadzone to actually be considered valid
                 continue; // send nothing
             }
