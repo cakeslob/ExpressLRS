@@ -243,7 +243,7 @@ class VescPanel extends LitElement {
                     <tr>
                         <th>Command</th>
                         <th>Channel</th>
-                        <th class="mui--text-center">Bi-directional</th>
+                        <th class="mui--text-center" style="padding-right: 0.75rem;">Bi-dir</th>
                         <th>Range</th>
                     </tr>
                     </thead>
