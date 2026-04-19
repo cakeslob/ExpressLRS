@@ -14,6 +14,10 @@
 
 SerialTramp::SerialTramp(Stream &out, Stream &in, int8_t serial1TXpin) : SerialIO(&out, &in)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)serial1TXpin;
+    return;
+#else
 #if defined(PLATFORM_ESP32)
     // we are on UART1, use Serial1 TX assigned pin for half-duplex
     UTXDoutIdx = U1TXD_OUT_IDX;
@@ -22,11 +26,16 @@ SerialTramp::SerialTramp(Stream &out, Stream &in, int8_t serial1TXpin) : SerialI
 #endif
     setRXMode();
     crsfRouter.addConnector(this);
+#endif
 }
 
  SerialTramp::~SerialTramp()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return;
+#else
     crsfRouter.removeConnector(this);
+#endif
 }
 
 void SerialTramp::setTXMode() const
@@ -49,6 +58,10 @@ void SerialTramp::setRXMode() const
 // Calculate tramp protocol checksum of the provided buffer
 static uint8_t checksum(const uint8_t *buf)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)buf;
+    return 0;
+#else
     uint8_t cksum = 0;
 
     for (int i = 1 ; i < TRAMP_FRAME_SIZE - 2; i++) {
@@ -56,10 +69,15 @@ static uint8_t checksum(const uint8_t *buf)
     }
 
     return cksum;
+#endif
 }
 
 void SerialTramp::sendQueuedData(uint32_t maxBytesToSend)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)maxBytesToSend;
+    return;
+#else
 #if defined(PLATFORM_ESP32)
     uint32_t bytesWritten = 0;
     static unsigned long lastSendTime = 0; // OVTX only changes protocols on startup every 500ms; if we send our 3 packets in different 500ms windows, we have a better chance of success
@@ -78,6 +96,7 @@ void SerialTramp::sendQueuedData(uint32_t maxBytesToSend)
         setRXMode();
     }
 #endif
+#endif
 }
 
 // Up to us how we want to define these; official Tramp VTXes are 600mW max, but other non-IRC VTXes
@@ -87,6 +106,10 @@ uint16_t powerLevelLUT[9] = { 0, 10, 25, 200, 400, 600, 1000, 1600, 3000 };
 
 void SerialTramp::forwardMessage(const crsf_header_t *message)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)message;
+    return;
+#else
     auto data = (uint8_t *)message;
     // What we're handed here is MSP wrapped in CRSF, so our offsets are thrown off
     uint8_t innerLength = data[6];
@@ -167,4 +190,5 @@ void SerialTramp::forwardMessage(const crsf_header_t *message)
         _fifo.pushBytes(tempFrame, TRAMP_FRAME_SIZE);
         _fifo.unlock();
     }
+#endif
 }

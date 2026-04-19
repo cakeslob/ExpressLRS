@@ -1408,7 +1408,7 @@ static void setupSerial()
     else if (vescSerialOutput)
     {
         serialIO = new SerialVESC(SERIAL_PROTOCOL_TX, SERIAL_PROTOCOL_RX);
-        ((SerialVESC*)serialIO)->begin(GPIO_PIN_RCSIGNAL_TX);
+        ((SerialVESC*)serialIO)->begin(0, GPIO_PIN_RCSIGNAL_TX);
     }
     else
     {
@@ -1513,7 +1513,7 @@ static void setupSerial1()
         case PROTOCOL_SERIAL1_VESC:
             Serial1.begin(115200, SERIAL_8N1, -1, serial1TXpin, false);
             serial1IO = new SerialVESC(SERIAL1_PROTOCOL_TX, SERIAL1_PROTOCOL_RX);
-            ((SerialVESC*)serial1IO)->begin(serial1TXpin);
+            ((SerialVESC*)serial1IO)->begin(1, serial1TXpin);
             break;
     }
 }

@@ -62,6 +62,15 @@
                 "platform": "esp32",
                 "firmware": "Unified_ESP32_2400_RX",
                 "prior_target_name": "Unified_ESP32_2400_RX"
+            },
+            "shrewforer4vesc": {
+                "product_name": "Shrew for ER4 VESC",
+                "lua_name": "Shrew-for-ER4-VESC",
+                "layout_file": "ShrewForER4VESC.json",
+                "upload_methods": ["uart", "wifi"],
+                "min_version": "3.5.0",
+                "platform": "esp8285",
+                "firmware": "Unified_ShrewForER4VESC_2400_RX"
             }
         },
         "tx_2400": {

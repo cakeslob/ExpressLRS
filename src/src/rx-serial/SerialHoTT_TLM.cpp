@@ -35,6 +35,10 @@ constexpr uint8_t SIZE_24BIT = 3;
 SerialHoTT_TLM::SerialHoTT_TLM(Stream &out, Stream &in, const int8_t serial1TXpin)
     : SerialIO(&out, &in)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)serial1TXpin;
+    return;
+#else
 #if defined(PLATFORM_ESP32)
     if (serial1TXpin == UNDEF_PIN)
     {
@@ -58,32 +62,50 @@ SerialHoTT_TLM::SerialHoTT_TLM(Stream &out, Stream &in, const int8_t serial1TXpi
     discoveryTimerStart = now;
 
     cmdSendState = HOTT_RECEIVING;
+#endif
 }
 
 int SerialHoTT_TLM::getMaxSerialReadSize()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return 0;
+#else
     return HOTT_MAX_BUF_LEN - hottInputBuffer.size();
+#endif
 }
 
 void SerialHoTT_TLM::setTXMode()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return;
+#else
 #if defined(PLATFORM_ESP32)
     pinMode(halfDuplexPin, OUTPUT);                                 // set half duplex GPIO to OUTPUT
     digitalWrite(halfDuplexPin, HIGH);                              // set half duplex GPIO to high level
     pinMatrixOutAttach(halfDuplexPin, UTXDoutIdx, false, false);    // attach GPIO as output of UART TX
 #endif
+#endif
 }
 
 void SerialHoTT_TLM::setRXMode()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return;
+#else
 #if defined(PLATFORM_ESP32)
     pinMode(halfDuplexPin, INPUT_PULLUP);                           // set half duplex GPIO to INPUT
     pinMatrixInAttach(halfDuplexPin, URXDinIdx, false);             // attach half duplex GPIO as input to UART RX
+#endif
 #endif
 }
 
 void SerialHoTT_TLM::processBytes(uint8_t *bytes, u_int16_t size)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)bytes;
+    (void)size;
+    return;
+#else
     hottInputBuffer.pushBytes(bytes, size);
 
     uint8_t bufferSize = hottInputBuffer.size();
@@ -104,10 +126,15 @@ void SerialHoTT_TLM::processBytes(uint8_t *bytes, u_int16_t size)
             processFrame();
         }
     }
+#endif
 }
 
 void SerialHoTT_TLM::sendQueuedData(uint32_t maxBytesToSend)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)maxBytesToSend;
+    return;
+#else
     uint32_t now = millis();
 
     if(connectionState != connected)
@@ -127,10 +154,15 @@ void SerialHoTT_TLM::sendQueuedData(uint32_t maxBytesToSend)
 
     // CRSF packet scheduler
     scheduleCRSFtelemetry(now);
+#endif
 }
 
 void SerialHoTT_TLM::scheduleDevicePolling(uint32_t now)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)now;
+    return;
+#else
     // send CMD byte 1
     if (now - lastPoll >= HOTT_POLL_RATE)
     {
@@ -190,10 +222,14 @@ void SerialHoTT_TLM::scheduleDevicePolling(uint32_t now)
         setRXMode();
         cmdSendState = HOTT_RECEIVING;
     }
+#endif
 }
 
 void SerialHoTT_TLM::processFrame()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return;
+#else
     void *frameData = (void *)&hottBusFrame.payload;
 
     // store received frame
@@ -224,10 +260,15 @@ void SerialHoTT_TLM::processFrame()
         memcpy((void *)&esc, frameData, sizeof(esc));
         break;
     }
+#endif
 }
 
 uint8_t SerialHoTT_TLM::calcFrameCRC(uint8_t *buf)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)buf;
+    return 0;
+#else
     uint16_t sum = 0;
 
     for (uint8_t i = 0; i < FRAME_SIZE - 1; i++)
@@ -236,10 +277,15 @@ uint8_t SerialHoTT_TLM::calcFrameCRC(uint8_t *buf)
     }
 
     return sum = sum & 0xff;
+#endif
 }
 
 void SerialHoTT_TLM::scheduleCRSFtelemetry(uint32_t now)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)now;
+    return;
+#else
     // HoTT stand alone Vario or GPS/Vario or EAM or GAM -> send vario packet
     if (device[VARIO].present || device[GPS].present || device[GAM].present || device[EAM].present)
     {
@@ -276,10 +322,15 @@ void SerialHoTT_TLM::scheduleCRSFtelemetry(uint32_t now)
         sendCRSFvolt(now, deviceToUse);
         sendCRSFairspeed(now, deviceToUse);
     }
+#endif
 }
 
 void SerialHoTT_TLM::sendCRSFvario(uint32_t now)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)now;
+    return;
+#else
     // indicate external sensor is present
     crsfBaroSensorDetected = true;
 
@@ -297,10 +348,15 @@ void SerialHoTT_TLM::sendCRSFvario(uint32_t now)
     }
 
     lastVarioCRC = crsfBaro.crc;
+#endif
 }
 
 void SerialHoTT_TLM::sendCRSFgps(uint32_t now)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)now;
+    return;
+#else
     // prepare CRSF telemetry packet
     CRSF_MK_FRAME_T(crsf_sensor_gps_t) crsfGPS = {0};
     crsfGPS.p.latitude = htobe32(getHoTTlatitude());
@@ -319,10 +375,15 @@ void SerialHoTT_TLM::sendCRSFgps(uint32_t now)
     }
 
     lastGPSCRC = crsfGPS.crc;
+#endif
 }
 
 void SerialHoTT_TLM::sendCRSFbattery(uint32_t now)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)now;
+    return;
+#else
     // indicate external sensor is present
     crsfBatterySensorDetected = true;
 
@@ -342,10 +403,16 @@ void SerialHoTT_TLM::sendCRSFbattery(uint32_t now)
     }
 
     lastBatteryCRC = crsfBatt.crc;
+#endif
 }
 
 void SerialHoTT_TLM::sendCRSFrpm(uint32_t now, HoTTDevices device)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)now;
+    (void)device;
+    return;
+#else
     // prepare CRSF telemetry packet
     CRSF_MK_FRAME_T(crsf_sensor_rpm_t) crsfRpm = {0};
 
@@ -391,10 +458,16 @@ void SerialHoTT_TLM::sendCRSFrpm(uint32_t now, HoTTDevices device)
     }
 
     lastRpmCRC = crc;
+#endif
 }
 
 void SerialHoTT_TLM::sendCRSFtemp(uint32_t now, HoTTDevices device)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)now;
+    (void)device;
+    return;
+#else
     // prepare CRSF telemetry packet
     CRSF_MK_FRAME_T(crsf_sensor_temp_t) crsfTemp = {0};
 
@@ -444,10 +517,16 @@ void SerialHoTT_TLM::sendCRSFtemp(uint32_t now, HoTTDevices device)
     }
 
     lastTempCRC = crc;
+#endif
 }
 
 void SerialHoTT_TLM::sendCRSFcells(uint32_t now, HoTTDevices device)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)now;
+    (void)device;
+    return;
+#else
     if (device == ESC)
         return;
 
@@ -501,10 +580,16 @@ void SerialHoTT_TLM::sendCRSFcells(uint32_t now, HoTTDevices device)
     }
 
     lastCellsCRC = crc;
+#endif
 }
 
 void SerialHoTT_TLM::sendCRSFvolt(uint32_t now, HoTTDevices device)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)now;
+    (void)device;
+    return;
+#else
     // prepare CRSF telemetry packet
     CRSF_MK_FRAME_T(crsf_sensor_cells_t) crsfVolt = {0};
 
@@ -545,10 +630,16 @@ void SerialHoTT_TLM::sendCRSFvolt(uint32_t now, HoTTDevices device)
     }
 
     lastVoltCRC = crc;
+#endif
 }
 
 void SerialHoTT_TLM::sendCRSFairspeed(uint32_t now, HoTTDevices device)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)now;
+    (void)device;
+    return;
+#else
     // prepare CRSF telemetry packet
     CRSF_MK_FRAME_T(crsf_sensor_airspeed_t) crsfAirspeed = {0};
 
@@ -576,11 +667,15 @@ void SerialHoTT_TLM::sendCRSFairspeed(uint32_t now, HoTTDevices device)
     }
 
     lastAirspeedCRC = crsfAirspeed.crc;
+#endif
 }
 
 // HoTT telemetry data getters
 uint16_t SerialHoTT_TLM::getHoTTvoltage()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return 0;
+#else
     if (device[EAM].present)
     {
         return eam.mainVoltage;
@@ -595,10 +690,14 @@ uint16_t SerialHoTT_TLM::getHoTTvoltage()
     }
 
     return 0;
+#endif
 }
 
 uint16_t SerialHoTT_TLM::getHoTTcurrent()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return 0;
+#else
     if (device[EAM].present)
     {
         return eam.current;
@@ -613,10 +712,14 @@ uint16_t SerialHoTT_TLM::getHoTTcurrent()
     }
     
     return 0;
+#endif
 }
 
 uint32_t SerialHoTT_TLM::getHoTTcapacity()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return 0;
+#else
     if (device[EAM].present)
     {
         return eam.capacity;
@@ -631,10 +734,14 @@ uint32_t SerialHoTT_TLM::getHoTTcapacity()
     }
 
     return 0;
+#endif
 }
 
 int16_t SerialHoTT_TLM::getHoTTaltitude()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return 0;
+#else
     if (device[VARIO].present)
     {
         return vario.altitude;
@@ -653,10 +760,14 @@ int16_t SerialHoTT_TLM::getHoTTaltitude()
     }
 
     return 0;
+#endif
 }
 
 int16_t SerialHoTT_TLM::getHoTTvv()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return 0;
+#else
     if (device[VARIO].present)
     {
         return (vario.mPerSec);
@@ -675,20 +786,28 @@ int16_t SerialHoTT_TLM::getHoTTvv()
     }
 
     return 0;
+#endif
 }
 
 uint8_t SerialHoTT_TLM::getHoTTremaining()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return 0;
+#else
     if (device[GAM].present)
     {
         return gam.fuelScale;
     }
 
     return 0;
+#endif
 }
 
 int32_t SerialHoTT_TLM::getHoTTlatitude()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return 0;
+#else
     if (!device[GPS].present)
     {
         return 0;
@@ -706,10 +825,14 @@ int32_t SerialHoTT_TLM::getHoTTlatitude()
     }
 
     return (Lat);
+#endif
 }
 
 int32_t SerialHoTT_TLM::getHoTTlongitude()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return 0;
+#else
     if (!device[GPS].present)
     {
         return 0;
@@ -725,20 +848,28 @@ int32_t SerialHoTT_TLM::getHoTTlongitude()
         Lon = -Lon;
 
     return Lon;
+#endif
 }
 
 uint16_t SerialHoTT_TLM::getHoTTgroundspeed()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return 0;
+#else
     if (device[GPS].present)
     {
         return gps.speed;
     }
 
     return 0;
+#endif
 }
 
 uint16_t SerialHoTT_TLM::getHoTTheading()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return 0;
+#else
     if (!device[GPS].present)
     {
         return 0;
@@ -752,30 +883,42 @@ uint16_t SerialHoTT_TLM::getHoTTheading()
     }
 
     return (heading);
+#endif
 }
 
 uint8_t SerialHoTT_TLM::getHoTTsatellites()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return 0;
+#else
     if (device[GPS].present)
     {
         return gps.satellites;
     }
 
     return 0;
+#endif
 }
 
 uint16_t SerialHoTT_TLM::getHoTTMSLaltitude()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return 0;
+#else
     if (device[GPS].present)
     {
         return gps.mslAltitude;
     }
 
     return 0;
+#endif
 }
 
 uint32_t SerialHoTT_TLM::htobe24(uint32_t val)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return val;
+#else
 #if (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
     return val;
 #else
@@ -786,6 +929,7 @@ uint32_t SerialHoTT_TLM::htobe24(uint32_t val)
     ptrByte[2] = swp;
 
     return val;
+#endif
 #endif
 }
 

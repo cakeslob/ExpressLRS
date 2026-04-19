@@ -26,10 +26,19 @@ SerialMavlink::SerialMavlink(Stream &out, Stream &in):
     // Send to all components as we may have ex. gimbal that listens to RC instead of using Autopilot driver
     target_component_id(MAV_COMPONENT::MAV_COMP_ID_ALL)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return;
+#endif
 }
 
 uint32_t SerialMavlink::sendRCFrame(bool frameAvailable, bool frameMissed, uint32_t *channelData)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)frameAvailable;
+    (void)frameMissed;
+    (void)channelData;
+    return DURATION_IMMEDIATELY;
+#else
     if (!frameAvailable) {
         return DURATION_IMMEDIATELY;
     }
@@ -62,23 +71,38 @@ uint32_t SerialMavlink::sendRCFrame(bool frameAvailable, bool frameMissed, uint3
     _outputPort->write(buf, len);
     
     return MAVLINK_RC_PACKET_INTERVAL;
+#endif
 }
 
 int SerialMavlink::getMaxSerialReadSize()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return 0;
+#else
     return MAV_INPUT_BUF_LEN - mavlinkInputBuffer.size();
+#endif
 }
 
 void SerialMavlink::processBytes(uint8_t *bytes, u_int16_t size)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)bytes;
+    (void)size;
+    return;
+#else
     if (connectionState == connected)
     {
         mavlinkInputBuffer.atomicPushBytes(bytes, size);
     }
+#endif
 }
 
 void SerialMavlink::sendQueuedData(uint32_t maxBytesToSend)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)maxBytesToSend;
+    return;
+#else
 
     // Send radio messages at 100Hz
     const uint32_t now = millis();
@@ -137,15 +161,26 @@ void SerialMavlink::sendQueuedData(uint32_t maxBytesToSend)
             _outputPort->write(buf, len);
         }
     }
+#endif
 }
 
 void SerialMavlink::forwardMessage(const uint8_t *data)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)data;
+    return;
+#else
     mavlinkOutputBuffer.atomicPushBytes(data + 2, data[1]);
+#endif
 }
 
 bool SerialMavlink::GetNextPayload(uint8_t* nextPayloadSize, uint8_t *payloadData)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)nextPayloadSize;
+    (void)payloadData;
+    return false;
+#else
     if (mavlinkInputBuffer.size() == 0)
     {
         return false;
@@ -157,6 +192,7 @@ bool SerialMavlink::GetNextPayload(uint8_t* nextPayloadSize, uint8_t *payloadDat
     mavlinkInputBuffer.popBytes(payloadData + CRSF_FRAME_NOT_COUNTED_BYTES, count);
     *nextPayloadSize = count + CRSF_FRAME_NOT_COUNTED_BYTES;
     return true;
+#endif
 }
 
 #endif // defined(TARGET_RX)

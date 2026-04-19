@@ -257,11 +257,14 @@ typedef struct __attribute__((packed)) {
                 teamracePitMode:1;  // FUTURE: Enable pit mode when disabling model
 
     int8_t      fixedPacketRate; // -1 means automatic, otherwise stores expresslrs_RFrates_e
+    uint32_t    vescConfig[2]; // bit 31 is the single or bidirection indicator, bits 30 and 29 are indicators for what command mode, bits 28 and down is the range maximum
 
     uint8_t     targetSysId;
     uint8_t     sourceSysId;
 
     custom_mixer_t custom_mixer;
+    uint32_t vesc_cfg[6] __attribute__((aligned(4))); // 3x per VESC, so up to 6 needed, each uint32_t is actually a vesc_cfg_t
+
 } rx_config_t;
 
 class RxConfig
@@ -302,6 +305,7 @@ public:
     int8_t GetFixedPacketRate() const { return m_config.fixedPacketRate; }
 
     const custom_mixer_t* GetCustomMixer() const { return &(m_config.custom_mixer); }
+    const uint32_t* GetVescCfg() const { return (const uint32_t*)(m_config.vesc_cfg); }
 
     // Setters
     void SetUID(uint8_t* uid);
@@ -330,6 +334,7 @@ public:
     void SetOtherDefaults();
     void SetFixedPacketRate(int8_t x);
     void SetCustomMixer(const custom_mixer_t*);
+    void SetVescCfg(const uint32_t*);
 
 private:
     void CheckUpdateFlashedUid(bool skipDescrimCheck);

@@ -21,6 +21,10 @@ GENERIC_CRC8 crc(SMARTAUDIO_CRC_POLY);
 
 SerialSmartAudio::SerialSmartAudio(Stream &out, Stream &in, int8_t serial1TXpin) : SerialIO(&out, &in)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)serial1TXpin;
+    return;
+#else
 #if defined(PLATFORM_ESP32)
     // we are on UART1, use Serial1 TX assigned pin for half-duplex
     UTXDoutIdx = U1TXD_OUT_IDX;
@@ -29,32 +33,49 @@ SerialSmartAudio::SerialSmartAudio(Stream &out, Stream &in, int8_t serial1TXpin)
 #endif
     setRXMode();
     crsfRouter.addConnector(this);
+#endif
 }
 
 SerialSmartAudio::~SerialSmartAudio()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return;
+#else
     crsfRouter.removeConnector(this);
+#endif
 }
 
 void SerialSmartAudio::setTXMode() const
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return;
+#else
 #if defined(PLATFORM_ESP32)
     pinMode(halfDuplexPin, OUTPUT);                                 // set half-duplex GPIO to OUTPUT
     digitalWrite(halfDuplexPin, HIGH);                              // set half-duplex GPIO to high level
     pinMatrixOutAttach(halfDuplexPin, UTXDoutIdx, false, false);    // attach GPIO as output of UART TX
 #endif
+#endif
 }
 
 void SerialSmartAudio::setRXMode() const
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return;
+#else
 #if defined(PLATFORM_ESP32)
     pinMode(halfDuplexPin, INPUT_PULLUP);                           // set half-duplex GPIO to INPUT
     pinMatrixInAttach(halfDuplexPin, URXDinIdx, false);             // attach half-duplex GPIO as input to UART RX
+#endif
 #endif
 }
 
 void SerialSmartAudio::sendQueuedData(uint32_t maxBytesToSend)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)maxBytesToSend;
+    return;
+#else
 #if defined(PLATFORM_ESP32)
     uint32_t bytesWritten = 0;
     static unsigned long lastSendTime = 0; // we need to delay between sending frames to allow for responses
@@ -75,10 +96,15 @@ void SerialSmartAudio::sendQueuedData(uint32_t maxBytesToSend)
         setRXMode();
     }
 #endif
+#endif
 }
 
 void SerialSmartAudio::forwardMessage(const crsf_header_t *message)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)message;
+    return;
+#else
     auto data = (uint8_t *)message;
     // What we're handed here is MSP wrapped in CRSF, so our offsets are thrown off
     uint8_t innerLength = data[6];
@@ -173,4 +199,5 @@ void SerialSmartAudio::forwardMessage(const crsf_header_t *message)
         _fifo.pushBytes(tempFrame, frameIndex);
         _fifo.unlock();
     }
+#endif
 }

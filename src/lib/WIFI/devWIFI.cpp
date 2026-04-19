@@ -374,6 +374,14 @@ static void GetConfiguration(AsyncWebServerRequest *request)
 
     cfg["fixed-packet-rate"] = config.GetFixedPacketRate();
 
+    // save the 6x uint32_t numbers as an array to be passed to the web ui
+    const uint32_t *vescCfg = config.GetVescCfg();
+    JsonArray vescCfgJson = cfg["vesc-cfg"].to<JsonArray>();
+    for (int i = 0; i < 6; ++i)
+    {
+      vescCfgJson.add(vescCfg[i]);
+    }
+
     for (int ch=0; ch<GPIO_PIN_PWM_OUTPUTS_COUNT; ++ch)
     {
       const auto channel = cfg["pwm"][ch].to<JsonObject>();
@@ -574,6 +582,17 @@ static void UpdateConfiguration(AsyncWebServerRequest *request, JsonVariant &jso
   JsonUidToConfig(json);
 
   config.SetFixedPacketRate((json["fixed-packet-rate"] | -1));
+
+  JsonArray vescCfgJson = json["vesc-cfg"].as<JsonArray>();
+  if (!vescCfgJson.isNull())
+  {
+    uint32_t vescCfg[6] = {};
+    for (uint32_t i = 0; i < 6 && i < vescCfgJson.size(); ++i)
+    {
+      vescCfg[i] = vescCfgJson[i] | 0U;
+    }
+    config.SetVescCfg(vescCfg);
+  }
 
   JsonArray pwm = json["pwm"].as<JsonArray>();
   for(uint32_t channel = 0 ; channel < pwm.size() ; channel++)
@@ -961,6 +980,7 @@ static void WebUpdateGetFirmware(AsyncWebServerRequest *request) {
 }
 
 static void HandleContinuousWave(AsyncWebServerRequest *request) {
+#if !defined(PLATFORM_ESP8266)
   if (request->hasArg("radio")) {
     SX12XX_Radio_Number_t radio = request->arg("radio").toInt() == 1 ? SX12XX_Radio_1 : SX12XX_Radio_2;
 
@@ -987,7 +1007,9 @@ static void HandleContinuousWave(AsyncWebServerRequest *request) {
     deferExecutionMillis(50, [radio](){ Radio.cwRepeat(radio); });
 #endif
 #endif
-  } else {
+  } else
+#endif // PLATFORM_ESP8266
+  {
     int radios = (GPIO_PIN_NSS_2 == UNDEF_PIN) ? 1 : 2;
     request->send(200, "application/json", String("{\"radios\": ") + radios + ", \"center\": "+ FHSSconfig->freq_center +
 #if defined(RADIO_LR1121)
@@ -1185,7 +1207,9 @@ static void startServices()
   server.on("/update", HTTP_OPTIONS, corsPreflightResponse);
   server.on("/forceupdate", WebUploadForceUpdateHandler);
   server.on("/forceupdate", HTTP_OPTIONS, corsPreflightResponse);
+  #if !defined(PLATFORM_ESP8266)
   server.on("/cw", HandleContinuousWave);
+  #endif
 
   DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
   DefaultHeaders::Instance().addHeader("Access-Control-Max-Age", "600");

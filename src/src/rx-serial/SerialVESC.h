@@ -3,6 +3,27 @@
 
 #include "CRSFRouter.h"
 
+typedef struct __attribute__((packed))
+{
+    uint8_t start_byte; // magic, always 0x02
+    uint8_t payload_length; // for this, always 5
+    uint8_t command_byte;
+    int32_t value;
+    uint16_t crc;
+    uint8_t stop_byte; // magic, always 0x03
+}
+vesc_i32_packet_t;
+
+typedef struct __attribute__((packed))
+{
+	uint8_t  bidirectional:1;
+	uint8_t  cmd:7;
+	uint8_t  channel_x:4;
+	uint8_t  channel_y:4;
+	uint16_t range;
+}
+vesc_cfg_t; // we need this to be 32 bits (4 bytes)
+
 class SerialVESC final : public SerialIO, public CRSFConnector {
 public:
     explicit SerialVESC(Stream &out, Stream &in)
@@ -15,7 +36,7 @@ public:
         crsfRouter.removeConnector(this);
     }
 
-    void begin(int8_t pin = -1);
+    void begin(uint8_t idx, int8_t pin = -1);
 
     uint32_t sendRCFrame(bool frameAvailable, bool frameMissed, uint32_t *channelData) override;
     void forwardMessage(const crsf_header_t *message) override;
@@ -26,23 +47,11 @@ private:
     void processBytes(uint8_t *bytes, uint16_t size) override;
 
     bool configed = false; // indicate if begin() has been called
+    uint8_t idx;           // either 0 for main Serial, or 1 for Serial1
     int pin;               // physical GPIO number
-    int ch;                // channel as data source (input channel, not output)
-    int failsafe_mode;     // failsafe mode for this pin
-    int32_t failsafe_val;  // failsafe position for this pin
-    int32_t last_val;      // last used value for this pin (used for hold-position failsafe)
+    vesc_cfg_t cfg[3];     // loaded configuration cached here
+	int32_t range[3];      // cached decoded range value
 };
-
-typedef struct __attribute__((packed))
-{
-    uint8_t start_byte; // magic, always 0x02
-    uint8_t payload_length; // for this, always 5
-    uint8_t command_byte;
-    int32_t value;
-    uint16_t crc;
-    uint8_t stop_byte; // magic, always 0x03
-}
-vesc_i32_packet_t;
 
 // this is copied from VESC's source code
 typedef enum {

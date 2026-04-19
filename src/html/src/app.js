@@ -68,14 +68,14 @@ export class App extends LitElement {
                         <strong>Advanced</strong>
                         <ul>
                             <li><a id="menu-hardware" href="#hardware"><span class="mui--align-middle icon--symbols icon--symbols--hardware"></span>Hardware Layout</a></li>
-                            <li><a id="menu-cw" href="#cw"><span class="mui--align-middle icon--symbols icon--symbols--wave"></span>Continuous Wave</a></li>
                             ${elrsState.config['custom-mixer'] ? html`
                                 <li><a id="menu-custom-mixer" href="#custom-mixer"><span class="mui--align-middle icon--symbols icon--symbols--shuffle"></span>Custom Mixer</a></li>
                             ` : ''}
-                            <!-- FEATURE:NOT IS_TX -->
                             <!-- FEATURE:NOT IS_8285 -->
                             <li><a id="menu-am32" href="#am32"><span class="mui--align-middle icon--symbols icon--symbols--motor"></span>AM32 Configurator</a></li>
                             <!-- /FEATURE:NOT IS_8285 -->
+                            <!-- FEATURE:NOT IS_TX -->
+                            <li><a id="menu-vesc" href="#vesc"><span class="mui--align-middle icon--symbols icon--symbols--motor"></span>VESC Router</a></li>
                             <!-- /FEATURE:NOT IS_TX -->
                             <!-- FEATURE:HAS_LR1121 -->
                             <li><a id="menu-lr1121" href="#lr1121"><span class="mui--align-middle icon--symbols icon--symbols--lr1121"></span>LR1121 Firmware</a></li>
@@ -176,8 +176,9 @@ export class App extends LitElement {
                 return FEATURES.IS_TX ? '<buttons-panel></buttons-panel>' : ''
             case 'hardware':
                 return '<hardware-layout></hardware-layout>'
-            case 'cw':
-                return '<continuous-wave></continuous-wave>'
+            // Continuous Wave page disabled to keep it out of the bundled WebUI.
+            // case 'cw':
+            //     return '<continuous-wave></continuous-wave>'
             case 'models':
                 return '<models-panel></models-panel>'
             case 'custom-mixer':
@@ -186,6 +187,8 @@ export class App extends LitElement {
                 return FEATURES.HAS_LR1121 ? '<lr1121-updater></lr1121-updater>' : ''
             case 'am32':
                 return (!FEATURES.IS_TX && !FEATURES.IS_8285) ? '<am32-panel></am32-panel>' : ''
+            case 'vesc':
+                return !FEATURES.IS_TX ? '<vesc-panel></vesc-panel>' : ''
             default:
                 return ''
         }
@@ -216,6 +219,7 @@ export class App extends LitElement {
             // FEATURE:NOT IS_8285
             imports.push(import('./pages/am32-panel.js'))
             // /FEATURE:NOT IS_8285
+            imports.push(import('./pages/vesc-panel.js'))
             // /FEATURE:NOT IS_TX
             await Promise.all(imports)
         } finally {
@@ -228,7 +232,8 @@ export class App extends LitElement {
         try {
             const imports = [
                 import('./pages/hardware-layout.js'),
-                import('./pages/continuous-wave.js'),
+                // Continuous Wave page disabled to keep it out of the bundled WebUI.
+                // import('./pages/continuous-wave.js'),
                 import('./pages/custom-mixer-panel.js')
             ]
             // FEATURE:HAS_LR1121
@@ -242,7 +247,7 @@ export class App extends LitElement {
 
     async ensureLoadedForRoute(route) {
         const generalRoutes = ['binding', 'options', 'wifi', 'update', 'connections', 'serial', 'buttons', 'models']
-        const advancedRoutes = ['hardware', 'cw', 'custom-mixer', 'am32', 'lr1121']
+        const advancedRoutes = ['hardware', 'custom-mixer', 'am32', 'vesc', 'lr1121']
 
         if (generalRoutes.includes(route)) {
             await this.loadGeneralGroup()

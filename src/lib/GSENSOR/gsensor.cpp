@@ -1,7 +1,8 @@
 #include "targets.h"
 
-#if defined(PLATFORM_ESP32) && !defined(PLATFORM_ESP32_C3)
 #include "gsensor.h"
+
+#if defined(PLATFORM_ESP32) && !defined(PLATFORM_ESP32_C3)
 #include "logging.h"
 
 #include "stk8baxx.h"
@@ -33,11 +34,21 @@ uint32_t smart_fan_start_time = 0;
 
 ICACHE_RAM_ATTR void handleGsensorInterrupt()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return;
+#else
+#if defined(PLATFORM_ESP32) && !defined(PLATFORM_ESP32_C3)
     interrupt = true;
+#endif
+#endif
 }
 
 bool Gsensor::init()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return false;
+#else
+#if defined(PLATFORM_ESP32) && !defined(PLATFORM_ESP32_C3)
     int16_t id = -1;
     if (OPT_HAS_GSENSOR_STK8xxx)
         id = stk8xxx.STK8xxx_Initialization();
@@ -68,10 +79,19 @@ bool Gsensor::init()
     system_state = GSENSOR_SYSTEM_STATE_MOVING;
     is_flipped = false;
     return true;
+#else
+    return false;
+#endif
+#endif
 }
 
 float get_data_average(float *data, int length)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)data;
+    (void)length;
+    return 0.0f;
+#else
     float average = 0;
     for(int i=0;i<length;i++)
     {
@@ -79,10 +99,17 @@ float get_data_average(float *data, int length)
     }
     average = average / length;
     return average;
+#endif
 }
 
 float get_data_variance(float average, float *data, int length)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)average;
+    (void)data;
+    (void)length;
+    return 0.0f;
+#else
     float variance = 0;
     for(int i=0;i<length;i++)
     {
@@ -92,10 +119,15 @@ float get_data_variance(float average, float *data, int length)
     }
     variance = variance / length;
     return variance;
+#endif
 }
 
 bool Gsensor::hasTriggered(unsigned long now)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    (void)now;
+    return false;
+#else
     static unsigned long lastTriggeredMs = 0;
 
     if (interrupt)
@@ -108,10 +140,14 @@ bool Gsensor::hasTriggered(unsigned long now)
         }
     }
     return false;
+#endif
 }
 
 void Gsensor::handle()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return;
+#else
     float x, y, z;
 
     getGSensorData(&x, &y, &z);
@@ -176,10 +212,16 @@ void Gsensor::handle()
             sample_counter++;
         }
     }
+#endif
 }
 
 void Gsensor::getGSensorData(float *X_DataOut, float *Y_DataOut, float *Z_DataOut)
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    *X_DataOut = 0.0f;
+    *Y_DataOut = 0.0f;
+    *Z_DataOut = 0.0f;
+#else
     *X_DataOut = 0;
     *Y_DataOut = 0;
     *Z_DataOut = 0;
@@ -192,15 +234,25 @@ void Gsensor::getGSensorData(float *X_DataOut, float *Y_DataOut, float *Z_DataOu
     {
         ERRLN("Gsensor abnormal status = %d", gensor_status);
     }
+#endif
 }
 
 int Gsensor::getSystemState()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return GSENSOR_SYSTEM_STATE_MOVING;
+#else
     return system_state;
+#endif
 }
 
 bool Gsensor::isFlipped()
 {
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+    return false;
+#else
     return is_flipped;
+#endif
 }
+
 #endif
