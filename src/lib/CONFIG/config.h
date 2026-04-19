@@ -19,6 +19,7 @@
 
 #define TX_CONFIG_VERSION   8U
 #define RX_CONFIG_VERSION   11U
+#define FIRMWARE_TRAILER_SIZE 4096U
 
 #if defined(TARGET_TX)
 
@@ -270,6 +271,7 @@ public:
 
     void Load();
     uint32_t Commit();
+    bool LoadFromMeta(uint32_t fw_size, bool to_commit);
 
     // Getters
     bool     GetIsBound() const;

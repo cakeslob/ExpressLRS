@@ -94,7 +94,6 @@ static bool force_update = false;
 static uint32_t totalSize;
 static uint32_t sketchSize = 0;
 static size_t firmwareOffset = 0;
-const size_t firmwareTrailerSize = 4096;  // max number of bytes for the options/hardware layout json
 
 static const char VERSION[] = {LATEST_VERSION, 0};
 
@@ -723,27 +722,7 @@ static void WebUploadResponseHandler(AsyncWebServerRequest *request) {
     String msg;
     if (!Update.hasError() && Update.end()) {
 
-#if defined(TARGET_RX) && (defined(PLATFORM_ESP32) || defined(PLATFORM_ESP8266))
-      // look at all the data that was written, if there's a EEPROM attached, then apply it to current EEPROM
-      unsigned int trailerAdr = totalSize - firmwareTrailerSize;
-      unsigned int eeAdr = trailerAdr + ELRSOPTS_PRODUCTNAME_SIZE + ELRSOPTS_DEVICENAME_SIZE + ELRSOPTS_OPTIONS_SIZE + ELRSOPTS_HARDWARE_SIZE;
-      #if defined(PLATFORM_ESP32)
-      const esp_partition_t *data_partition = esp_ota_get_boot_partition();
-      if (data_partition) {
-          firmwareOffset = data_partition->address;
-      }
-      #endif
-      uint8_t eeBuff[ELRSOPTS_EEPROM_SIZE];
-      ESP.flashRead(firmwareOffset + eeAdr, (uint32_t*)eeBuff, (size_t)ELRSOPTS_EEPROM_SIZE);
-      if (memcmp(eeBuff, "EEPROM", 6) == 0) { // contains the header
-        for (unsigned int i = 6; i < ELRSOPTS_EEPROM_SIZE; i++) {
-          EEPROM.write(i - 6, eeBuff[i]);
-        }
-        EEPROM.commit();
-        DBGLN("Updated the EEPROM using trailing data");
-      }
-#endif
-
+      config.LoadFromMeta(totalSize, true);
 
       DBGLN("Update complete, rebooting");
       msg = String("{\"status\": \"ok\", \"msg\": \"Update complete. ");
@@ -975,7 +954,7 @@ static void WebUpdateGetFirmware(AsyncWebServerRequest *request) {
       firmwareOffset = running->address;
   }
   #endif
-  AsyncWebServerResponse *response = request->beginResponse("application/octet-stream", (size_t)ESP.getSketchSize() + firmwareTrailerSize, &getFirmwareChunk);
+  AsyncWebServerResponse *response = request->beginResponse("application/octet-stream", (size_t)ESP.getSketchSize() + FIRMWARE_TRAILER_SIZE, &getFirmwareChunk);
   String filename = String("attachment; filename=\"") + (const char *)&target_name[4] + "_" + VERSION + ".bin\"";
   response->addHeader("Content-Disposition", filename);
   request->send(response);
