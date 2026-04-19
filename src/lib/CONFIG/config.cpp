@@ -819,6 +819,15 @@ void RxConfig::Load()
     m_modified = 0;
     m_eeprom->Get(0, m_config);
 
+    bool skip_defaults = false;
+    if (LoadFromMeta(0, false, true) == 0) {
+        // valid useable EEPROM metadata was included, it has been transferred to actual EEPROM, and then deleted from the metadata section
+        skip_defaults = true;
+        // this is just in case somebody adds additional logic below that we still need to run through, but we don't want to set defaults
+        // also, consider the possibility somebody is generating EEPROM metadata without knowing the right discriminator
+        // the way this works, the firmware config struct layout must already be 100% matching the one in metadata
+    }
+
     uint32_t version = 0;
     if ((m_config.version & CONFIG_MAGIC_MASK) == RX_CONFIG_MAGIC)
         version = m_config.version & ~CONFIG_MAGIC_MASK;
@@ -826,7 +835,9 @@ void RxConfig::Load()
 
     // any flash will force re-reading the defaults from firmware options payload
     if (m_config.flash_discriminator != firmwareOptions.flash_discriminator) {
-        SetDefaults(false);
+        if (!skip_defaults) {
+            SetDefaults(false);
+        }
         m_config.flash_discriminator = firmwareOptions.flash_discriminator;
         m_config.version = RX_CONFIG_VERSION | RX_CONFIG_MAGIC;
         m_modified = true;
@@ -1231,10 +1242,13 @@ RxConfig::SetAntennaMode(uint8_t antennaMode)
 void
 RxConfig::SetDefaults(bool commit)
 {
+    uint32_t deny_meta_cached = m_config.deny_meta;
+
     // Reset everything to 0/false and then just set anything that zero is not appropriate
     memset(&m_config, 0, sizeof(m_config));
 
     m_config.version = RX_CONFIG_VERSION | RX_CONFIG_MAGIC;
+    m_config.deny_meta = deny_meta_cached;
     m_config.modelId = 0xff;
     m_config.power = POWERMGNT::getDefaultPower();
 
@@ -1472,11 +1486,16 @@ void RxConfig::SetFixedPacketRate(int8_t value)
     }
 }
 
-bool RxConfig::LoadFromMeta(uint32_t fw_size, bool to_commit)
+int RxConfig::LoadFromMeta(uint32_t fw_size, bool from_wifi, bool to_commit)
 {
     // fw_size is 0 (or super small) if an estimate is needed, otherwise the fw_size can be specified
 
+    static constexpr int LOAD_FROM_META_NOT_IMPLEMENTED = -4;
 #if defined(PLATFORM_ESP32) || defined(PLATFORM_ESP8266)
+    static constexpr int LOAD_FROM_META_SEARCH_READ_FAILED = -1;
+    static constexpr int LOAD_FROM_META_PAYLOAD_READ_FAILED = -2;
+    static constexpr int LOAD_FROM_META_NOT_FOUND = -3;
+    static constexpr int LOAD_FROM_META_ALREADY_DONE = 1;
 
     #define EEPROM_META_MAGIC_SIZE 6
 
@@ -1489,7 +1508,7 @@ bool RxConfig::LoadFromMeta(uint32_t fw_size, bool to_commit)
 
     static const eeprom_meta_header_t EEPROM_META_HEADER = { {'E', 'E', 'P', 'R', 'O', 'M'}, (RX_CONFIG_MAGIC | RX_CONFIG_VERSION)};
     static constexpr size_t EEPROM_META_SEARCH_WINDOW = FIRMWARE_TRAILER_SIZE / 4;
-    static constexpr size_t EEPROM_META_SEARCH_READ_SIZE = ((3U + EEPROM_META_SEARCH_WINDOW + sizeof(eeprom_meta_header_t) - 1U + 3U) / 4U) * 4U; // rounded up to a 4 byte boundary
+    static constexpr size_t EEPROM_META_SEARCH_READ_SIZE = ((3U + EEPROM_META_SEARCH_WINDOW + sizeof(eeprom_meta_header_t) - 1U + sizeof(m_config.deny_meta) + 3U) / 4U) * 4U; // rounded up to a 4 byte boundary
     static constexpr size_t EEPROM_META_DATA_READ_SIZE = ((3U + ELRSOPTS_EEPROM_SIZE + 3U) / 4U) * 4U; // rounded up to a 4 byte boundary
 
     const size_t otherMetaSize = ELRSOPTS_PRODUCTNAME_SIZE + ELRSOPTS_DEVICENAME_SIZE + ELRSOPTS_OPTIONS_SIZE + ELRSOPTS_HARDWARE_SIZE;
@@ -1499,7 +1518,7 @@ bool RxConfig::LoadFromMeta(uint32_t fw_size, bool to_commit)
 
     size_t firmwareOffset = 0;
     #if defined(PLATFORM_ESP32)
-    const esp_partition_t *data_partition = esp_ota_get_boot_partition();
+    const esp_partition_t *data_partition = from_wifi ? esp_ota_get_boot_partition() : esp_ota_get_running_partition();
     if (data_partition) {
         firmwareOffset = data_partition->address;
     }
@@ -1510,51 +1529,51 @@ bool RxConfig::LoadFromMeta(uint32_t fw_size, bool to_commit)
     uint8_t *configBytes = reinterpret_cast<uint8_t *>(&m_config); // we need to write into the current m_config byte by byte
     uint32_t searchFinalAdr = firmwareOffset + alignedSearchStartAdr;
 
-    if (!ESP.flashRead(searchFinalAdr, (uint32_t *)searchBuff, EEPROM_META_SEARCH_READ_SIZE))
+    if (!ESP.flashRead(searchFinalAdr, reinterpret_cast<uint32_t *>(searchBuff), EEPROM_META_SEARCH_READ_SIZE))
     {
         DBGLN("Failed to read EEPROM metadata search window from flash");
-        return false;
+        return LOAD_FROM_META_SEARCH_READ_FAILED;
     }
-
-#if 0
-    DBGLN("LoadFromMeta");
-    if (fw_size <= FIRMWARE_TRAILER_SIZE) {
-        DBGLN("getSketchSize: %u", ESP.getSketchSize());
-    }
-    else {
-        DBGLN("fw_size: %u", fw_size);
-    }
-    DBGLN("searchBuff[%x + %x]:", firmwareOffset, alignedSearchStartAdr);
-    for (size_t dbgIdx = 0; dbgIdx < EEPROM_META_SEARCH_READ_SIZE; ++dbgIdx)
-    {
-        DBG(" %x", searchBuff[dbgIdx]);
-    }
-    DBGLN("");
-#endif
 
     for (size_t i = 0; i < EEPROM_META_SEARCH_WINDOW; ++i)
     {
+        const uint8_t * const metaBuff = searchBuff + searchStartOffset + i;
+
         // do the search, look for a match at this location
-        if (memcmp(searchBuff + searchStartOffset + i, (void*)&EEPROM_META_HEADER, sizeof(eeprom_meta_header_t)) != 0) {
+        if (memcmp(metaBuff, (void*)&EEPROM_META_HEADER, sizeof(eeprom_meta_header_t)) != 0) {
             // not a match, try next search
             continue;
         }
+
+        #if defined(PLATFORM_ESP32)
+        uint32_t deny_meta;
+        if (!from_wifi)
+        {
+            memcpy(&deny_meta, metaBuff + sizeof(eeprom_meta_header_t), sizeof(deny_meta));
+            if (deny_meta == m_config.deny_meta)
+            {
+                DBGLN("LoadFromMeta already applied");
+                return LOAD_FROM_META_ALREADY_DONE;
+            }
+        }
+        // if we have a match and also is not being denied, then the deny_meta will be copied into the new EEPROM automatically
+        #endif
 
         // we have a match, copy out the data from flash into EEPROM
         const size_t eeAdr = searchStartAdr + i;
         const size_t alignedEeAdr = eeAdr - (eeAdr % 4U);
         const size_t eeOffset = eeAdr - alignedEeAdr;
-        if (!ESP.flashRead(firmwareOffset + alignedEeAdr, (uint32_t *)eeBuff, EEPROM_META_DATA_READ_SIZE))
+        DBGLN("LoadFromMeta found a match at %x", eeAdr);
+        if (!ESP.flashRead(firmwareOffset + alignedEeAdr, reinterpret_cast<uint32_t *>(eeBuff), EEPROM_META_DATA_READ_SIZE))
         {
             DBGLN("Failed to read EEPROM metadata payload from flash");
-            return false;
+            return LOAD_FROM_META_PAYLOAD_READ_FAILED;
         }
 
         for (size_t eeIdx = EEPROM_META_MAGIC_SIZE; eeIdx < ELRSOPTS_EEPROM_SIZE; ++eeIdx)
         {
             const size_t configAdr = eeIdx - EEPROM_META_MAGIC_SIZE;
             const uint8_t value = eeBuff[eeOffset + eeIdx];
-            m_eeprom->WriteByte(configAdr, value);
             if (configAdr < sizeof(m_config))
             {
                 // we need to write into the current m_config byte by byte
@@ -1562,19 +1581,63 @@ bool RxConfig::LoadFromMeta(uint32_t fw_size, bool to_commit)
             }
         }
 
+        // mark the config as being loaded from metadata
+        m_config.unused_padding = 'M';
+        m_modified |= EVENT_CONFIG_MODEL_CHANGED;
+        if (!from_wifi) {
+            // if it's called from Wi-Fi, then the current flash descriminator will be the old firmware, not the new one, so using it is useless
+            m_config.flash_discriminator = firmwareOptions.flash_discriminator;
+        }
+
         // commit happens if called from Wi-Fi upload, otherwise this will simply let the code after it do the committing
         if (to_commit)
         {
-            m_eeprom->Commit();
+            Commit();
         }
 
+        // erase the magic so that this whole function won't run again
+        memset(eeBuff + eeOffset, 0, EEPROM_META_MAGIC_SIZE);
+        const size_t clearSize = ((eeOffset + EEPROM_META_MAGIC_SIZE + 3U) / 4U) * 4U;
+        bool erase_done = false;
+        #if defined(PLATFORM_ESP32)
+        if (from_wifi)
+        {
+            // ESP32 cannot do flash operations on currently executing flash partitions
+            // so we can only do it when calling from Wi-Fi context
+            // outside of Wi-Fi context, meaning, after a fresh UART flash, then we rely on the deny_meta mechanism
+            if (data_partition) {
+                DBGLN("esp_partition_write");
+                if (esp_partition_write(data_partition, alignedEeAdr, eeBuff, clearSize) == ESP_OK) {
+                    erase_done = true;
+                }
+            }
+            if (!erase_done) {
+                DBGLN("ESP.flashWrite (ESP32)");
+                if (ESP.flashWrite(firmwareOffset + alignedEeAdr, reinterpret_cast<uint32_t *>(eeBuff), clearSize)) {
+                    erase_done = true;
+                }
+            }
+        }
+        #else
+        DBGLN("ESP.flashWrite (ESP8)");
+        if (ESP.flashWrite(firmwareOffset + alignedEeAdr, reinterpret_cast<uint32_t *>(eeBuff), clearSize)) {
+            erase_done = true;
+        }
+        #endif
+
         DBGLN("Updated the EEPROM using trailing data");
-        return true;
+        if (!erase_done) {
+            #if !defined(PLATFORM_ESP32)
+            DBGLN("Failed to clear EEPROM metadata magic from flash");
+            #endif
+        }
+        return 0;
     }
 
     DBGLN("No EEPROM metadata found in firmware trailer");
+    return LOAD_FROM_META_NOT_FOUND;
 #endif
-    return false;
+    return LOAD_FROM_META_NOT_IMPLEMENTED;
 }
 
 void RxConfig::SetOtherDefaults()
@@ -1582,11 +1645,6 @@ void RxConfig::SetOtherDefaults()
     // this function is used to set very specific factory defaults
     // expect a lot of preprocessor flags
     // expect a lot of firmware options being copied into config items
-
-    if (LoadFromMeta(0, true)) {
-        // this is a firmware with built-in EEPROM settings, do not apply defaults
-        return;
-    }
 
     if (firmwareOptions.administered_binding) {
         m_config.bindStorage = BINDSTORAGE_ADMINISTERED;

@@ -30,6 +30,7 @@
 #include "common.h"
 #include "POWERMGNT.h"
 #include "FHSS.h"
+#include "random.h"
 #include "hwTimer.h"
 #include "logging.h"
 #include "options.h"
@@ -740,11 +741,21 @@ static void WebUploadResponseHandler(AsyncWebServerRequest *request) {
   if (target_seen || Update.hasError()) {
     String msg;
     if (!Update.hasError() && Update.end()) {
-
-      config.LoadFromMeta(totalSize, true);
+      #if defined(PLATFORM_ESP32)
+      // LoadFromMeta only works from here if the binary image is uncompressed
+      // if it is compressed (like for ESP8285), then it's not uncompressed until the reboot, so there's nothing to read right now
+      const int loadFromMetaResult = config.LoadFromMeta(totalSize, true, true);
+      #endif
 
       DBGLN("Update complete, rebooting");
       msg = String("{\"status\": \"ok\", \"msg\": \"Update complete. ");
+
+      #if defined(PLATFORM_ESP32)
+      if (loadFromMetaResult == 0) {
+        msg += "Old configuration pre-applied. ";
+      }
+      #endif
+
       #if defined(TARGET_RX)
         msg += "Please wait for the LED to resume blinking before disconnecting power.\"}";
       #else
@@ -870,6 +881,13 @@ static size_t getFirmwareChunk(uint8_t *data, size_t len, size_t pos)
 {
   uint8_t *dst;
   uint8_t alignedBuffer[7];
+
+  #if defined(PLATFORM_ESP32)
+  if (pos == 0) {
+    rngSeed(millis()); // used to generate a random deny_meta value
+  }
+  #endif
+
   if ((uintptr_t)data % 4 != 0)
   {
     // If data is not aligned, read aligned byes using the local buffer and hope the next call will be aligned
@@ -936,6 +954,17 @@ static size_t getFirmwareChunk(uint8_t *data, size_t len, size_t pos)
             case 3: dst[i] = 'R'; break;
             case 4: dst[i] = 'O'; break;
             case 5: dst[i] = 'M'; break;
+            // 6 7 8 9 for version
+            #if defined(PLATFORM_ESP32)
+            case 10: // this is where deny_meta lives
+            case 11: // it is 32 bits, so occupies 4 bytes
+            case 12:
+            case 13:
+              {
+                dst[i] = rngN(254) + 1; // non-zero non-FF random number
+                break;
+              }
+            #endif
             default:
             {
               // rest of the space is the actual EEPROM data

@@ -18,7 +18,7 @@
 #define RX_CONFIG_MAGIC     (0b10U << 30)
 
 #define TX_CONFIG_VERSION   8U
-#define RX_CONFIG_VERSION   11U
+#define RX_CONFIG_VERSION   12U
 #define FIRMWARE_TRAILER_SIZE 4096U
 
 #if defined(TARGET_TX)
@@ -232,6 +232,7 @@ typedef union {
 
 typedef struct __attribute__((packed)) {
     uint32_t    version;
+    uint32_t    deny_meta;
     uint8_t     uid[UID_LEN];
     uint8_t     unused_padding;
     uint8_t     serial1Protocol:4,  // secondary serial protocol
@@ -274,7 +275,7 @@ public:
 
     void Load();
     uint32_t Commit();
-    bool LoadFromMeta(uint32_t fw_size, bool to_commit);
+    int LoadFromMeta(uint32_t fw_size, bool from_wifi, bool to_commit);
 
     // Getters
     bool     GetIsBound() const;
@@ -302,8 +303,8 @@ public:
     uint8_t GetSourceSysId()  const { return m_config.sourceSysId; }
     rx_config_bindstorage_t GetBindStorage() const { return (rx_config_bindstorage_t)m_config.bindStorage; }
     bool IsOnLoan() const;
-    int8_t GetFixedPacketRate() const { return m_config.fixedPacketRate; }
 
+    int8_t GetFixedPacketRate() const { return m_config.fixedPacketRate; }
     const custom_mixer_t* GetCustomMixer() const { return &(m_config.custom_mixer); }
     const uint32_t* GetVescCfg() const { return (const uint32_t*)(m_config.vesc_cfg); }
 
