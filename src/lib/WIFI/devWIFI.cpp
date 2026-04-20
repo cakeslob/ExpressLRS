@@ -1445,10 +1445,6 @@ static int event()
 
 static int timeout()
 {
-  #ifdef BUILD_AM32CONFIG
-  am32_tick();
-  #endif
-
   if (wifiStarted)
   {
     HandleWebUpdate();

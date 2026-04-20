@@ -40,6 +40,7 @@
 #include "RXEndpoint.h"
 #include "RXOTAConnector.h"
 #include "rx-serial/devSerialIO.h"
+#include "AM32.h"
 
 #include <LittleFS.h>
 #if defined(PLATFORM_ESP8266)
@@ -1428,7 +1429,7 @@ static void setupSerial()
 }
 
 #if defined(PLATFORM_ESP32)
-static void serial1Shutdown()
+void serial1Shutdown()
 {
     if(serial1IO != nullptr)
     {
@@ -1528,7 +1529,7 @@ void reconfigureSerial1()
     void reconfigureSerial1() {};
 #endif
 
-static void serialShutdown()
+void serialShutdown()
 {
     BackpackOrLogStrm = new NullStream();
     if(serialIO != nullptr)
@@ -2128,6 +2129,10 @@ void loop()
 
     // read and process any data from serial ports, send any queued non-RC data
     handleSerialIO();
+
+    #ifdef BUILD_AM32CONFIG
+    am32_tick();
+    #endif
 
     // If the reboot time is set and the current time is past the reboot time then reboot.
     if (rebootTime != 0 && now > rebootTime) {
