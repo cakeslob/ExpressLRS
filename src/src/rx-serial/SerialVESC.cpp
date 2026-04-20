@@ -6,9 +6,10 @@
 #include "config.h"
 #include "CustomMixer.h"
 #include "vesc_buffer.h"
-#include <WiFi.h>
 #if defined(PLATFORM_ESP32)
-#include <esp32-hal-gpio.h>
+#include <WiFi.h>
+#elif defined(PLATFORM_ESP8266)
+#include <ESP8266WiFi.h>
 #endif
 
 #define ENABLE_VESC_TCP_BRIDGE
