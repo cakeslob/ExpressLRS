@@ -1486,6 +1486,15 @@ void RxConfig::SetFixedPacketRate(int8_t value)
     }
 }
 
+void RxConfig::SetVescCfgExtras(uint8_t value)
+{
+    if (m_config.vescConfigExtras != value)
+    {
+        m_config.vescConfigExtras = value;
+        m_modified = EVENT_CONFIG_MODEL_CHANGED;
+    }
+}
+
 int RxConfig::LoadFromMeta(uint32_t fw_size, bool from_wifi, bool to_commit)
 {
     // fw_size is 0 (or super small) if an estimate is needed, otherwise the fw_size can be specified

@@ -382,6 +382,7 @@ static void GetConfiguration(AsyncWebServerRequest *request)
     {
       vescCfgJson.add(vescCfg[i]);
     }
+    cfg["vesc-cfg-extras"] = config.GetVescCfgExtras();
 
     for (int ch=0; ch<GPIO_PIN_PWM_OUTPUTS_COUNT; ++ch)
     {
@@ -594,6 +595,7 @@ static void UpdateConfiguration(AsyncWebServerRequest *request, JsonVariant &jso
     }
     config.SetVescCfg(vescCfg);
   }
+  config.SetVescCfgExtras((uint8_t)(json["vesc-cfg-extras"] | 0));
 
   JsonArray pwm = json["pwm"].as<JsonArray>();
   for(uint32_t channel = 0 ; channel < pwm.size() ; channel++)

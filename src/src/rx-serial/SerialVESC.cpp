@@ -42,6 +42,7 @@ static constexpr uint32_t TCP_SEND_TIMEOUT = 0;
 static constexpr size_t TCP_BRIDGE_BUFFER_SIZE = 64;
 #endif
 
+static uint8_t telem_cfg = 0; // // bit 0 = enable power telemetry, bit 1 = enable RPM telemetry, bit 2 = enable TCP bridge
 static void vesc_sendTelemetry(vesc_telem_t* data);
 
 void SerialVESC::begin(uint8_t idx, int8_t pin, int8_t pin_rx)
@@ -105,6 +106,8 @@ void SerialVESC::begin(uint8_t idx, int8_t pin, int8_t pin_rx)
         vesc_crc = new Crc2Byte();
         vesc_crc->init(16, 0x1021);
     }
+
+    telem_cfg = config.GetVescCfgExtras();
 
     this->configed = true;
     resetReceiveState();
@@ -192,7 +195,7 @@ uint32_t SerialVESC::sendRCFrame(bool frameAvailable, bool frameMissed, uint32_t
     }
 
     #ifdef ENABLE_VESC_TELEMETRY
-    if (is_main_vesc)
+    if (is_main_vesc && (telem_cfg & (VESC_TELEM_CFG_POWER | VESC_TELEM_CFG_RPM)) != 0U)
     {
         // see if it is time to send telemetry
         uint32_t now = millis();
@@ -374,6 +377,10 @@ void SerialVESC::resetReceiveState()
 bool SerialVESC::handleTcpBridge(uint8_t *bytes, uint16_t size)
 {
     #ifdef ENABLE_VESC_TCP_BRIDGE
+    if ((telem_cfg & VESC_CFG_TCP_BRIDGE) == 0U) {
+        return false;
+    }
+
     if (this->is_main_vesc && !wclient.connected())
     {
         if (wserver == NULL) {
@@ -446,15 +453,21 @@ static void vesc_sendTelemetry(vesc_telem_t* data)
         voltage = (scaledVoltage >= 65535.0f) ? 0xFFFFU : (uint16_t)scaledVoltage;
     }
 
+    if ((telem_cfg & VESC_TELEM_CFG_POWER) != 0U && voltage != 0U) {
+        crsfBatterySensorDetected = true;
+    }
+
     if (data->avgInputCurrent > 0.0f) {
         float scaledCurrent = data->avgInputCurrent * 100.0f;
         current = (scaledCurrent >= 65535.0f) ? 0xFFFFU : (uint16_t)scaledCurrent;
     }
 
-    crsfbatt.p.voltage = htobe16(voltage);
-    crsfbatt.p.current = htobe16(current);
-    crsfRouter.SetHeaderAndCrc((crsf_header_t *)&crsfbatt, CRSF_FRAMETYPE_BATTERY_SENSOR, CRSF_FRAME_SIZE(sizeof(crsf_sensor_battery_t)));
-    crsfRouter.deliverMessageTo(CRSF_ADDRESS_RADIO_TRANSMITTER, &crsfbatt.h);
+    if ((telem_cfg & VESC_TELEM_CFG_POWER) != 0U) {
+        crsfbatt.p.voltage = htobe16(voltage);
+        crsfbatt.p.current = htobe16(current);
+        crsfRouter.SetHeaderAndCrc((crsf_header_t *)&crsfbatt, CRSF_FRAMETYPE_BATTERY_SENSOR, CRSF_FRAME_SIZE(sizeof(crsf_sensor_battery_t)));
+        crsfRouter.deliverMessageTo(CRSF_ADDRESS_RADIO_TRANSMITTER, &crsfbatt.h);
+    }
 
     // CRSF RPM stores a signed 24-bit value, so clamp to the two's-complement range [-2^23, 2^23 - 1].
     constexpr int32_t CRSF_RPM_MIN = -(1 << 23);
@@ -472,10 +485,12 @@ static void vesc_sendTelemetry(vesc_telem_t* data)
     rpm = ((rpm & 0x0000FFU) << 16) | (rpm & 0x00FF00U) | ((rpm & 0xFF0000U) >> 16);
 #endif
 
-    crsfrpm.p.source_id = 0;
-    crsfrpm.p.rpm0 = rpm;
-    crsfRouter.SetHeaderAndCrc((crsf_header_t *)&crsfrpm, CRSF_FRAMETYPE_RPM, CRSF_FRAME_SIZE(4));
-    crsfRouter.deliverMessageTo(CRSF_ADDRESS_RADIO_TRANSMITTER, &crsfrpm.h);
+    if ((telem_cfg & VESC_TELEM_CFG_RPM) != 0U) {
+        crsfrpm.p.source_id = 0;
+        crsfrpm.p.rpm0 = rpm;
+        crsfRouter.SetHeaderAndCrc((crsf_header_t *)&crsfrpm, CRSF_FRAMETYPE_RPM, CRSF_FRAME_SIZE(4));
+        crsfRouter.deliverMessageTo(CRSF_ADDRESS_RADIO_TRANSMITTER, &crsfrpm.h);
+    }
 }
 
 static int32_t i32map(int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, int32_t out_max)

@@ -15,6 +15,9 @@ const POSITION_RANGE_SNAP_MAX = POSITION_RANGE_SNAP_TO + 500000
 const VESC_RANGE_MAX = 1000000000
 const PROTOCOL_VESC = 10
 const PROTOCOL_SERIAL1_VESC = 12
+const VESC_TELEM_CFG_POWER = 1 << 0
+const VESC_TELEM_CFG_RPM = 1 << 1
+const VESC_CFG_TCP_BRIDGE = 1 << 2
 
 const COMMAND_OPTIONS = [
     {value: 0, label: "DISABLED"},
@@ -140,12 +143,18 @@ function getStoredConfig() {
     return output
 }
 
+function getStoredExtras() {
+    return Number(elrsState.config["vesc-cfg-extras"] || 0) & 0x07
+}
+
 @customElement("vesc-panel")
 class VescPanel extends LitElement {
     @state() accessor rows = []
+    @state() accessor extras = 0
 
     createRenderRoot() {
         this.rows = getStoredConfig().map((item) => decodeRow(item))
+        this.extras = getStoredExtras()
         this._save = this._save.bind(this)
         return this
     }
@@ -217,6 +226,38 @@ class VescPanel extends LitElement {
                     available: true,
                     message: "Use the Serial panel to set Serial 2 Protocol to VESC before these mappings will be active.",
                 }) : ""}
+
+                <fieldset>
+                    <legend>Extras</legend>
+                    <div class="mui-checkbox">
+                        <input
+                            id="vesc-extra-power"
+                            type="checkbox"
+                            ?checked="${(this.extras & VESC_TELEM_CFG_POWER) !== 0}"
+                            @change="${(e) => this._setExtraFlag(VESC_TELEM_CFG_POWER, e.target.checked)}"
+                        />
+                        <label for="vesc-extra-power">Enable Power Telemetry</label>
+                    </div>
+                    <div class="mui-checkbox">
+                        <input
+                            id="vesc-extra-rpm"
+                            type="checkbox"
+                            ?checked="${(this.extras & VESC_TELEM_CFG_RPM) !== 0}"
+                            @change="${(e) => this._setExtraFlag(VESC_TELEM_CFG_RPM, e.target.checked)}"
+                        />
+                        <label for="vesc-extra-rpm">Enable RPM Telemetry</label>
+                    </div>
+                    <div class="mui-checkbox">
+                        <input
+                            id="vesc-extra-tcp"
+                            type="checkbox"
+                            ?checked="${(this.extras & VESC_CFG_TCP_BRIDGE) !== 0}"
+                            @change="${(e) => this._setExtraFlag(VESC_CFG_TCP_BRIDGE, e.target.checked)}"
+                        />
+                        <label for="vesc-extra-tcp">Enable TCP Bridge</label>
+                    </div>
+                    <p class="vesc-group-note vesc-muted">TCP bridge port: <code>65102</code></p>
+                </fieldset>
 
                 <button
                     class="mui-btn mui-btn--small mui-btn--primary"
@@ -343,10 +384,20 @@ class VescPanel extends LitElement {
         return source.map((row) => encodeRow(row))
     }
 
+    _setExtraFlag(flag, enabled) {
+        if (enabled) {
+            this.extras = (this.extras | flag) & 0x07
+        }
+        else {
+            this.extras = this.extras & ~flag
+        }
+    }
+
     _save(e) {
         e.preventDefault()
         saveConfig({
-            "vesc-cfg": this._encodeRows()
+            "vesc-cfg": this._encodeRows(),
+            "vesc-cfg-extras": this.extras & 0x07,
         }, () => {
             this.requestUpdate()
         })
@@ -360,6 +411,6 @@ class VescPanel extends LitElement {
                 return true
             }
         }
-        return false
+        return getStoredExtras() !== (this.extras & 0x07)
     }
 }
