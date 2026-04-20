@@ -1,6 +1,8 @@
 #include <math.h>
 #include <Arduino.h>
+#if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266) || defined(TARGET_TX)
 #include <Wire.h>
+#endif
 
 #include "baro_base.h"
 
@@ -11,6 +13,7 @@ uint8_t BaroI2CBase::m_address = 0;
  **/
 int32_t BaroBase::pressureToAltitude(uint32_t pressuredPa)
 {
+#if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266) || defined(TARGET_TX)
 #if defined(PLATFORM_ESP32)
      const float seaLeveldPa = 1013250; // 1013.25hPa
      return 4433000 * (1.0 - pow(pressuredPa / seaLeveldPa, 0.1903));
@@ -31,10 +34,14 @@ int32_t BaroBase::pressureToAltitude(uint32_t pressuredPa)
 
     return map(pressuredPa, p0, p1, a0, a1);
 #endif
+#else
+    return 0;
+#endif
 }
 
 void BaroI2CBase::readRegister(uint8_t reg, uint8_t *data, size_t size)
 {
+#if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     Wire.beginTransmission(m_address);
     Wire.write(reg);
     if (Wire.endTransmission() == 0)
@@ -42,12 +49,15 @@ void BaroI2CBase::readRegister(uint8_t reg, uint8_t *data, size_t size)
         Wire.requestFrom(m_address, size);
         Wire.readBytes(data, size);
     }
+#endif
 }
 
 void BaroI2CBase::writeRegister(uint8_t reg, uint8_t *data, size_t size)
 {
+#if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     Wire.beginTransmission(m_address);
     Wire.write(reg);
     Wire.write(data, size);
     Wire.endTransmission();
+#endif
 }

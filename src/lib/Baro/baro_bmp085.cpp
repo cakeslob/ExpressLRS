@@ -11,16 +11,19 @@
 
 void BMP085::initialize()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     if (m_initialized)
         return;
 
     // All the calibration registers are in order of our struct and are 2 bytes long too,
     // so just read them directly into our calib data
     readRegister(BMP085_CALIB_COEFFS_START, (uint8_t *)&m_calib, sizeof(m_calib));
+    #endif
 }
 
 uint8_t BMP085::getPressureDuration()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     switch (OVERSAMPLING_PRESSURE)
     {
         case 0: return 5; // 4.5ms
@@ -29,23 +32,29 @@ uint8_t BMP085::getPressureDuration()
         default: // fallthrough
         case 3: return 26; // 25.5ms
     }
+    #endif
 }
 
 void BMP085::startPressure()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     uint8_t reg_value = BMP085_CMD_MEAS_PRESSURE | (OVERSAMPLING_PRESSURE << 6);
     writeRegister(BMP085_REG_CONTROL, &reg_value, sizeof(reg_value));
+    #endif
 }
 
 int32_t BMP085::computeB5(int32_t UT) const
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     int32_t X1 = (UT - (int32_t)m_calib.ac6) * ((int32_t)m_calib.ac5) >> 15;
     int32_t X2 = ((int32_t)m_calib.mc << 11) / (X1 + (int32_t)m_calib.md);
     return X1 + X2;
+    #endif
 }
 
 uint32_t BMP085::getPressure()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     uint8_t buf[3];
     readRegister(BMP085_REG_PRESSURE_DATA, buf, sizeof(buf));
     uint32_t raw = ((buf[0] << 16) | (buf[1] << 8) | buf[2]) >> OVERSAMPLING_PRESSURE;
@@ -78,6 +87,9 @@ uint32_t BMP085::getPressure()
 
     p = p + ((X1 + X2 + (int32_t)3791) >> 4);
     return p;
+    #else
+    return 0;
+    #endif
 }
 
 uint8_t BMP085::getTemperatureDuration()
@@ -88,23 +100,31 @@ uint8_t BMP085::getTemperatureDuration()
 
 void BMP085::startTemperature()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     uint8_t reg_value = BMP085_CMD_MEAS_TEMPERATURE;
     writeRegister(BMP085_REG_CONTROL, &reg_value, sizeof(reg_value));
+    #endif
 }
 
 int32_t BMP085::getTemperature()
 {
     m_temperatureLast = 0;
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     readRegister(BMP085_REG_TEMPERATURE_DATA, (uint8_t *)&m_temperatureLast, sizeof(m_temperatureLast));
+    #endif
     return m_temperatureLast;
 }
 
 bool BMP085::detect()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     // Assumes Wire.begin() has already been called
     uint8_t chipid = 0;
     m_address = BMP085_I2C_ADDR;
     readRegister(BMP085_REG_CHIPID, &chipid, sizeof(chipid));
     return chipid == BMP085_CHIPID;
+    #else
+    return false;
+    #endif
 }
 #endif

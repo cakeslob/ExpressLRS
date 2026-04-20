@@ -5,6 +5,10 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 
+#if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266) || defined(TARGET_TX)
+#define TRIM_UNNECESSARY_HW
+#endif
+
 typedef enum {
     INT,
     BOOL,
@@ -21,21 +25,25 @@ static const struct {
     {HARDWARE_customised, "customised", BOOL},
     {HARDWARE_serial_rx, "serial_rx", INT},
     {HARDWARE_serial_tx, "serial_tx", INT},
+    #ifndef TRIM_UNNECESSARY_HW
     {HARDWARE_serial1_rx, "serial1_rx", INT},
     {HARDWARE_serial1_tx, "serial1_tx", INT},
+    #endif
     {HARDWARE_radio_busy, "radio_busy", INT},
-    {HARDWARE_radio_busy_2, "radio_busy_2", INT},
     {HARDWARE_radio_dio0, "radio_dio0", INT},
-    {HARDWARE_radio_dio0_2, "radio_dio0_2", INT},
     {HARDWARE_radio_dio1, "radio_dio1", INT},
-    {HARDWARE_radio_dio1_2, "radio_dio1_2", INT},
     {HARDWARE_radio_miso, "radio_miso", INT},
     {HARDWARE_radio_mosi, "radio_mosi", INT},
     {HARDWARE_radio_nss, "radio_nss", INT},
-    {HARDWARE_radio_nss_2, "radio_nss_2", INT},
     {HARDWARE_radio_rst, "radio_rst", INT},
-    {HARDWARE_radio_rst_2, "radio_rst_2", INT},
     {HARDWARE_radio_sck, "radio_sck", INT},
+    #ifndef TRIM_UNNECESSARY_HW
+    {HARDWARE_radio_busy_2, "radio_busy_2", INT},
+    {HARDWARE_radio_dio0_2, "radio_dio0_2", INT},
+    {HARDWARE_radio_dio1_2, "radio_dio1_2", INT},
+    {HARDWARE_radio_nss_2, "radio_nss_2", INT},
+    {HARDWARE_radio_rst_2, "radio_rst_2", INT},
+    #endif
     {HARDWARE_radio_dcdc, "radio_dcdc", BOOL},
     {HARDWARE_radio_rfo_hf, "radio_rfo_hf", BOOL},
     {HARDWARE_radio_rfsw_ctrl, "radio_rfsw_ctrl", ARRAY},
@@ -62,11 +70,13 @@ static const struct {
     {HARDWARE_power_values2, "power_values2", ARRAY},
     {HARDWARE_power_values_dual, "power_values_dual", ARRAY},
     {HARDWARE_power_values_dual_count, "power_values_dual", COUNT},
+    #ifndef TRIM_UNNECESSARY_HW
     {HARDWARE_joystick, "joystick", INT},
     {HARDWARE_joystick_values, "joystick_values", ARRAY},
     {HARDWARE_five_way1, "five_way1", INT},
     {HARDWARE_five_way2, "five_way2", INT},
     {HARDWARE_five_way3, "five_way3", INT},
+    #endif
     {HARDWARE_button, "button", INT},
     {HARDWARE_button_led_index, "button_led_index", INT},
     {HARDWARE_button2, "button2", INT},
@@ -82,12 +92,15 @@ static const struct {
     {HARDWARE_led_red_green, "led_red_green", INT},
     {HARDWARE_led_rgb, "led_rgb", INT},
     {HARDWARE_led_rgb_isgrb, "led_rgb_isgrb", BOOL},
+    #if !defined(TRIM_UNNECESSARY_HW) && !defined(BUILD_DISABLE_RGB_LED)
     {HARDWARE_ledidx_rgb_status, "ledidx_rgb_status", ARRAY},
     {HARDWARE_ledidx_rgb_status_count, "ledidx_rgb_status", COUNT},
     {HARDWARE_ledidx_rgb_vtx, "ledidx_rgb_vtx", ARRAY},
     {HARDWARE_ledidx_rgb_vtx_count, "ledidx_rgb_vtx", COUNT},
     {HARDWARE_ledidx_rgb_boot, "ledidx_rgb_boot", ARRAY},
     {HARDWARE_ledidx_rgb_boot_count, "ledidx_rgb_boot", COUNT},
+    #endif
+    #ifndef TRIM_UNNECESSARY_HW
     {HARDWARE_screen_cs, "screen_cs", INT},
     {HARDWARE_screen_dc, "screen_dc", INT},
     {HARDWARE_screen_mosi, "screen_mosi", INT},
@@ -115,12 +128,14 @@ static const struct {
     {HARDWARE_misc_fan_speeds_count, "misc_fan_speeds", COUNT},
     {HARDWARE_gsensor_stk8xxx, "gsensor_stk8xxx", BOOL},
     {HARDWARE_thermal_lm75a, "thermal_lm75a", BOOL},
+    #endif
     {HARDWARE_pwm_outputs, "pwm_outputs", ARRAY},
     {HARDWARE_pwm_outputs_count, "pwm_outputs", COUNT},
     {HARDWARE_vbat, "vbat", INT},
     {HARDWARE_vbat_offset, "vbat_offset", INT},
     {HARDWARE_vbat_scale, "vbat_scale", INT},
     {HARDWARE_vbat_atten, "vbat_atten", INT},
+    #ifndef TRIM_UNNECESSARY_HW
     {HARDWARE_vtx_amp_pwm, "vtx_amp_pwm", INT},
     {HARDWARE_vtx_amp_vpd, "vtx_amp_vpd", INT},
     {HARDWARE_vtx_amp_vref, "vtx_amp_vref", INT},
@@ -132,6 +147,7 @@ static const struct {
     {HARDWARE_vtx_amp_vpd_100mW, "vtx_amp_vpd_100mW", ARRAY},
     {HARDWARE_vtx_amp_pwm_25mW, "vtx_amp_pwm_25mW", ARRAY},
     {HARDWARE_vtx_amp_pwm_100mW, "vtx_amp_pwm_100mW", ARRAY},
+    #endif
 };
 
 typedef union {

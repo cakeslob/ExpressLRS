@@ -4,6 +4,7 @@
 
 void BMP280::initialize()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     if (m_initialized)
         return;
 
@@ -16,32 +17,44 @@ void BMP280::initialize()
     writeRegister(BMP280_REG_CONFIG, (uint8_t *)&BMP280_FILTER, sizeof(BMP280_FILTER));
 
     m_initialized = true;
+    #endif
 }
 
 uint8_t BMP280::getTemperatureDuration()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     // Calculate in microseconds, then divide by 1000 for ms, rounding up
     constexpr uint32_t duration = 1250U +
         (2300U * ((1U << OVERSAMPLING_TEMPERATURE) >> 1)) +
         (2300U * ((1U << OVERSAMPLING_PRESSURE) >> 1) + 575U);
     return (FREERUNNING_NUM_SAMPLES * duration + 999U) / 1000U;
+    #else
+    return 0;
+    #endif
 }
 
 void BMP280::startTemperature()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     // Measure both Pressure and Temperature, freerunning to allow internal IIR to smooth extra samples for us
     constexpr uint8_t SAMPLING_MODE = (FREERUNNING_NUM_SAMPLES != 0) ? BMP280_MODE_NORMAL : BMP280_MODE_FORCED;
     constexpr uint8_t BMP280_MODE = (OVERSAMPLING_PRESSURE << 2 | OVERSAMPLING_TEMPERATURE << 5 | SAMPLING_MODE);
     writeRegister(BMP280_REG_CTRL_MEAS, (uint8_t *)&BMP280_MODE, sizeof(BMP280_MODE));
+    #endif
 }
 
 uint32_t BMP280::getPressure()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     return m_pressureLast;
+    #else
+    return 0;
+    #endif
 }
 
 int32_t BMP280::getTemperature()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     // uint8_t status = 0xff;
     // readRegister(BMP280_REG_STATUS, &status, sizeof(status));
     // if (status & bit(3))
@@ -85,10 +98,14 @@ int32_t BMP280::getTemperature()
     //DBGLN("%u t=%d p=%u", millis(), temperature, m_pressureLast);
 
     return temperature;
+    #else
+    return 0;
+    #endif
 }
 
 bool BMP280::detect()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     // Assumes Wire.begin() has already been called
     uint8_t chipid = 0;
 
@@ -101,6 +118,6 @@ bool BMP280::detect()
        if (chipid == BMP280_CHIPID || chipid == BME280_CHIPID)
            return true;
     }
-
+    #endif
     return false;
 }

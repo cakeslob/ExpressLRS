@@ -1,6 +1,9 @@
 #include "targets.h"
 
+#if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
 #include <Wire.h>
+#endif
+
 #include "stk8baxx.h"
 #include "logging.h"
 

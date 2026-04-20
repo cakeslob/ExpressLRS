@@ -2,7 +2,7 @@
 
 .elrs-header {
     background-color: #4686a0;
-    color: rgba(255, 255, 255, 0.75);
+    color: rgba(255, 255, 255, 0.8);
     background-image: linear-gradient(45deg, #9dc66b 5%, #4fa49a 30%, #4361c2);
 }
 
@@ -295,59 +295,61 @@ img.icon-pwm {
   }
 
   .error-bg {
-	background: #d85261;
+	background: #d56;
   }
 
   .success-bg {
-	background: #2dd284;
+	background: #3c8;
   }
 
   .warning-bg {
-	background: #fada5e;
+	background: #fd6;
   }
 
   .question-bg {
-	background: #779ecb;
+	background: #79c;
   }
 
   .error-btn:hover {
-	background: #e5a4b4;
+	background: #dab;
   }
 
   .success-btn:hover {
-	background: #6edaa4;
+	background: #6da;
   }
 
   .warning-btn:hover {
-	background: #fcecae;
+	background: #fea;
   }
 
   .info-btn:hover {
-	background: #c3e6fb;
+	background: #bef;
   }
 
   .question-btn:hover {
-	background: #bacee4;
+	background: #bcd;
   }
 
+/*
   .error-timer {
-	background: #e5a4b4;
+	background: #dab;
   }
 
   .success-timer {
-	background: #6edaa4;
+	background: #6da;
   }
 
   .warning-timer {
-	background: #fcecae;
+	background: #fea;
   }
 
   .info-timer {
-	background: #c3e6fb;
+	background: #bef;
   }
+*/
 
   .info-bg {
-	background: #88cef7;
+	background: #8cf;
   }
 
     /* Custom code for ExpressLRS PWM Output table */
@@ -373,7 +375,7 @@ img.icon-pwm {
   /*==========================*/
 
   .badge {
-	color: white;
+	color: #fff;
 	padding: 4px 8px;
 	font-weight: bold;
 	text-align: center;

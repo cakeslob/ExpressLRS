@@ -19,6 +19,7 @@ extern bool i2c_enabled;
 
 static bool Baro_Detect()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     // I2C Baros
     if (i2c_enabled)
     {
@@ -43,11 +44,13 @@ static bool Baro_Detect()
         // }
         // DBGLN("No baro detected");
     } // I2C
+    #endif
     return false;
 }
 
 static int Baro_Init()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     baro->initialize();
     if (baro->isInitialized())
     {
@@ -56,6 +59,7 @@ static int Baro_Init()
         BaroReadState = brsReadTemp;
         return DURATION_IMMEDIATELY;
     }
+    #endif
 
     // Did not init, try again later
     return BARO_STARTUP_INTERVAL;
@@ -63,6 +67,7 @@ static int Baro_Init()
 
 static void Baro_PublishPressure(uint32_t pressuredPa)
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     static int32_t last_altitude_cm;
     static int16_t verticalspd_smoothed;
     int32_t altitude_cm = baro->pressureToAltitude(pressuredPa);
@@ -111,6 +116,7 @@ static void Baro_PublishPressure(uint32_t pressuredPa)
         crsfRouter.SetHeaderAndCrc((crsf_header_t *)&crsfBaro, CRSF_FRAMETYPE_BARO_ALTITUDE, CRSF_FRAME_SIZE(sizeof(crsf_sensor_baro_vario_t)));
         crsfRouter.deliverMessageTo(CRSF_ADDRESS_RADIO_TRANSMITTER, &crsfBaro.h);
     }
+    #endif
 }
 
 static bool initialize()
@@ -126,6 +132,7 @@ static int start()
 
 static int timeout()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     if (connectionState >= MODE_STATES)
         return DURATION_NEVER;
 
@@ -180,6 +187,9 @@ static int timeout()
                 return tempDuration;
             }
     }
+    #else
+    return DURATION_NEVER;
+    #endif
 }
 
 device_t Baro_device = {

@@ -7,6 +7,8 @@
 #include "crsf_protocol.h"
 #include "POWERMGNT.h"
 
+#ifndef BUILD_DISABLE_RGB_LED
+
 static uint8_t pixelCount;
 static uint8_t *statusLEDs;
 static uint8_t statusLEDcount;
@@ -526,3 +528,97 @@ void rgbled_dynamicUpdate()
         blinkyColor.s = 255; // reset
     }
 }
+
+#else // #ifndef BUILD_DISABLE_RGB_LED
+
+typedef struct {
+    uint8_t h, s, v;
+} blinkyColor_t;
+
+void WS281Binit()
+{
+}
+
+void WS281BsetLED(int index, uint32_t color)
+{
+    (void)index;
+    (void)color;
+}
+
+void WS281BsetLED(uint32_t color)
+{
+    (void)color;
+}
+
+uint32_t HsvToRgb(const blinkyColor_t &blinkyColor)
+{
+    (void)blinkyColor;
+    return 0;
+}
+
+void brightnessFadeLED(blinkyColor_t &blinkyColor, uint8_t start, uint8_t end)
+{
+    (void)blinkyColor;
+    (void)start;
+    (void)end;
+}
+
+void hueFadeLED(blinkyColor_t &blinkyColor, uint16_t start, uint16_t end, uint8_t lightness, uint8_t count)
+{
+    (void)blinkyColor;
+    (void)start;
+    (void)end;
+    (void)lightness;
+    (void)count;
+}
+
+uint16_t flashLED(blinkyColor_t &blinkyColor, uint8_t onLightness, uint8_t offLightness, const uint8_t durations[], uint8_t durationCounts)
+{
+    (void)blinkyColor;
+    (void)onLightness;
+    (void)offLightness;
+    (void)durations;
+    (void)durationCounts;
+    return DURATION_NEVER;
+}
+
+uint32_t toRGB(uint8_t c)
+{
+    (void)c;
+    return 0;
+}
+
+void setButtonColors(uint8_t b1, uint8_t b2)
+{
+    (void)b1;
+    (void)b2;
+}
+
+static bool initialize()
+{
+    return false;
+}
+
+static int start()
+{
+    return DURATION_NEVER;
+}
+
+static int timeout()
+{
+    return DURATION_NEVER;
+}
+
+device_t RGB_device = {
+    .initialize = initialize,
+    .start = start,
+    .event = timeout,
+    .timeout = timeout,
+    .subscribe = EVENT_NONE
+};
+
+void rgbled_dynamicUpdate()
+{
+}
+
+#endif
