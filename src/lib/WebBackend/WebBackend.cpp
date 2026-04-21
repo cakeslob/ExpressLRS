@@ -11,9 +11,11 @@
 #include "handset.h"
 #endif
 
+static bool webbe_installed = false;
+
+#ifdef BUILD_WEB_BACKEND_WEBSOCKET
 static AsyncWebSocket* ws;
 static bool ws_started = false;
-static bool webbe_installed = false;
 
 static constexpr uint8_t WS_CHANNEL_PACKET_HEADER = '>';
 static constexpr uint8_t WS_CHANNEL_PACKET_FOOTER = '#';
@@ -37,7 +39,7 @@ static bool parseWsChannelPacket()
         return false;
     }
 
-    const uint16_t *packet = wsChannelPacket;
+    const uint16_t *packet = (const uint16_t *)wsChannelPacket;
     for (uint8_t ch = 0; ch < CRSF_NUM_CHANNELS; ++ch)
     {
         ChannelData[ch] = (uint16_t)packet[ch * 2] | ((uint16_t)packet[(ch * 2) + 1] << 8);
@@ -138,6 +140,7 @@ void onWsEvent(AsyncWebSocket *server,
         // WebSocket pong frame received from the client.
     }
 }
+#endif
 
 void webbe_tick()
 {
@@ -151,13 +154,13 @@ void webbe_tick()
     am32_tick();
     #endif
 
+    #if defined(TARGET_RX) && defined(BUILD_WEB_BACKEND_WEBSOCKET)
     if (ws_started) {
         servosUpdate(now); // transitioning to Wi-Fi mode would have disabled the servos device scheduler, so we call the update function here
         // no need to call handleSerialIO() as it is called in the main application loop
         // the serial IO device scheduler is still running, and will handle the new data if crsfRCFrameAvailable is called
     }
-
-    #if defined(TARGET_RX)
+    
     if ((now - wsLastPacketTime) >= 500 && wsLastPacketTime != 0) {
         // I understand this might be redundant as servosUpdate itself has an internal timeout
         servosFailsafe();
@@ -176,9 +179,11 @@ void webbe_install(AsyncWebServer* srv)
     am32_setupServer(srv);
     #endif
 
+    #ifdef BUILD_WEB_BACKEND_WEBSOCKET
     ws = new AsyncWebSocket("/ws");
     ws->onEvent(onWsEvent);
     srv->addHandler(ws);
+    #endif
 
     webbe_installed = true; // do not repeat
 }

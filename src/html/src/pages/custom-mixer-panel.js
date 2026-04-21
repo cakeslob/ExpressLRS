@@ -4,6 +4,7 @@ import '../assets/mui.js';
 import {elrsState, saveConfig} from "../utils/state.js";
 
 const SCALE_STEP_PERCENT = 5;
+const EXTRA_FEATURE_CUSTOM_MIXER_BIT = 1;
 const DEFAULT_CHANNEL_OPTIONS = ['None/Disabled', 'CH1', 'CH2', 'CH3', 'CH4', 'CH5', 'CH6', 'CH7', 'CH8', 'CH9', 'CH10', 'CH11', 'CH12', 'CH13', 'CH14', 'CH15', 'CH16'];
 
 const MIXER_CURVE_FIELDS = [
@@ -49,6 +50,15 @@ class CustomMixerPanel extends LitElement {
     }
 
     render() {
+        if (!this.isFeatureAvailable()) {
+            return html`
+                <div class="mui-panel mui--text-title">Custom Mixer</div>
+                <div class="mui-panel">
+                    <p>This firmware does not support this feature.</p>
+                </div>
+            `;
+        }
+
         return html`
             <div class="mui-panel mui--text-title">Custom Mixer</div>
             <div class="mui-panel">
@@ -103,6 +113,11 @@ class CustomMixerPanel extends LitElement {
                 </div>
             </div>
         `;
+    }
+
+    isFeatureAvailable() {
+        const extraFeatureFlags = Number(elrsState.config["extra-features-avail"]) || 0;
+        return (extraFeatureFlags & (1 << EXTRA_FEATURE_CUSTOM_MIXER_BIT)) !== 0;
     }
 
     loadMixerConfigFromState() {

@@ -293,6 +293,25 @@ static void GetConfiguration(AsyncWebServerRequest *request)
   const auto uid = cfg["uid"].to<JsonArray>();
   copyArray(UID, UID_LEN, uid);
 
+  // let the front-end know what extra compiled features are available
+  uint32_t extra_feature_flags = 0;
+  #if defined(BUILD_EEPROM_EXPORT_IMPORT)
+  extra_feature_flags |= 1 << 0;
+  #endif
+  #if defined(BUILD_CUSTOM_MIXER)
+  extra_feature_flags |= 1 << 1;
+  #endif
+  #if defined(BUILD_WEB_BACKEND_WEBSOCKET)
+  extra_feature_flags |= 1 << 2;
+  #endif
+  #if defined(BUILD_VESC_UART)
+  extra_feature_flags |= 1 << 3;
+  #endif
+  #if defined(BUILD_AM32_CONFIG)
+  extra_feature_flags |= 1 << 4;
+  #endif
+  cfg["extra-features-avail"] = extra_feature_flags;
+
 #if defined(TARGET_TX)
   int button_count = 0;
   if (GPIO_PIN_BUTTON != UNDEF_PIN)
@@ -750,7 +769,7 @@ static void WebUploadResponseHandler(AsyncWebServerRequest *request) {
       DBGLN("Update complete, rebooting");
       msg = String("{\"status\": \"ok\", \"msg\": \"Update complete. ");
 
-      #if defined(PLATFORM_ESP32)
+      #if defined(PLATFORM_ESP32) && defined(BUILD_EEPROM_EXPORT_IMPORT)
       if (loadFromMetaResult == 0) {
         msg += "Old configuration pre-applied. ";
       }
@@ -919,7 +938,9 @@ static size_t getFirmwareChunk(uint8_t *data, size_t len, size_t pos)
       {
         unsigned int metaAdr1 = adr - (sketchSize + ELRSOPTS_PRODUCTNAME_SIZE + ELRSOPTS_DEVICENAME_SIZE);
         unsigned int metaAdr2 = metaAdr1 - ELRSOPTS_OPTIONS_SIZE;
+        #if defined(BUILD_EEPROM_EXPORT_IMPORT)
         unsigned int metaAdr3 = metaAdr2 - ELRSOPTS_HARDWARE_SIZE;
+        #endif
         if (metaAdr1 < ELRSOPTS_OPTIONS_SIZE && file1 && !file1.isDirectory()) { // if writing options file region and the file exists
           if (metaAdr1 < file1.size()) { // if we are within the actual file size
             file1.seek(metaAdr1, SeekSet);
@@ -946,6 +967,7 @@ static size_t getFirmwareChunk(uint8_t *data, size_t len, size_t pos)
             dst[i] = 0; // blank out the rest of the file
           }
         }
+        #if defined(BUILD_EEPROM_EXPORT_IMPORT)
         if (metaAdr3 < ELRSOPTS_EEPROM_SIZE) {
           switch (metaAdr3) { // first 6 characters are used to indicate that the EEPROM exists, this is checked during file upload
             case 0: dst[i] = 'E'; break;
@@ -973,6 +995,7 @@ static size_t getFirmwareChunk(uint8_t *data, size_t len, size_t pos)
             break;
           }
         }
+        #endif
       }
     }
     // close the files to be clean, they will be re-opened on the next chunk request

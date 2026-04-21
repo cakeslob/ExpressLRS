@@ -1,5 +1,7 @@
 #pragma once
 
+#include "extra_features.h"
+
 #ifndef UNIT_TEST
 #include "targets.h"
 #include <device.h>

@@ -24,6 +24,8 @@ static Crc2Byte* vesc_crc = NULL; // we only need one instance even if two seria
 
 void SerialVESC::begin(uint8_t idx, int8_t pin)
 {
+    #ifdef BUILD_VESC_UART
+
     DBGVLN("SerialVESC::begin %u %d", idx, pin);
 
     this->idx = idx;
@@ -44,10 +46,13 @@ void SerialVESC::begin(uint8_t idx, int8_t pin)
     }
 
     this->configed = true;
+
+    #endif
 }
 
 uint32_t SerialVESC::sendRCFrame(bool frameAvailable, bool frameMissed, uint32_t *channelData)
 {
+    #ifdef BUILD_VESC_UART
     if (!this->configed) {
         return DURATION_IMMEDIATELY;
     }
@@ -125,6 +130,8 @@ uint32_t SerialVESC::sendRCFrame(bool frameAvailable, bool frameMissed, uint32_t
         _outputPort->write((const uint8_t *)&packet, sizeof(vesc_i32_packet_t));
     }
 
+    #endif
+
     return DURATION_IMMEDIATELY;
 }
 
@@ -181,6 +188,8 @@ static int16_t xy_magnitude(int16_t x, int16_t y)
 
 static int32_t xy_to_vesc_pos_offset(int16_t x, int16_t y, bool invert)
 {
+    #ifdef BUILD_VESC_UART
+
     if (x == 0 && y == 0) {
         return 0;
     }
@@ -209,4 +218,7 @@ static int32_t xy_to_vesc_pos_offset(int16_t x, int16_t y, bool invert)
     }
 
     return pos;
+    #else
+    return 0;
+    #endif
 }

@@ -1,0 +1,19 @@
+#pragma once
+
+#if defined(PLATFORM_ESP32) || defined(PLATFORM_ESP32_C3) || defined(PLATFORM_ESP32_C3)
+
+#define BUILD_EEPROM_EXPORT_IMPORT
+#define BUILD_CUSTOM_MIXER
+#define BUILD_WEB_BACKEND_WEBSOCKET
+#define BUILD_VESC_UART
+#define BUILD_AM32_CONFIG
+
+#endif
+
+#if defined(PLATFORM_ESP32)
+
+#define BUILD_EEPROM_EXPORT_IMPORT
+#define BUILD_CUSTOM_MIXER
+#define BUILD_WEB_BACKEND_WEBSOCKE
+
+#endif

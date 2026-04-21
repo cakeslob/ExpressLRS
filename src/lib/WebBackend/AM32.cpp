@@ -2,7 +2,7 @@
 #include "common.h"
 #include "config.h"
 
-#if defined(BUILD_AM32CONFIG)
+#if defined(BUILD_AM32_CONFIG)
 #if defined(PLATFORM_ESP32)
 
 #include <WiFi.h>

@@ -2,10 +2,12 @@ import {html, LitElement} from 'lit'
 import {customElement} from 'lit/decorators.js'
 import '../assets/mui.js'
 import {cuteAlert} from '../utils/feedback.js'
+import {elrsState} from '../utils/state.js'
 
 // Keep one shared script-loader promise so we do not append duplicate <script> tags
 // when users navigate away from and back to this route.
 let legacyAm32ScriptsReadyPromise = null
+const EXTRA_FEATURE_AM32_BIT = 4
 
 @customElement('am32-panel')
 export class Am32Panel extends LitElement {
@@ -14,6 +16,10 @@ export class Am32Panel extends LitElement {
     }
 
     async firstUpdated() {
+        if (!this._isFeatureAvailable()) {
+            return
+        }
+
         try {
             await this._ensureLegacyScriptsLoaded()
 
@@ -79,6 +85,15 @@ export class Am32Panel extends LitElement {
     }
 
     render() {
+        if (!this._isFeatureAvailable()) {
+            return html`
+                <div class="mui-panel mui--text-title">AM32 Configurator</div>
+                <div class="mui-panel">
+                    <p>This firmware does not support this feature.</p>
+                </div>
+            `
+        }
+
         return html`
             <div class="mui-panel mui--text-title">AM32 Configurator</div>
             <div id="div_loading">Loading... Please Wait...</div>
@@ -201,5 +216,10 @@ export class Am32Panel extends LitElement {
                 </fieldset>
             </div>
         `
+    }
+
+    _isFeatureAvailable() {
+        const extraFeatureFlags = Number(elrsState.config['extra-features-avail']) || 0
+        return (extraFeatureFlags & (1 << EXTRA_FEATURE_AM32_BIT)) !== 0
     }
 }

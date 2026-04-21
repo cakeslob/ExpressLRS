@@ -1491,7 +1491,7 @@ int RxConfig::LoadFromMeta(uint32_t fw_size, bool from_wifi, bool to_commit)
     // fw_size is 0 (or super small) if an estimate is needed, otherwise the fw_size can be specified
 
     static constexpr int LOAD_FROM_META_NOT_IMPLEMENTED = -4;
-#if defined(PLATFORM_ESP32) || defined(PLATFORM_ESP8266)
+#if (defined(PLATFORM_ESP32) || defined(PLATFORM_ESP8266)) && defined(BUILD_EEPROM_EXPORT_IMPORT)
     static constexpr int LOAD_FROM_META_SEARCH_READ_FAILED = -1;
     static constexpr int LOAD_FROM_META_PAYLOAD_READ_FAILED = -2;
     static constexpr int LOAD_FROM_META_NOT_FOUND = -3;
