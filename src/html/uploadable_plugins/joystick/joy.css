@@ -1,0 +1,38 @@
+.hidden {display: none;}
+.joy-row
+{
+    display: flex;
+    justify-content: center;
+}
+.joy-column
+{
+    flex: 0 0 auto; /* Do not grow or shrink */
+}
+.square-container {
+    display: flex;
+    flex-wrap: wrap;
+    height: 25px;
+}
+.square {
+    width: 20px;
+    height: 20px;
+    border: 1px solid black; /* Default border color */
+    margin: -1px; /* Overlap borders */
+    padding: 2px 2px 2px 2px;
+}
+.dbggrid-container {
+    display: grid;
+    grid-template-columns: 1fr 2fr 1fr 2fr;
+    width: 100%;
+    gap: 1px; /* Creates the grid gap which will act as the border */
+}
+.dbggrid-cell {
+    background-color: white; /* Background color for the cells */
+    min-height: 20px; /* Minimum height for each cell */
+    border: 1px solid gray; /* 1 pixel solid gray border */
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+}
+.right-aligned {
+    text-align: right;
+}

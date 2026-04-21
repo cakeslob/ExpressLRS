@@ -26,19 +26,18 @@ static inline void resetWsChannelPacket()
 
 static bool parseWsChannelPacket()
 {
-    size_t idx = 0;
-    for (uint8_t ch = 0; ch < CRSF_NUM_CHANNELS; ++ch)
+    if (wsChannelPacketLen != WS_CHANNEL_PACKET_LEN)
     {
-        if (idx + 2U > wsChannelPacketLen)
-        {
-            return false;
-        }
-
-        ChannelData[ch] = ((uint16_t)wsChannelPacket[idx] << 8) | wsChannelPacket[idx + 1U]; // javavascript sends big-endian
-        idx += 2U;
+        return false;
     }
 
-    return idx == wsChannelPacketLen;
+    const uint16_t *packet = wsChannelPacket;
+    for (uint8_t ch = 0; ch < CRSF_NUM_CHANNELS; ++ch)
+    {
+        ChannelData[ch] = (uint16_t)packet[ch * 2] | ((uint16_t)packet[(ch * 2) + 1] << 8);
+    }
+
+    return true;
 }
 
 void onWsEvent(AsyncWebSocket *server,
@@ -122,7 +121,7 @@ void onWsEvent(AsyncWebSocket *server,
 void webbe_tick()
 {
     // this function only runs if wifiStarted is true
-    // it will repeat as fast ad the device schedule engine allows
+    // it will repeat as fast as the device schedule engine allows
 
     uint32_t now = millis();
     (void)now;
@@ -153,5 +152,5 @@ void webbe_install(AsyncWebServer* srv)
     ws->onEvent(onWsEvent);
     srv->addHandler(ws);
 
-    webbe_installed = true;
+    webbe_installed = true; // do not repeat
 }
