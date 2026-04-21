@@ -9,6 +9,7 @@
 #endif
 
 extern device_t ServoOut_device;
+extern bool servos_movedBlinkLed;
 
 // Notify this unit that new channel data has arrived
 void servoNewChannelsAvailable();

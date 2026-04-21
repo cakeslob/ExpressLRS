@@ -27,6 +27,10 @@ static constexpr uint32_t FAILSAFE_ABS_TIMEOUT_MS = 1000U;
 
 typedef void (*servoWrite_fn)(uint8_t ch, uint16_t us);
 
+#ifdef BUILD_SERVOS_MOVE_BLINK
+bool servos_movedBlinkLed = false;
+#endif
+
 void ICACHE_RAM_ATTR servoNewChannelsAvailable()
 {
     newChannelsAvailable = true;
@@ -151,6 +155,11 @@ void servosFailsafe()
 
 static void servoCalcAllChannels(servoWrite_fn write)
 {
+    #ifdef BUILD_SERVOS_MOVE_BLINK
+    static int32_t prev_ch_us[CRSF_NUM_CHANNELS];
+    static uint32_t movement_sum = 0;
+    #endif
+
     for (int ch = 0 ; ch < GPIO_PIN_PWM_OUTPUTS_COUNT ; ++ch)
     {
         const rx_config_pwm_t *chConfig = config.GetPwmChannel(ch);
@@ -161,6 +170,7 @@ static void servoCalcAllChannels(servoWrite_fn write)
         {
             continue;
         }
+
 
         uint16_t us;
         if (chConfig->val.stretched)
@@ -180,6 +190,18 @@ static void servoCalcAllChannels(servoWrite_fn write)
         {
             us = 3000U - us;
         }
+
+        #ifdef BUILD_SERVOS_MOVE_BLINK
+        int32_t prev_us = prev_ch_us[ch];
+        prev_ch_us[ch] = us;
+        movement_sum += abs(us - prev_us);
+        if (movement_sum >= 1000) {
+            movement_sum = 0;
+            servos_movedBlinkLed = true;
+            devicesTriggerEvent(EVENT_SERVO_ACTIVITY);
+        }
+        #endif
+
         write(ch, us);
     } /* for each servo */
 }
