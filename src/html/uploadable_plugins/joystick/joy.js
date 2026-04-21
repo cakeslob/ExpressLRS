@@ -1,12 +1,3 @@
-// top of the file contains configurations, we can set a configuration and recompile it as a distinct plugin
-const drive_mix_mode = MIXMODE_MIXED;
-const slider_assignment = SLIDERMODE_NONE;
-const slider_bidirectional = false;
-const btnidx_weapon_stop = PAD_IDX_BTN_CIRCLE;
-const btnidx_weapon_faster = PAD_IDX_BTN_CROSS;
-const btnidx_weapon_slower = PAD_IDX_BTN_TRIANGLE;
-const weapon_chan = 2;
-
 var Joy1;
 var Joy2;
 var Slider1;
@@ -27,10 +18,29 @@ const channel = new Array(16).fill(CRSF_CHANNEL_VALUE_MID);
 const channel16 = new Uint16Array(16);
 
 function webjoy_onLoad() {
+    var joystickScale = Number(joystick_size_scale);
+    if (joystickScale > 0) {
+        var joystickDivs = [document.getElementById("joy1Div"), document.getElementById("joy2Div")];
+        for (let i = 0; i < joystickDivs.length; i++) {
+            var joystickDiv = joystickDivs[i];
+            joystickDiv.style.width = (joystickDiv.clientWidth * joystickScale / 100) + "px";
+            joystickDiv.style.height = (joystickDiv.clientHeight * joystickScale / 100) + "px";
+        }
+    }
     Joy1 = new JoyStick('joy1Div');
     Joy2 = new JoyStick('joy2Div');
     Slider1 = document.getElementById("slider_1");
     Slider2 = document.getElementById("slider_2");
+    var sliderScale = Number(slider_width_scale);
+    if (sliderScale > 0) {
+        var sliderWrappers = document.getElementsByClassName("slider-with-ticks");
+        for (let i = 0; i < sliderWrappers.length; i++) {
+            sliderWrappers[i].style.transform = "scaleX(" + (sliderScale / 100) + ")";
+            sliderWrappers[i].style.transformOrigin = "center center";
+        }
+    }
+    Slider1.onchange = webjoy_onSliderChange;
+    Slider2.onchange = webjoy_onSliderChange;
     if (slider_bidirectional) {
         setSliderVal(Slider1, 50);
         setSliderVal(Slider2, 50);
@@ -424,6 +434,28 @@ function initWakeLock() {
     requestWakeLock();
 }
 
+function webjoy_onSliderChange(event)
+{
+    if (!slider_snap) {
+        return;
+    }
+
+    var slider = event.target;
+    var value = Number(slider.value);
+    if (slider_bidirectional)
+    {
+        if (value >= 40 && value <= 60) {
+            slider.value = 50;
+        }
+    }
+    else
+    {
+        if (value < 20) {
+            slider.value = 0;
+        }
+    }
+}
+
 function changeSliderVal(slder, amount_in_percent)
 {
     var min = Number(slder.min);
@@ -504,27 +536,39 @@ function runMixer()
         }
         x = findFarthest(x);
         y = findFarthest(y);
-        channel[0] = scaleToCRSF(y, 1);
-        channel[1] = scaleToCRSF(x, 1);
-        channel[weapon_chan] = scaleToCRSF(-1, 1);
-        if (MyGamepad == null || slider_assignment == 0) {
-            channel[weapon_chan] = scaleToCRSF(mapRange(Slider1.value, 0, 100, -1, 1, true), 1);
+
+        if (throttle_chan >= 0) {
+            channel[throttle_chan] = scaleToCRSF(y, 1);
         }
-        else if (MyGamepad != null)
+        if (steering_chan >= 0) {
+            channel[steering_chan] = scaleToCRSF(x, 1);
+        }
+        if (typeof simpleTankMix === 'function' && mix_cfg != null) {
+            simpleTankMix(y, x, mix_cfg);
+        }
+
+        if (weapon_chan >= 0)
         {
-            if (slider_assignment == 1) {
-                channel[weapon_chan] = scaleToCRSF(MyGamepad.axes[PAD_IDX_STICK_LEFT_Y], 1);
+            channel[weapon_chan] = scaleToCRSF(-1, 1);
+            if (MyGamepad == null || slider_assignment == 0) {
+                channel[weapon_chan] = scaleToCRSF(mapRange(Slider1.value, 0, 100, -1, 1, true), 1);
             }
-            else if (slider_assignment == 2) {
-                channel[weapon_chan] = scaleToCRSF(MyGamepad.axes[PAD_IDX_STICK_RIGHT_Y], 1);
-            }
-            else if (slider_assignment == SLIDERMODE_TRIGGERS) {
-                var t = MyGamepad.buttons[PAD_IDX_TRIGGER_LEFT].value - MyGamepad.buttons[PAD_IDX_TRIGGER_RIGHT].value;
-                if (slider_bidirectional == false) {
-                    t = mapRange(t, 0, 1, -1, 1, true);
+            else if (MyGamepad != null)
+            {
+                if (slider_assignment == 1) {
+                    channel[weapon_chan] = scaleToCRSF(MyGamepad.axes[PAD_IDX_STICK_LEFT_Y], 1);
                 }
-                setSliderVal(Slider1, mapRange(t, -1, 1, 0, 100, true));
-                channel[weapon_chan] = scaleToCRSF(t, 1);
+                else if (slider_assignment == 2) {
+                    channel[weapon_chan] = scaleToCRSF(MyGamepad.axes[PAD_IDX_STICK_RIGHT_Y], 1);
+                }
+                else if (slider_assignment == SLIDERMODE_TRIGGERS) {
+                    var t = MyGamepad.buttons[PAD_IDX_TRIGGER_LEFT].value - MyGamepad.buttons[PAD_IDX_TRIGGER_RIGHT].value;
+                    if (slider_bidirectional == false) {
+                        t = mapRange(t, 0, 1, -1, 1, true);
+                    }
+                    setSliderVal(Slider1, mapRange(t, -1, 1, 0, 100, true));
+                    channel[weapon_chan] = scaleToCRSF(t, 1);
+                }
             }
         }
     }
@@ -534,15 +578,21 @@ function runMixer()
             return false;
         }
 
-        channel[0] = scaleToCRSF(MyGamepad.axes[PAD_IDX_STICK_LEFT_Y], 1);
-        channel[1] = scaleToCRSF(MyGamepad.axes[PAD_IDX_STICK_RIGHT_Y], 1);
+        if (throttle_chan >= 0) {
+            channel[throttle_chan] = scaleToCRSF(MyGamepad.axes[PAD_IDX_STICK_LEFT_Y], 1);
+        }
+        if (steering_chan >= 0) {
+            channel[steering_chan] = scaleToCRSF(MyGamepad.axes[PAD_IDX_STICK_RIGHT_Y], 1);
+        }
         if (slider_assignment == SLIDERMODE_TRIGGERS) {
             var t = MyGamepad.buttons[PAD_IDX_TRIGGER_LEFT].value - MyGamepad.buttons[PAD_IDX_TRIGGER_RIGHT].value;
             if (slider_bidirectional == false) {
                 t = mapRange(t, 0, 1, -1, 1, true);
             }
             setSliderVal(Slider1, mapRange(t, -1, 1, 0, 100, true));
-            channel[weapon_chan] = scaleToCRSF(t, 1);
+            if (weapon_chan >= 0) {
+                channel[weapon_chan] = scaleToCRSF(t, 1);
+            }
         }
     }
 
@@ -571,7 +621,9 @@ function runMixer()
             }
         }
 
-        channel[weapon_chan] = scaleToCRSF(v, 1);
+        if (weapon_chan >= 0) {
+            channel[weapon_chan] = scaleToCRSF(v, 1);
+        }
     }
     else if (slider_assignment == SLIDERMODE_BUTTON_LATCH)
     {
@@ -600,7 +652,9 @@ function runMixer()
         }
         let v = Slider1.value;
         v = mapRange(v, 0, 100, -1, 1);
-        channel[weapon_chan] = scaleToCRSF(v, 1);
+        if (weapon_chan >= 0) {
+            channel[weapon_chan] = scaleToCRSF(v, 1);
+        }
     }
 
     return true;

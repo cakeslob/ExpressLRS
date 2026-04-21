@@ -604,4 +604,16 @@ bool CRSFHandset::UARTwdt()
 #endif
     return retval;
 }
+
+void CRSFHandset::FakeDataReceived()
+{
+    GoodPktsCount++;
+    uint32_t nowMicros = micros();
+    uint32_t nowMillis = millis();
+    CRSFHandset::dataLastRecv = nowMicros;
+    RCdataLastRecv = nowMicros;
+    UARTwdtLastChecked = nowMillis;
+    if (RCdataCallback) RCdataCallback();
+}
+
 #endif

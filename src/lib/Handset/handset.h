@@ -126,6 +126,8 @@ public:
     void forceConnection() { if (connected) connected(); }
 #endif
 
+    virtual void FakeDataReceived() {};
+
 protected:
     virtual ~Handset() = default;
 

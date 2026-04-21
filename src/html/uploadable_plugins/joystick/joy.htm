@@ -4,13 +4,13 @@
     <title>Browser ELRS Control</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <script src="joyconsts.js"></script>
+    <script src="joy.cfg.js"></script>
     <script src="joylib.js"></script>
     <script src="joy.js"></script>
     <link href="joy.css" rel="stylesheet" type="text/css" />
 </head>
 
-<body>
+<body onload="webjoy_onLoad()">
 <div><h2>Browser ELRS Control</h2></div>
 <div id="msg_wifidisconnected" class="hidden">Wi-Fi DISCONNECTED</div>
 <div id="msg_nocontrol" class="hidden">ERROR: TRANSMITTER NOT ACTIVE</div>
@@ -26,11 +26,21 @@
     </div>
     <div class="joy-row">
         <div class="slidecontainer joy-column">
-            <input type="range" min="0" max="100" value="50" class="slider" id="slider_1">
+            <div class="slider-with-ticks">
+                <input type="range" min="0" max="100" value="50" class="slider" id="slider_1">
+                <span class="slider-tick slider-tick-25" aria-hidden="true"></span>
+                <span class="slider-tick slider-tick-50" aria-hidden="true"></span>
+                <span class="slider-tick slider-tick-75" aria-hidden="true"></span>
+            </div>
         </div>
-        <div class="slidecontainer joy-column" style="min-width:50px;">&nbsp;&nbsp;&nbsp;&nbsp;</div>
-        <div class="slidecontainer joy-column">
-            <input type="range" min="0" max="100" value="50" class="slider" id="slider_2">
+        <div class="slidecontainer joy-column hidden" style="min-width:50px;">&nbsp;&nbsp;&nbsp;&nbsp;</div>
+        <div class="slidecontainer joy-column hidden">
+            <div class="slider-with-ticks">
+                <input type="range" min="0" max="100" value="50" class="slider" id="slider_2">
+                <span class="slider-tick slider-tick-25" aria-hidden="true"></span>
+                <span class="slider-tick slider-tick-50" aria-hidden="true"></span>
+                <span class="slider-tick slider-tick-75" aria-hidden="true"></span>
+            </div>
         </div>
     </div>
 </div>

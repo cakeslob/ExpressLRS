@@ -1553,6 +1553,8 @@ static void setupConfigAndPocCheck()
     config.SetStorageProvider(&eeprom); // Pass pointer to the Config class for access to storage
     config.Load();
 
+    #ifndef DISABLE_POWER_ON_COUNT
+
     // If bound, track number of plug/unplug cycles to go to binding mode in eeprom
     if (config.GetIsBound() && config.GetPowerOnCounter() < 3)
     {
@@ -1568,6 +1570,8 @@ static void setupConfigAndPocCheck()
             config.Commit();
         }
     });
+
+    #endif
 }
 
 static void setupTarget()
@@ -1792,6 +1796,7 @@ static void updateBindingMode(unsigned long now)
     }
 #endif
 
+#ifndef DISABLE_POWER_ON_COUNT
     // If the power on counter is >=3, enter binding, the counter will be reset after 2s
     else if (!InBindingMode && config.GetPowerOnCounter() >= 3)
     {
@@ -1799,6 +1804,15 @@ static void updateBindingMode(unsigned long now)
         webserverPreventAutoStart = true;
         DBGLN("Power on counter >=3, enter binding mode");
         EnterBindingMode();
+    }
+#endif
+
+    // If the eeprom is indicating that we're not bound, and we can only use Wi-Fi to bind, then go into Wi-Fi mode
+    else if (!UID_IS_BOUND(UID) && !InBindingMode && config.GetBindStorage() == BINDSTORAGE_ADMINISTERED)
+    {
+        DBGLN("RX has not been bound, enter Wi-Fi mode");
+        setWifiUpdateMode();
+        return;
     }
 
     // If the eeprom is indicating that we're not bound, enter binding

@@ -80,4 +80,11 @@ void PPMHandset::handleInput()
     }
 }
 
+void PPMHandset::FakeDataReceived()
+{
+    uint32_t now = millis();
+    lastPPM = now;
+    if (RCdataCallback) RCdataCallback();
+}
+
 #endif

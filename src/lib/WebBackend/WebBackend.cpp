@@ -1,10 +1,15 @@
 #include "WebBackend.h"
 
 #include "common.h"
+#if defined(TARGET_RX)
 #include "CustomMixer.h"
 #include "devServoOutput.h"
 #include "../../src/rx-serial/devSerialIO.h"
 #include "AM32.h"
+#endif
+#if defined(TARGET_TX)
+#include "handset.h"
+#endif
 
 static AsyncWebSocket* ws;
 static bool ws_started = false;
@@ -17,6 +22,7 @@ static constexpr size_t WS_CHANNEL_PACKET_LEN = CRSF_NUM_CHANNELS * 2U;
 static uint8_t wsChannelPacket[WS_CHANNEL_PACKET_LEN];
 static size_t wsChannelPacketLen = 0;
 static bool wsChannelPacketActive = false;
+static uint32_t wsLastPacketTime = 0;
 
 static inline void resetWsChannelPacket()
 {
@@ -56,6 +62,13 @@ void onWsEvent(AsyncWebSocket *server,
     }
     else if (type == WS_EVT_DATA)
     {
+        uint32_t now = millis();
+
+        // if we stop mid-stream for a long time, reset the state machine
+        if ((now - wsLastPacketTime) >= 500 && wsLastPacketTime != 0) {
+            resetWsChannelPacket();
+        }
+
         for (size_t i = 0; i < len; ++i) // for every byte in this current payload
         {
             const uint8_t ch = data[i];
@@ -81,10 +94,16 @@ void onWsEvent(AsyncWebSocket *server,
                 // is end of packet, validated (and copied)
                 if (ch == WS_CHANNEL_PACKET_FOOTER && parseWsChannelPacket())
                 {
+                    wsLastPacketTime = now;
+                    #if defined(TARGET_RX)
                     custommixer_mix();
                     // signal to other services
                     servoNewChannelsAvailable();
                     crsfRCFrameAvailable();
+                    #endif
+                    #if defined(TARGET_TX)
+                    handset->FakeDataReceived();
+                    #endif
                     // reply back to front-end with an ack
                     client->text(&WS_ACK, 1U);
                 }
@@ -106,7 +125,9 @@ void onWsEvent(AsyncWebSocket *server,
         (void)server;
         (void)client;
         resetWsChannelPacket();
+        #if defined(TARGET_RX)
         servosFailsafe();
+        #endif
     }
     else if (type == WS_EVT_ERROR)
     {
@@ -126,7 +147,7 @@ void webbe_tick()
     uint32_t now = millis();
     (void)now;
 
-    #ifdef PLATFORM_ESP32
+    #if defined(TARGET_RX) && defined(PLATFORM_ESP32)
     am32_tick();
     #endif
 
@@ -135,6 +156,13 @@ void webbe_tick()
         // no need to call handleSerialIO() as it is called in the main application loop
         // the serial IO device scheduler is still running, and will handle the new data if crsfRCFrameAvailable is called
     }
+
+    #if defined(TARGET_RX)
+    if ((now - wsLastPacketTime) >= 500 && wsLastPacketTime != 0) {
+        // I understand this might be redundant as servosUpdate itself has an internal timeout
+        servosFailsafe();
+    }
+    #endif
 }
 
 void webbe_install(AsyncWebServer* srv)
@@ -144,7 +172,7 @@ void webbe_install(AsyncWebServer* srv)
         return;
     }
 
-    #ifdef PLATFORM_ESP32
+    #if defined(TARGET_RX) && defined(PLATFORM_ESP32)
     am32_setupServer(srv);
     #endif
 

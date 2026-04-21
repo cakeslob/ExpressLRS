@@ -105,11 +105,11 @@ class InfoPanel extends LitElement {
             try {
                 globalThis.elrs_web_plugin_init = undefined
                 globalThis.eval(event.target?.result?.toString() ?? '')
-                if (typeof globalThis.elrs_web_plugin_init !== 'function') {
+                if (typeof globalThis.elrs_plugin_init !== 'function') {
                     await cuteAlert({
                         type: 'error',
                         title: 'Plugin Load Failed',
-                        message: 'The plugin did not define <code>elrs_web_plugin_init()</code>.'
+                        message: 'The plugin did not define <code>elrs_plugin_init()</code>.'
                     })
                     return
                 }
