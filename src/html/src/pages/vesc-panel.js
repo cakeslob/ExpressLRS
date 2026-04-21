@@ -250,7 +250,7 @@ class VescPanel extends LitElement {
     }
 
     _isFeatureAvailable() {
-        const extraFeatureFlags = Number(elrsState.config["extra-features-avail"]) || 0
+        const extraFeatureFlags = Number(elrsState.settings["extra-features-avail"]) || 0
         return (extraFeatureFlags & (1 << EXTRA_FEATURE_VESC_BIT)) !== 0
     }
 

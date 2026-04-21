@@ -293,25 +293,6 @@ static void GetConfiguration(AsyncWebServerRequest *request)
   const auto uid = cfg["uid"].to<JsonArray>();
   copyArray(UID, UID_LEN, uid);
 
-  // let the front-end know what extra compiled features are available
-  uint32_t extra_feature_flags = 0;
-  #if defined(BUILD_EEPROM_EXPORT_IMPORT)
-  extra_feature_flags |= 1 << 0;
-  #endif
-  #if defined(BUILD_CUSTOM_MIXER)
-  extra_feature_flags |= 1 << 1;
-  #endif
-  #if defined(BUILD_WEB_BACKEND_WEBSOCKET)
-  extra_feature_flags |= 1 << 2;
-  #endif
-  #if defined(BUILD_VESC_UART)
-  extra_feature_flags |= 1 << 3;
-  #endif
-  #if defined(BUILD_AM32_CONFIG)
-  extra_feature_flags |= 1 << 4;
-  #endif
-  cfg["extra-features-avail"] = extra_feature_flags;
-
 #if defined(TARGET_TX)
   int button_count = 0;
   if (GPIO_PIN_BUTTON != UNDEF_PIN)
@@ -460,6 +441,26 @@ static void GetConfiguration(AsyncWebServerRequest *request)
     settings["reg_domain_low"] = FHSSconfig->domain;
     settings["reg_domain_high"] = FHSSconfigDualBand->domain;
 #endif
+
+    // Let the front-end know what extra compiled features are available.
+    uint32_t extra_feature_flags = 0;
+    #if defined(BUILD_EEPROM_EXPORT_IMPORT)
+    extra_feature_flags |= 1 << 0;
+    #endif
+    #if defined(BUILD_CUSTOM_MIXER)
+    extra_feature_flags |= 1 << 1;
+    #endif
+    #if defined(BUILD_WEB_BACKEND_WEBSOCKET)
+    extra_feature_flags |= 1 << 2;
+    #endif
+    #if defined(BUILD_VESC_UART)
+    extra_feature_flags |= 1 << 3;
+    #endif
+    #if defined(BUILD_AM32_CONFIG)
+    extra_feature_flags |= 1 << 4;
+    #endif
+    settings["extra-features-avail"] = extra_feature_flags;
+
   }
 
   response->setLength();

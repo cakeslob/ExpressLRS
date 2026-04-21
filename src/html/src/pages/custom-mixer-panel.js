@@ -116,7 +116,7 @@ class CustomMixerPanel extends LitElement {
     }
 
     isFeatureAvailable() {
-        const extraFeatureFlags = Number(elrsState.config["extra-features-avail"]) || 0;
+        const extraFeatureFlags = Number(elrsState.settings["extra-features-avail"]) || 0;
         return (extraFeatureFlags & (1 << EXTRA_FEATURE_CUSTOM_MIXER_BIT)) !== 0;
     }
 

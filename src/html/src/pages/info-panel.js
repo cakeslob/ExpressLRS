@@ -103,7 +103,7 @@ class InfoPanel extends LitElement {
         const reader = new FileReader()
         reader.onload = async (event) => {
             try {
-                globalThis.elrs_web_plugin_init = undefined
+                globalThis.elrs_plugin_init = undefined
                 globalThis.eval(event.target?.result?.toString() ?? '')
                 if (typeof globalThis.elrs_plugin_init !== 'function') {
                     await cuteAlert({
@@ -114,7 +114,12 @@ class InfoPanel extends LitElement {
                     return
                 }
 
-                await globalThis.elrs_web_plugin_init()
+                const pluginContext = {
+                    config:   {...elrsState.config},
+                    options:  {...elrsState.options},
+                    settings: {...elrsState.settings}
+                }
+                await globalThis.elrs_plugin_init(pluginContext)
                 await cuteAlert({
                     type: 'success',
                     title: 'Plugin Loaded',

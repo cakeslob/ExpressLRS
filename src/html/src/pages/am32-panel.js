@@ -219,7 +219,7 @@ export class Am32Panel extends LitElement {
     }
 
     _isFeatureAvailable() {
-        const extraFeatureFlags = Number(elrsState.config['extra-features-avail']) || 0
+        const extraFeatureFlags = Number(elrsState.settings['extra-features-avail']) || 0
         return (extraFeatureFlags & (1 << EXTRA_FEATURE_AM32_BIT)) !== 0
     }
 }
