@@ -1,0 +1,157 @@
+#include "WebBackend.h"
+
+#include "common.h"
+#include "CustomMixer.h"
+#include "devServoOutput.h"
+#include "../../src/rx-serial/devSerialIO.h"
+#include "AM32.h"
+
+static AsyncWebSocket* ws;
+static bool ws_started = false;
+static bool webbe_installed = false;
+
+static constexpr uint8_t WS_CHANNEL_PACKET_HEADER = '>';
+static constexpr uint8_t WS_CHANNEL_PACKET_FOOTER = '#';
+static constexpr uint8_t WS_ACK = '!';
+static constexpr size_t WS_CHANNEL_PACKET_LEN = CRSF_NUM_CHANNELS * 2U;
+static uint8_t wsChannelPacket[WS_CHANNEL_PACKET_LEN];
+static size_t wsChannelPacketLen = 0;
+static bool wsChannelPacketActive = false;
+
+static inline void resetWsChannelPacket()
+{
+    wsChannelPacketLen = 0;
+    wsChannelPacketActive = false;
+}
+
+static bool parseWsChannelPacket()
+{
+    size_t idx = 0;
+    for (uint8_t ch = 0; ch < CRSF_NUM_CHANNELS; ++ch)
+    {
+        if (idx + 2U > wsChannelPacketLen)
+        {
+            return false;
+        }
+
+        ChannelData[ch] = ((uint16_t)wsChannelPacket[idx] << 8) | wsChannelPacket[idx + 1U]; // javavascript sends big-endian
+        idx += 2U;
+    }
+
+    return idx == wsChannelPacketLen;
+}
+
+void onWsEvent(AsyncWebSocket *server,
+               AsyncWebSocketClient *client,
+               AwsEventType type,
+               void *arg,
+               uint8_t *data,
+               size_t len)
+{
+    // assume single client!
+
+    if (type == WS_EVT_CONNECT)
+    {
+        resetWsChannelPacket();
+        ws_started = true;
+    }
+    else if (type == WS_EVT_DATA)
+    {
+        for (size_t i = 0; i < len; ++i) // for every byte in this current payload
+        {
+            const uint8_t ch = data[i];
+
+            // state machine is waiting for header
+            if (!wsChannelPacketActive && ch == WS_CHANNEL_PACKET_HEADER)
+            {
+                wsChannelPacketLen = 0;
+                wsChannelPacketActive = true;
+                // go to next state, check next byte
+                continue;
+            }
+
+            if (!wsChannelPacketActive)
+            {
+                // do not populate temporary buffer
+                continue;
+            }
+
+            // end of packet expected
+            if (wsChannelPacketLen == WS_CHANNEL_PACKET_LEN)
+            {
+                // is end of packet, validated (and copied)
+                if (ch == WS_CHANNEL_PACKET_FOOTER && parseWsChannelPacket())
+                {
+                    custommixer_mix();
+                    // signal to other services
+                    servoNewChannelsAvailable();
+                    crsfRCFrameAvailable();
+                    // reply back to front-end with an ack
+                    client->text(&WS_ACK, 1U);
+                }
+                resetWsChannelPacket(); // restart state machine
+                continue;
+            }
+
+            if (wsChannelPacketLen >= WS_CHANNEL_PACKET_LEN) // error, stream did not have a terminator
+            {
+                resetWsChannelPacket(); // restart state machine
+                continue;
+            }
+
+            wsChannelPacket[wsChannelPacketLen++] = ch;
+        }
+    }
+    else if (type == WS_EVT_DISCONNECT)
+    {
+        (void)server;
+        (void)client;
+        resetWsChannelPacket();
+        servosFailsafe();
+    }
+    else if (type == WS_EVT_ERROR)
+    {
+        // WebSocket error event.
+    }
+    else if (type == WS_EVT_PONG)
+    {
+        // WebSocket pong frame received from the client.
+    }
+}
+
+void webbe_tick()
+{
+    // this function only runs if wifiStarted is true
+    // it will repeat as fast ad the device schedule engine allows
+
+    uint32_t now = millis();
+    (void)now;
+
+    #ifdef PLATFORM_ESP32
+    am32_tick();
+    #endif
+
+    if (ws_started) {
+        servosUpdate(now); // transitioning to Wi-Fi mode would have disabled the servos device scheduler, so we call the update function here
+        // no need to call handleSerialIO() as it is called in the main application loop
+        // the serial IO device scheduler is still running, and will handle the new data if crsfRCFrameAvailable is called
+    }
+}
+
+void webbe_install(AsyncWebServer* srv)
+{
+    if (webbe_installed) {
+        // do not repeat
+        return;
+    }
+
+    #ifdef PLATFORM_ESP32
+    am32_setupServer(srv);
+    #endif
+
+    ws = new AsyncWebSocket("/ws");
+    ws->onEvent(onWsEvent);
+    srv->addHandler(ws);
+
+    webbe_installed = true;
+}

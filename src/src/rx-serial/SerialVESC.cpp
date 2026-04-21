@@ -57,8 +57,6 @@ uint32_t SerialVESC::sendRCFrame(bool frameAvailable, bool frameMissed, uint32_t
         return DURATION_IMMEDIATELY;
     }
 
-    custommixer_mix();
-
     for (int i = 0; i < 3; i++)
     {
         const vesc_cfg_t* pcfg = &(this->cfg[i]);

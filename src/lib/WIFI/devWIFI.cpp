@@ -14,7 +14,6 @@
 #include <esp_partition.h>
 #include <esp_ota_ops.h>
 #include <soc/uart_pins.h>
-#include "AM32.h"
 #else
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
@@ -43,6 +42,7 @@
 #include "WebContent.h"
 
 #include "config.h"
+#include "WebBackend.h"
 #include "CustomMixer.h"
 
 #if defined(RADIO_LR1121)
@@ -1269,9 +1269,7 @@ static void startServices()
 
   addCaptivePortalHandlers();
 
-  #ifdef BUILD_AM32CONFIG
-  am32_setupServer(&server);
-  #endif
+  webbe_install(&server);
 
   server.onNotFound(WebUpdateHandleNotFound);
 
@@ -1443,13 +1441,10 @@ static int event()
 
 static int timeout()
 {
-  #ifdef BUILD_AM32CONFIG
-  am32_tick();
-  #endif
-
   if (wifiStarted)
   {
     HandleWebUpdate();
+    webbe_tick();
 #if defined(PLATFORM_ESP8266)
     // When in STA mode, a small delay reduces power use from 90mA to 30mA when idle
     // In AP mode, it doesn't seem to make a measurable difference, but does not hurt
@@ -1458,9 +1453,7 @@ static int timeout()
       delay(1);
     return DURATION_IMMEDIATELY;
 #else
-    // All the web traffic is async apart from changing modes and MSP2WIFI
-    // No need to run balls-to-the-wall; the wifi runs on this core too (0)
-    return 2;
+    return DURATION_IMMEDIATELY;
 #endif
   }
 

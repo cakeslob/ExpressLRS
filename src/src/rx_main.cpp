@@ -113,6 +113,7 @@ bool crsfBaroSensorDetected = false;
 
 unsigned long rebootTime = 0;
 extern bool webserverPreventAutoStart;
+extern void custommixer_mix();
 bool pwmSerialDefined = false;
 uint32_t serialBaud;
 
@@ -900,6 +901,7 @@ static void ICACHE_RAM_ATTR ProcessRfPacket_RC(OTA_Packet_s const * const otaPkt
         return;
 
     bool telemetryConfirmValue = OtaUnpackChannelData(otaPktPtr, ChannelData);
+    custommixer_mix();
     DataDlSender.ConfirmCurrentPayload(telemetryConfirmValue);
 
     // No channels packets to the FC or PWM pins if no model match

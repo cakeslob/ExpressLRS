@@ -124,7 +124,7 @@ static void servoWrite(uint8_t ch, uint16_t us)
     }
 }
 
-static void servosFailsafe()
+void servosFailsafe()
 {
     #ifdef BUILD_SHREW_HBRIDGE
     hbridge_failsafe();
@@ -198,7 +198,7 @@ void servoCurrentToFailsafeConfig()
     servoCalcAllChannels(&servoUsToFailsafeConfig);
 }
 
-static void servosUpdate(unsigned long now)
+void servosUpdate(unsigned long now)
 {
     static uint32_t lastUpdate;
 
@@ -212,7 +212,6 @@ static void servosUpdate(unsigned long now)
         newChannelsAvailable = false;
         lastUpdate = now;
 
-        custommixer_mix();
         #ifdef BUILD_SHREW_HBRIDGE
         hbridge_update(now);
         #endif
@@ -235,7 +234,7 @@ static void servosUpdate(unsigned long now)
     }
 }
 
-static bool initialize()
+void servo_initializeAll()
 {
     custommixer_init(config.GetCustomMixer());
     #ifdef BUILD_SHREW_HBRIDGE
@@ -244,7 +243,7 @@ static bool initialize()
 
     if (!OPT_HAS_SERVO_OUTPUT)
     {
-        return false;
+        return;
     }
 
 #if defined(PLATFORM_ESP32)
@@ -301,6 +300,50 @@ static bool initialize()
             digitalWrite(pin, LOW);
         }
     }
+}
+
+void servo_initializeEnable()
+{
+    for (int ch = 0; ch < GPIO_PIN_PWM_OUTPUTS_COUNT; ++ch)
+    {
+        const rx_config_pwm_t *chConfig = config.GetPwmChannel(ch);
+        const auto frequency = servoOutputModeToFrequency((eServoOutputMode)chConfig->val.mode);
+        if (frequency && servoPins[ch] != UNDEF_PIN)
+        {
+            pwmChannels[ch] = PWM.allocate(servoPins[ch], frequency);
+        }
+#if defined(PLATFORM_ESP32)
+        else if ((eServoOutputMode)chConfig->val.mode == somDShot || (eServoOutputMode)chConfig->val.mode == somDShot3D)
+        {
+            dshotInstances[ch]->begin(DSHOT300, false); // Set DShot protocol and bidirectional dshot bool
+        }
+#endif
+    }
+}
+
+void servo_shutdown()
+{
+    for (int ch = 0; ch < GPIO_PIN_PWM_OUTPUTS_COUNT; ++ch)
+    {
+        if (pwmChannels[ch] != -1)
+        {
+            PWM.release(pwmChannels[ch]);
+            pwmChannels[ch] = -1;
+        }
+#if defined(PLATFORM_ESP32)
+        if (dshotInstances[ch] != nullptr)
+        {
+            delete dshotInstances[ch];
+            dshotInstances[ch] = nullptr;
+        }
+#endif
+        servoPins[ch] = UNDEF_PIN;
+    }
+}
+
+static bool initialize()
+{
+    servo_initializeAll();
     return true;
 }
 
@@ -314,42 +357,14 @@ static int event()
     }
     if (connectionState == wifiUpdate)
     {
-        for (int ch = 0; ch < GPIO_PIN_PWM_OUTPUTS_COUNT; ++ch)
-        {
-            if (pwmChannels[ch] != -1)
-            {
-                PWM.release(pwmChannels[ch]);
-                pwmChannels[ch] = -1;
-            }
-#if defined(PLATFORM_ESP32)
-            if (dshotInstances[ch] != nullptr)
-            {
-                delete dshotInstances[ch];
-                dshotInstances[ch] = nullptr;
-            }
-#endif
-            servoPins[ch] = UNDEF_PIN;
-        }
+        //servo_shutdown();
+        servosFailsafe();
         return DURATION_NEVER;
     }
     if (!initialized && connectionState == connected)
     {
         initialized = true;
-        for (int ch = 0; ch < GPIO_PIN_PWM_OUTPUTS_COUNT; ++ch)
-        {
-            const rx_config_pwm_t *chConfig = config.GetPwmChannel(ch);
-            const auto frequency = servoOutputModeToFrequency((eServoOutputMode)chConfig->val.mode);
-            if (frequency && servoPins[ch] != UNDEF_PIN)
-            {
-                pwmChannels[ch] = PWM.allocate(servoPins[ch], frequency);
-            }
-#if defined(PLATFORM_ESP32)
-            else if ((eServoOutputMode)chConfig->val.mode == somDShot || (eServoOutputMode)chConfig->val.mode == somDShot3D)
-            {
-                dshotInstances[ch]->begin(DSHOT300, false); // Set DShot protocol and bidirectional dshot bool
-            }
-#endif
-        }
+        servo_initializeEnable();
     }
     return DURATION_IMMEDIATELY;
 }
