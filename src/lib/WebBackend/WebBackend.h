@@ -5,5 +5,8 @@
 
 #include <ESPAsyncWebServer.h>
 
+extern bool webbe_installed;
+extern bool webbe_ws_started;
+
 void webbe_tick();
 void webbe_install(AsyncWebServer* srv);

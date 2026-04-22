@@ -9,12 +9,12 @@
 #include "rxtx_intf.h"
 #include "CustomMixer.h"
 #include "ShrewHBridge.h"
+#include "WebBackend.h"
 
 static int8_t servoPins[PWM_MAX_CHANNELS];
 static pwm_channel_t pwmChannels[PWM_MAX_CHANNELS];
 static uint16_t pwmChannelValues[PWM_MAX_CHANNELS];
 static bool initialized = false;
-extern bool webbe_installed;
 
 #if defined(PLATFORM_ESP32)
 static DShotRMT *dshotInstances[PWM_MAX_CHANNELS] = {nullptr};
@@ -130,7 +130,7 @@ static void servoWrite(uint8_t ch, uint16_t us)
     }
 }
 
-void servosFailsafe()
+void servosFailsafe(bool no_pulse)
 {
     if (!initialized) {
         // we might be running the servos from another place in the code
@@ -145,14 +145,14 @@ void servosFailsafe()
     for (int ch = 0 ; ch < GPIO_PIN_PWM_OUTPUTS_COUNT ; ++ch)
     {
         const rx_config_pwm_t *chConfig = config.GetPwmChannel(ch);
-        if (chConfig->val.failsafeMode == PWMFAILSAFE_SET_POSITION) {
+        if (chConfig->val.failsafeMode == PWMFAILSAFE_SET_POSITION && !no_pulse) {
             // Note: Failsafe values do not respect the inverted flag, failsafe values are absolute
             uint16_t us = chConfig->val.failsafe + CHANNEL_VALUE_FS_US_MIN;
             // Always write the failsafe position even if the servo has never been started,
             // so all the servos go to their expected position
             servoWrite(ch, us);
         }
-        else if (chConfig->val.failsafeMode == PWMFAILSAFE_NO_PULSES) {
+        else if (chConfig->val.failsafeMode == PWMFAILSAFE_NO_PULSES || no_pulse) {
             servoWrite(ch, 0);
         }
         else if (chConfig->val.failsafeMode == PWMFAILSAFE_LAST_POSITION) {
@@ -256,7 +256,7 @@ void servosUpdate(unsigned long now)
             servoCalcAllChannels(&servoWrite);
         }
         else {
-            servosFailsafe();
+            servosFailsafe(false);
         }
     }     /* if newChannelsAvailable */
 
@@ -265,7 +265,7 @@ void servosUpdate(unsigned long now)
     // go to failsafe
     else if (lastUpdate && ((getLq() == 0 && webbe_installed == false) || (now - lastUpdate > FAILSAFE_ABS_TIMEOUT_MS)))
     {
-        servosFailsafe();
+        servosFailsafe(connectionState == wifiUpdate && !webbe_ws_started);
         lastUpdate = 0;
     }
 }
@@ -394,9 +394,7 @@ static int event()
     if (connectionState == wifiUpdate)
     {
         //servo_shutdown();
-        if (!webbe_installed) {
-            servosFailsafe();
-        }
+        servosFailsafe(!webbe_installed || !webbe_ws_started);
         return DURATION_NEVER;
     }
     if (!initialized && connectionState == connected)

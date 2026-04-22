@@ -12,10 +12,10 @@
 #endif
 
 bool webbe_installed = false;
+bool webbe_ws_started = false;
 
 #ifdef BUILD_WEB_BACKEND_WEBSOCKET
 static AsyncWebSocket* ws;
-static bool ws_started = false;
 
 static constexpr uint8_t WS_CHANNEL_PACKET_HEADER = '>';
 static constexpr uint8_t WS_CHANNEL_PACKET_FOOTER = '#';
@@ -63,7 +63,7 @@ void onWsEvent(AsyncWebSocket *server,
     if (type == WS_EVT_CONNECT)
     {
         resetWsChannelPacket();
-        ws_started = true;
+        webbe_ws_started = true;
         if (client != nullptr)
         {
             client->setCloseClientOnQueueFull(false);
@@ -141,7 +141,7 @@ void onWsEvent(AsyncWebSocket *server,
             wsPendingAck = false;
         }
         #if defined(TARGET_RX)
-        servosFailsafe();
+        servosFailsafe(true);
         #endif
     }
     else if (type == WS_EVT_ERROR)
@@ -181,7 +181,7 @@ void webbe_tick()
         }
     }
 
-    if (ws_started) {
+    if (webbe_ws_started) {
         servosUpdate(now); // transitioning to Wi-Fi mode would have disabled the servos device scheduler, so we call the update function here
         // no need to call handleSerialIO() as it is called in the main application loop
         // the serial IO device scheduler is still running, and will handle the new data if crsfRCFrameAvailable is called
@@ -189,7 +189,7 @@ void webbe_tick()
     
     if ((now - wsLastPacketTime) >= 2000 && wsLastPacketTime != 0) {
         // I understand this might be redundant as servosUpdate itself has an internal timeout
-        servosFailsafe();
+        servosFailsafe(!webbe_ws_started);
     }
     #endif
 }
@@ -210,7 +210,7 @@ void webbe_install(AsyncWebServer* srv)
     ws->onEvent(onWsEvent);
     srv->addHandler(ws);
     #if defined(TARGET_RX)
-    servosFailsafe();
+    servosFailsafe(true); // this line may be redundant as the servos device scheduler's event handler would've done it too
     #endif
     #endif
 

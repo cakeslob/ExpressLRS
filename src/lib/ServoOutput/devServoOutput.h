@@ -14,7 +14,7 @@ extern bool servos_movedBlinkLed;
 // Notify this unit that new channel data has arrived
 void servoNewChannelsAvailable();
 void servosUpdate(unsigned long now);
-void servosFailsafe();
+void servosFailsafe(bool no_pulse);
 // Copy the current output values to the config's failsafe values
 void servoCurrentToFailsafeConfig();
 
