@@ -44,6 +44,7 @@ globalThis.SLIDERMODE_BUTTON_LATCH = 5;
 
 globalThis.drive_mix_mode = MIXMODE_MIXED;
 // assign channels, if using mixing, left+right channels may be configured with mix_cfg
+// these numbers are zero-indexed, so a setting number 0 is physical channel 1
 globalThis.throttle_chan = -1;
 globalThis.steering_chan = -1;
 globalThis.weapon_chan   = -1;

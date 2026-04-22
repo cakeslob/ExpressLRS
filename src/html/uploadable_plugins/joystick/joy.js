@@ -157,6 +157,10 @@ function webjoy_task()
                 });
                 dataview.setUint8((channel.length * 2) + 1, '#'.charCodeAt(0));
                 ws.send(buffer);
+                // Successful outbound traffic also counts as socket activity.
+                // The firmware may throttle replies, but control is still live
+                // if packets continue to leave the browser cleanly.
+                ws_timestamp = currentTime;
             }
         }
     }
@@ -283,7 +287,7 @@ function ws_checkConnection() {
     }
     else {
         if (timedout) {
-            console.log('WebSocket no response');
+            console.log('WebSocket no traffic');
             // WARNING: the code below is commented out because it's super annoying and I don't see a benefit
 
             //console.log('WebSocket no response, closing');
@@ -522,10 +526,10 @@ function runMixer()
         x.push(Joy1.GetX());
         x.push(Joy2.GetX());
         if (MyGamepad != null) {
-            if (slider_assignment != 1) {
+            if (slider_assignment != SLIDERMODE_LEFT_STICK) {
                 x.push(MyGamepad.axes[PAD_IDX_STICK_LEFT_X]);
             }
-            if (slider_assignment != 2) {
+            if (slider_assignment != SLIDERMODE_RIGHT_STICK) {
                 x.push(MyGamepad.axes[PAD_IDX_STICK_RIGHT_X]);
             }
         }
@@ -533,13 +537,13 @@ function runMixer()
         y.push(Joy1.GetY());
         y.push(Joy2.GetY());
         if (MyGamepad != null) {
-            if (slider_assignment != 1) {
+            if (slider_assignment != SLIDERMODE_LEFT_STICK) {
                 y.push(MyGamepad.axes[PAD_IDX_STICK_LEFT_Y]);
             }
-            if (slider_assignment != 2) {
+            if (slider_assignment != SLIDERMODE_RIGHT_STICK) {
                 y.push(MyGamepad.axes[PAD_IDX_STICK_RIGHT_Y]);
             }
-            if (slider_assignment != 3) {
+            if (slider_assignment != SLIDERMODE_TRIGGERS) {
                 y.push(MyGamepad.buttons[PAD_IDX_TRIGGER_LEFT].value - MyGamepad.buttons[PAD_IDX_TRIGGER_RIGHT].value);
             }
         }
@@ -559,15 +563,15 @@ function runMixer()
         if (weapon_chan >= 0)
         {
             channel[weapon_chan] = scaleToCRSF(-1, 1);
-            if (MyGamepad == null || slider_assignment == 0) {
+            if (MyGamepad == null || slider_assignment == SLIDERMODE_NONE) {
                 channel[weapon_chan] = scaleToCRSF(mapRange(Slider1.value, 0, 100, -1, 1, true), 1);
             }
             else if (MyGamepad != null)
             {
-                if (slider_assignment == 1) {
+                if (slider_assignment == SLIDERMODE_LEFT_STICK) {
                     channel[weapon_chan] = scaleToCRSF(MyGamepad.axes[PAD_IDX_STICK_LEFT_Y], 1);
                 }
-                else if (slider_assignment == 2) {
+                else if (slider_assignment == SLIDERMODE_RIGHT_STICK) {
                     channel[weapon_chan] = scaleToCRSF(MyGamepad.axes[PAD_IDX_STICK_RIGHT_Y], 1);
                 }
                 else if (slider_assignment == SLIDERMODE_TRIGGERS) {
