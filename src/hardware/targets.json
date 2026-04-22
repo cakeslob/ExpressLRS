@@ -63,6 +63,21 @@
                 "firmware": "Unified_ESP32_2400_RX",
                 "prior_target_name": "Unified_ESP32_2400_RX"
             },
+            "shrewforer4": {
+                "product_name": "Shrew for ER4",
+                "lua_name": "Shrew-for-ER4",
+                "layout_file": "Generic 2400 PWMP5.json",
+                "overlay": {
+                    "radio_dcdc": true,
+                    "pwm_outputs": [0,1,3,9],
+                    "vbat_offset": -10,
+                    "vbat_scale": 292
+                },
+                "upload_methods": ["uart", "wifi"],
+                "min_version": "3.5.0",
+                "platform": "esp8285",
+                "firmware": "Unified_ShrewForER4_2400_RX"
+            },
             "shrewforer4vesc": {
                 "product_name": "Shrew for ER4 VESC",
                 "lua_name": "Shrew-for-ER4-VESC",
