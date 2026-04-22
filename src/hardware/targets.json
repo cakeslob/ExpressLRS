@@ -86,6 +86,21 @@
                 "min_version": "3.5.0",
                 "platform": "esp8285",
                 "firmware": "Unified_ShrewForER4VESC_2400_RX"
+            },
+            "shrewforer4dbg": {
+                "product_name": "Shrew for ER4 DBG",
+                "lua_name": "Shrew-for-ER4-DBG",
+                "layout_file": "Generic 2400.json",
+                "overlay": {
+                    "radio_dcdc": true,
+                    "pwm_outputs": [0,9],
+                    "vbat_offset": -10,
+                    "vbat_scale": 292
+                },
+                "upload_methods": ["uart", "wifi"],
+                "min_version": "3.5.0",
+                "platform": "esp8285",
+                "firmware": "Unified_ShrewForER4DBG_2400_RX"
             }
         },
         "tx_2400": {
