@@ -39,10 +39,9 @@ static bool parseWsChannelPacket()
         return false;
     }
 
-    const uint16_t *packet = (const uint16_t *)wsChannelPacket;
     for (uint8_t ch = 0; ch < CRSF_NUM_CHANNELS; ++ch)
     {
-        ChannelData[ch] = (uint16_t)packet[ch * 2] | ((uint16_t)packet[(ch * 2) + 1] << 8);
+        ChannelData[ch] = (uint16_t)wsChannelPacket[ch * 2] | ((uint16_t)wsChannelPacket[(ch * 2) + 1] << 8);
     }
 
     return true;

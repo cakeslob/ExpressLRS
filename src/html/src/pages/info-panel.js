@@ -120,12 +120,13 @@ class InfoPanel extends LitElement {
                     settings: {...elrsState.settings}
                 }
                 await globalThis.elrs_plugin_init(pluginContext)
-                await cuteAlert({
-                    type: 'success',
-                    title: 'Plugin Loaded',
-                    message: 'The plugin was loaded successfully.'
-                })
+                //await cuteAlert({
+                //    type: 'success',
+                //    title: 'Plugin Loaded',
+                //    message: 'The plugin was loaded successfully.'
+                //})
             } catch (err) {
+                console.log(err);
                 await cuteAlert({
                     type: 'error',
                     title: 'Plugin Load Failed',

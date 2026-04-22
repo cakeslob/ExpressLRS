@@ -14,8 +14,8 @@ const CRSF_CHANNEL_VALUE_MID  = 992;
 const CRSF_CHANNEL_VALUE_2000 = 1792;
 const CRSF_CHANNEL_VALUE_MAX  = 1811;
 
-const channel = new Array(16).fill(CRSF_CHANNEL_VALUE_MID);
-const channel16 = new Uint16Array(16);
+globalThis.channel = new Array(16).fill(CRSF_CHANNEL_VALUE_MID);
+globalThis.channel16 = new Uint16Array(16);
 
 function webjoy_onLoad() {
     var joystickScale = Number(joystick_size_scale);
@@ -50,7 +50,13 @@ function webjoy_onLoad() {
         setSliderVal(Slider2, 0);
     }
     document.getElementById('joystick_area').classList.add("hidden");
-    initWakeLock();
+    try {
+        initWakeLock();
+    }
+    catch (e) {
+        console.log("err initWakeLock");
+        console.log(e);
+    }
     setupGamepadEvents();
     setupVisibilitySafety();
     websock_init();
