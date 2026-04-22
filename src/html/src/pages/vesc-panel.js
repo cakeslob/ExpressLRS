@@ -145,9 +145,13 @@ function getStoredConfig() {
 class VescPanel extends LitElement {
     @state() accessor rows = []
 
-    createRenderRoot() {
+    constructor() {
+        super()
         this.rows = getStoredConfig().map((item) => decodeRow(item))
         this._save = this._save.bind(this)
+    }
+
+    createRenderRoot() {
         return this
     }
 
