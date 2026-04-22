@@ -277,16 +277,19 @@ function ws_checkConnection() {
         return false;
     }
     var currentTime = Date.now();
-    var timedout = ((currentTime - ws_timestamp) >= 1000);
+    var timedout = ((currentTime - ws_timestamp) >= 5000);
     if (ws.readyState !== WebSocket.OPEN) {
         return false;
     }
     else {
         if (timedout) {
-            console.log('WebSocket no response, closing');
-            ws.close();
-            ws_primeReconnect();
-            return false;
+            console.log('WebSocket no response');
+            // WARNING: the code below is commented out because it's super annoying and I don't see a benefit
+
+            //console.log('WebSocket no response, closing');
+            //ws.close();
+            //ws_primeReconnect();
+            //return false;
         }
     }
     return ws.readyState === WebSocket.OPEN;

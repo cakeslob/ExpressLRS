@@ -17,6 +17,8 @@ static int32_t apply_scale(int32_t x, int8_t scale);
 static int32_t apply_kickstart(int32_t x, uint8_t ks);
 static int32_t apply_offset(int32_t x, int8_t offset);
 
+extern bool webbe_installed;
+
 void custommixer_init(const custom_mixer_t* cfg_ptr)
 {
     custom_mixer = (custom_mixer_t*)cfg_ptr;
@@ -37,6 +39,10 @@ void custommixer_mix()
 bool custommixer_isArmed()
 {
     #ifdef BUILD_CUSTOM_MIXER
+    if (webbe_installed) {
+        // allow the servos to run if using the websocket
+        return true;
+    }
     return armed_switch_armed;
     #else
     return true;

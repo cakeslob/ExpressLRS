@@ -5,8 +5,8 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 
-#if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266) || defined(TARGET_TX)
-#define TRIM_UNNECESSARY_HW
+#if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP32) || defined(TARGET_TX)
+//#define TRIM_UNNECESSARY_HW
 #endif
 
 typedef enum {

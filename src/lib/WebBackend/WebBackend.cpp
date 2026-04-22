@@ -11,7 +11,7 @@
 #include "handset.h"
 #endif
 
-static bool webbe_installed = false;
+bool webbe_installed = false;
 
 #ifdef BUILD_WEB_BACKEND_WEBSOCKET
 static AsyncWebSocket* ws;
@@ -20,11 +20,15 @@ static bool ws_started = false;
 static constexpr uint8_t WS_CHANNEL_PACKET_HEADER = '>';
 static constexpr uint8_t WS_CHANNEL_PACKET_FOOTER = '#';
 static constexpr uint8_t WS_ACK = '!';
+static constexpr uint32_t WS_ACK_INTERVAL_MS = 100;
 static constexpr size_t WS_CHANNEL_PACKET_LEN = CRSF_NUM_CHANNELS * 2U;
 static uint8_t wsChannelPacket[WS_CHANNEL_PACKET_LEN];
 static size_t wsChannelPacketLen = 0;
 static bool wsChannelPacketActive = false;
 static uint32_t wsLastPacketTime = 0;
+static uint32_t wsLastAckTime = 0;
+static uint32_t wsPendingAckClientId = 0;
+static bool wsPendingAck = false;
 
 static inline void resetWsChannelPacket()
 {
@@ -60,6 +64,10 @@ void onWsEvent(AsyncWebSocket *server,
     {
         resetWsChannelPacket();
         ws_started = true;
+        if (client != nullptr)
+        {
+            client->setCloseClientOnQueueFull(false);
+        }
     }
     else if (type == WS_EVT_DATA)
     {
@@ -105,8 +113,11 @@ void onWsEvent(AsyncWebSocket *server,
                     #if defined(TARGET_TX)
                     handset->FakeDataReceived();
                     #endif
-                    // reply back to front-end with an ack
-                    client->text(&WS_ACK, 1U);
+                    // Defer the ack to the main Wi-Fi loop on ESP8266/ESP8285.
+                    // Sending inline from the websocket receive callback can re-enter
+                    // the network stack while it is still processing the inbound frame.
+                    wsPendingAckClientId = client->id();
+                    wsPendingAck = true;
                 }
                 resetWsChannelPacket(); // restart state machine
                 continue;
@@ -124,8 +135,11 @@ void onWsEvent(AsyncWebSocket *server,
     else if (type == WS_EVT_DISCONNECT)
     {
         (void)server;
-        (void)client;
         resetWsChannelPacket();
+        if (wsPendingAck && client != nullptr && wsPendingAckClientId == client->id())
+        {
+            wsPendingAck = false;
+        }
         #if defined(TARGET_RX)
         servosFailsafe();
         #endif
@@ -154,13 +168,26 @@ void webbe_tick()
     #endif
 
     #if defined(TARGET_RX) && defined(BUILD_WEB_BACKEND_WEBSOCKET)
+    if (wsPendingAck)
+    {
+        if ((now - wsLastAckTime) >= WS_ACK_INTERVAL_MS) // rate limit the ack
+        {
+            if (ws->availableForWrite(wsPendingAckClientId))
+            {
+                ws->text(wsPendingAckClientId, &WS_ACK, 1U);
+                wsLastAckTime = now;
+                wsPendingAck = false;
+            }
+        }
+    }
+
     if (ws_started) {
         servosUpdate(now); // transitioning to Wi-Fi mode would have disabled the servos device scheduler, so we call the update function here
         // no need to call handleSerialIO() as it is called in the main application loop
         // the serial IO device scheduler is still running, and will handle the new data if crsfRCFrameAvailable is called
     }
     
-    if ((now - wsLastPacketTime) >= 500 && wsLastPacketTime != 0) {
+    if ((now - wsLastPacketTime) >= 2000 && wsLastPacketTime != 0) {
         // I understand this might be redundant as servosUpdate itself has an internal timeout
         servosFailsafe();
     }
@@ -182,6 +209,9 @@ void webbe_install(AsyncWebServer* srv)
     ws = new AsyncWebSocket("/ws");
     ws->onEvent(onWsEvent);
     srv->addHandler(ws);
+    #if defined(TARGET_RX)
+    servosFailsafe();
+    #endif
     #endif
 
     webbe_installed = true; // do not repeat

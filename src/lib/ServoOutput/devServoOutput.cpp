@@ -14,6 +14,7 @@ static int8_t servoPins[PWM_MAX_CHANNELS];
 static pwm_channel_t pwmChannels[PWM_MAX_CHANNELS];
 static uint16_t pwmChannelValues[PWM_MAX_CHANNELS];
 static bool initialized = false;
+extern bool webbe_installed;
 
 #if defined(PLATFORM_ESP32)
 static DShotRMT *dshotInstances[PWM_MAX_CHANNELS] = {nullptr};
@@ -25,6 +26,7 @@ static bool newChannelsAvailable;
 // Absolute max failsafe time if no update is received, regardless of LQ
 static constexpr uint32_t FAILSAFE_ABS_TIMEOUT_MS = 1000U;
 
+void servo_initializeEnable();
 typedef void (*servoWrite_fn)(uint8_t ch, uint16_t us);
 
 #ifdef BUILD_SERVOS_MOVE_BLINK
@@ -130,6 +132,12 @@ static void servoWrite(uint8_t ch, uint16_t us)
 
 void servosFailsafe()
 {
+    if (!initialized) {
+        // we might be running the servos from another place in the code
+        initialized = true;
+        servo_initializeEnable();
+    }
+
     #ifdef BUILD_SHREW_HBRIDGE
     hbridge_failsafe();
     #endif
@@ -224,6 +232,12 @@ void servosUpdate(unsigned long now)
 {
     static uint32_t lastUpdate;
 
+    if (!initialized) {
+        // we might be running the servos from another place in the code
+        initialized = true;
+        servo_initializeEnable();
+    }
+
     #if defined(PLATFORM_ESP32_C3)
     // for ESP32-C3's implementation of DShotRMT, there's extra tasks to take care of even if no update is needed
     DShotRMT::poll();
@@ -249,7 +263,7 @@ void servosUpdate(unsigned long now)
     // LQ goes to 0 (100 packets missed in a row)
     // OR last update older than FAILSAFE_ABS_TIMEOUT_MS
     // go to failsafe
-    else if (lastUpdate && ((getLq() == 0) || (now - lastUpdate > FAILSAFE_ABS_TIMEOUT_MS)))
+    else if (lastUpdate && ((getLq() == 0 && webbe_installed == false) || (now - lastUpdate > FAILSAFE_ABS_TIMEOUT_MS)))
     {
         servosFailsafe();
         lastUpdate = 0;
@@ -380,7 +394,9 @@ static int event()
     if (connectionState == wifiUpdate)
     {
         //servo_shutdown();
-        servosFailsafe();
+        if (!webbe_installed) {
+            servosFailsafe();
+        }
         return DURATION_NEVER;
     }
     if (!initialized && connectionState == connected)
