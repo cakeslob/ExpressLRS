@@ -7,7 +7,7 @@
 #include "crsf_protocol.h"
 #include "POWERMGNT.h"
 
-#ifndef BUILD_DISABLE_RGB_LED
+#if !defined(BUILD_DISABLE_RGB_LED)
 
 static uint8_t pixelCount;
 static uint8_t *statusLEDs;

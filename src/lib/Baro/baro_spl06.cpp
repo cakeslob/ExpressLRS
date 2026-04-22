@@ -1,4 +1,4 @@
-#if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
+#if (defined(BUILD_SHREW_UNNECESSARY) && defined(BUILD_I2C_WIRE)) || !defined(PLATFORM_ESP8266)
 #include <Wire.h>
 #endif
 

@@ -1,6 +1,6 @@
 #include "targets.h"
 
-#if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
+#if (defined(BUILD_SHREW_UNNECESSARY) && defined(BUILD_I2C_WIRE)) || !defined(PLATFORM_ESP8266)
 #include <Wire.h>
 #endif
 
@@ -13,7 +13,7 @@ uint8_t stk8xxx_pid_list[PID_SIZE] = {STK8xxx_CHIPID_VAL, STK8BA50_X_CHIPID_VAL,
 
 void STK8xxx::ReadAccRegister(uint8_t reg, uint8_t *data)
 {
-#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+#if !(defined(BUILD_SHREW_UNNECESSARY) && defined(BUILD_I2C_WIRE)) && defined(PLATFORM_ESP8266)
     (void)reg;
     *data = 0;
 #else
@@ -28,7 +28,7 @@ void STK8xxx::ReadAccRegister(uint8_t reg, uint8_t *data)
 
 void STK8xxx::WriteAccRegister(uint8_t reg, uint8_t data)
 {
-#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266)
+#if !(defined(BUILD_SHREW_UNNECESSARY) && defined(BUILD_I2C_WIRE)) && defined(PLATFORM_ESP8266)
     (void)reg;
     (void)data;
 #else

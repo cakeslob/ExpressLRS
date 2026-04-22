@@ -1,23 +1,38 @@
+#include "extra_features.h"
+
 // Serial
 #define GPIO_PIN_RCSIGNAL_RX hardware_pin(HARDWARE_serial_rx)
 #define GPIO_PIN_RCSIGNAL_TX hardware_pin(HARDWARE_serial_tx)
+#ifndef TRIM_UNNECESSARY_HW
 #define GPIO_PIN_SERIAL1_RX hardware_pin(HARDWARE_serial1_rx)
 #define GPIO_PIN_SERIAL1_TX hardware_pin(HARDWARE_serial1_tx)
+#else
+#define GPIO_PIN_SERIAL1_RX UNDEF_PIN
+#define GPIO_PIN_SERIAL1_TX UNDEF_PIN
+#endif
 
 // Radio
 #define GPIO_PIN_BUSY hardware_pin(HARDWARE_radio_busy)
-#define GPIO_PIN_BUSY_2 hardware_pin(HARDWARE_radio_busy_2)
 #define GPIO_PIN_DIO0 hardware_pin(HARDWARE_radio_dio0)
-#define GPIO_PIN_DIO0_2 hardware_pin(HARDWARE_radio_dio0_2)
 #define GPIO_PIN_DIO1 hardware_pin(HARDWARE_radio_dio1)
-#define GPIO_PIN_DIO1_2 hardware_pin(HARDWARE_radio_dio1_2)
 #define GPIO_PIN_MISO hardware_pin(HARDWARE_radio_miso)
 #define GPIO_PIN_MOSI hardware_pin(HARDWARE_radio_mosi)
 #define GPIO_PIN_NSS hardware_pin(HARDWARE_radio_nss)
-#define GPIO_PIN_NSS_2 hardware_pin(HARDWARE_radio_nss_2)
 #define GPIO_PIN_RST hardware_pin(HARDWARE_radio_rst)
-#define GPIO_PIN_RST_2 hardware_pin(HARDWARE_radio_rst_2)
 #define GPIO_PIN_SCK hardware_pin(HARDWARE_radio_sck)
+#ifndef TRIM_UNNECESSARY_HW
+#define GPIO_PIN_BUSY_2 hardware_pin(HARDWARE_radio_busy_2)
+#define GPIO_PIN_DIO0_2 hardware_pin(HARDWARE_radio_dio0_2)
+#define GPIO_PIN_DIO1_2 hardware_pin(HARDWARE_radio_dio1_2)
+#define GPIO_PIN_NSS_2 hardware_pin(HARDWARE_radio_nss_2)
+#define GPIO_PIN_RST_2 hardware_pin(HARDWARE_radio_rst_2)
+#else
+#define GPIO_PIN_BUSY_2 UNDEF_PIN
+#define GPIO_PIN_DIO0_2 UNDEF_PIN
+#define GPIO_PIN_DIO1_2 UNDEF_PIN
+#define GPIO_PIN_NSS_2 UNDEF_PIN
+#define GPIO_PIN_RST_2 UNDEF_PIN
+#endif
 #define OPT_USE_HARDWARE_DCDC hardware_flag(HARDWARE_radio_dcdc)
 #define OPT_USE_SX1276_RFO_HF hardware_flag(HARDWARE_radio_rfo_hf)
 #define LR1121_RFSW_CTRL hardware_u16_array(HARDWARE_radio_rfsw_ctrl)
@@ -62,16 +77,30 @@
 
 #define GPIO_PIN_LED_WS2812 hardware_pin(HARDWARE_led_rgb)
 #define OPT_WS2812_IS_GRB hardware_flag(HARDWARE_led_rgb_isgrb)
+#if !defined(TRIM_UNNECESSARY_HW) || !defined(BUILD_DISABLE_RGB_LED)
 #define WS2812_STATUS_LEDS hardware_i16_array(HARDWARE_ledidx_rgb_status)
 #define WS2812_STATUS_LEDS_COUNT hardware_int(HARDWARE_ledidx_rgb_status_count)
 #define WS2812_VTX_STATUS_LEDS hardware_i16_array(HARDWARE_ledidx_rgb_vtx)
 #define WS2812_VTX_STATUS_LEDS_COUNT hardware_int(HARDWARE_ledidx_rgb_vtx_count)
 #define WS2812_BOOT_LEDS hardware_i16_array(HARDWARE_ledidx_rgb_boot)
 #define WS2812_BOOT_LEDS_COUNT hardware_int(HARDWARE_ledidx_rgb_boot_count)
+#else
+#define WS2812_STATUS_LEDS nullptr
+#define WS2812_STATUS_LEDS_COUNT 0
+#define WS2812_VTX_STATUS_LEDS nullptr
+#define WS2812_VTX_STATUS_LEDS_COUNT 0
+#define WS2812_BOOT_LEDS nullptr
+#define WS2812_BOOT_LEDS_COUNT 0
+#endif
 
-// I2C
+// I2C & Misc
+#ifndef TRIM_UNNECESSARY_HW
 #define GPIO_PIN_SCL hardware_pin(HARDWARE_i2c_scl)
 #define GPIO_PIN_SDA hardware_pin(HARDWARE_i2c_sda)
+#else
+#define GPIO_PIN_SCL UNDEF_PIN
+#define GPIO_PIN_SDA UNDEF_PIN
+#endif
 
 // PWM
 #define GPIO_PIN_PWM_OUTPUTS hardware_i16_array(HARDWARE_pwm_outputs)
@@ -85,6 +114,7 @@
 
 #if defined(PLATFORM_ESP32)
 // VTX
+#ifndef TRIM_UNNECESSARY_HW
 #define OPT_HAS_VTX_SPI (hardware_pin(HARDWARE_vtx_nss) != UNDEF_PIN)
 #define GPIO_PIN_RF_AMP_PWM hardware_pin(HARDWARE_vtx_amp_pwm)
 #define GPIO_PIN_RF_AMP_VPD hardware_pin(HARDWARE_vtx_amp_vpd)
@@ -97,11 +127,34 @@
 #define VPD_VALUES_100MW hardware_u16_array(HARDWARE_vtx_amp_vpd_100mW)
 #define PWM_VALUES_25MW hardware_u16_array(HARDWARE_vtx_amp_pwm_25mW)
 #define PWM_VALUES_100MW hardware_u16_array(HARDWARE_vtx_amp_pwm_100mW)
+#else
+#define OPT_HAS_VTX_SPI false
+#define GPIO_PIN_RF_AMP_PWM UNDEF_PIN
+#define GPIO_PIN_RF_AMP_VPD UNDEF_PIN
+#define GPIO_PIN_RF_AMP_VREF UNDEF_PIN
+#define GPIO_PIN_SPI_VTX_NSS UNDEF_PIN
+#define GPIO_PIN_SPI_VTX_MISO UNDEF_PIN
+#define GPIO_PIN_SPI_VTX_MOSI UNDEF_PIN
+#define GPIO_PIN_SPI_VTX_SCK UNDEF_PIN
+#define VPD_VALUES_25MW nullptr
+#define VPD_VALUES_100MW nullptr
+#define PWM_VALUES_25MW nullptr
+#define PWM_VALUES_100MW nullptr
+#endif
 
+#ifndef TRIM_UNNECESSARY_HW
 #define OPT_HAS_THERMAL_LM75A false
 #define GPIO_PIN_FAN_EN hardware_pin(HARDWARE_misc_fan_en)
 #define GPIO_PIN_FAN_PWM hardware_pin(HARDWARE_misc_fan_pwm)
 #define GPIO_PIN_FAN_TACHO hardware_pin(HARDWARE_misc_fan_tacho)
 #define GPIO_PIN_FAN_SPEEDS hardware_u16_array(HARDWARE_misc_fan_speeds)
 #define GPIO_PIN_FAN_SPEEDS_COUNT hardware_int(HARDWARE_misc_fan_speeds_count)
+#else
+#define OPT_HAS_THERMAL_LM75A false
+#define GPIO_PIN_FAN_EN UNDEF_PIN
+#define GPIO_PIN_FAN_PWM UNDEF_PIN
+#define GPIO_PIN_FAN_TACHO UNDEF_PIN
+#define GPIO_PIN_FAN_SPEEDS nullptr
+#define GPIO_PIN_FAN_SPEEDS_COUNT 0
+#endif
 #endif

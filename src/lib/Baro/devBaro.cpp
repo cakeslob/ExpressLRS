@@ -19,7 +19,7 @@ extern bool i2c_enabled;
 
 static bool Baro_Detect()
 {
-    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
+    #if (defined(BUILD_SHREW_UNNECESSARY) && defined(BUILD_I2C_WIRE)) || !defined(PLATFORM_ESP8266)
     // I2C Baros
     if (i2c_enabled)
     {
@@ -50,7 +50,7 @@ static bool Baro_Detect()
 
 static int Baro_Init()
 {
-    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
+    #if (defined(BUILD_SHREW_UNNECESSARY) && defined(BUILD_I2C_WIRE)) || !defined(PLATFORM_ESP8266)
     baro->initialize();
     if (baro->isInitialized())
     {

@@ -5,10 +5,6 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 
-#if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP32) || defined(TARGET_TX)
-//#define TRIM_UNNECESSARY_HW
-#endif
-
 typedef enum {
     INT,
     BOOL,
@@ -92,7 +88,7 @@ static const struct {
     {HARDWARE_led_red_green, "led_red_green", INT},
     {HARDWARE_led_rgb, "led_rgb", INT},
     {HARDWARE_led_rgb_isgrb, "led_rgb_isgrb", BOOL},
-    #if !defined(TRIM_UNNECESSARY_HW) && !defined(BUILD_DISABLE_RGB_LED)
+    #if !defined(TRIM_UNNECESSARY_HW) || !defined(BUILD_DISABLE_RGB_LED)
     {HARDWARE_ledidx_rgb_status, "ledidx_rgb_status", ARRAY},
     {HARDWARE_ledidx_rgb_status_count, "ledidx_rgb_status", COUNT},
     {HARDWARE_ledidx_rgb_vtx, "ledidx_rgb_vtx", ARRAY},

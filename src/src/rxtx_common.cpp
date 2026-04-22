@@ -5,7 +5,7 @@
 
 #include <functional>
 
-#if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266) || defined(TARGET_TX)
+#if (defined(BUILD_SHREW_UNNECESSARY) && defined(BUILD_I2C_WIRE)) || !defined(PLATFORM_ESP8266) || defined(TARGET_TX)
 #include <Wire.h>
 #endif
 
@@ -31,7 +31,7 @@ static void setupWire()
     int gpio_sda = GPIO_PIN_SDA;
 
 #if defined(TARGET_RX)
-    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
+    #if (defined(BUILD_SHREW_UNNECESSARY) && defined(BUILD_I2C_WIRE)) || !defined(PLATFORM_ESP8266)
     for (int ch = 0 ; ch < GPIO_PIN_PWM_OUTPUTS_COUNT ; ++ch)
     {
         auto pin = GPIO_PIN_PWM_OUTPUTS[ch];
@@ -57,7 +57,7 @@ static void setupWire()
 #endif
     if(gpio_sda != UNDEF_PIN && gpio_scl != UNDEF_PIN)
     {
-        #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266) || defined(TARGET_TX)
+        #if (defined(BUILD_SHREW_UNNECESSARY) && defined(BUILD_I2C_WIRE)) || !defined(PLATFORM_ESP8266) || defined(TARGET_TX)
         DBGLN("Starting wire on SCL %d, SDA %d", gpio_scl, gpio_sda);
         // ESP hopes to get Wire::begin(int, int)
         // ESP32 hopes to get Wire::begin(int = -1, int = -1, uint32 = 0)
