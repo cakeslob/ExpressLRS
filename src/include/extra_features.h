@@ -1,5 +1,7 @@
 #pragma once
 
+#define DISABLE_POWER_ON_COUNT
+
 #if defined(PLATFORM_ESP32) || defined(PLATFORM_ESP32_C3) || defined(PLATFORM_ESP32_C3)
 
 #define BUILD_EEPROM_EXPORT_IMPORT
@@ -11,7 +13,7 @@
 
 #endif
 
-#if defined(PLATFORM_ESP32)
+#if defined(PLATFORM_ESP8266)
 
 #define BUILD_EEPROM_EXPORT_IMPORT
 #define BUILD_CUSTOM_MIXER

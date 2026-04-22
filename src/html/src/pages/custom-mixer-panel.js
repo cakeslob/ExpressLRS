@@ -216,10 +216,10 @@ class CustomMixerPanel extends LitElement {
                         <td>${this.renderChannelSelect('ch_arm')}</td>
                     </tr>
                     <tr>
-                        <th><label for="arming-up">Armed when Up</label></th>
+                        <th><label for="arming-up">Armed when Up/High</label></th>
                         <td>
                             <div class="mui-checkbox">
-                                <input id="arming-up" type="checkbox" ?checked="${this.getArmingRangeBit(0)}" @change="${(event) => this.updateArmingRangeBit(0, event.target.checked)}">
+                                <input id="arming-up" type="checkbox" ?checked="${this.getArmingRangeBit(2)}" @change="${(event) => this.updateArmingRangeBit(2, event.target.checked)}">
                             </div>
                         </td>
                     </tr>
@@ -232,10 +232,10 @@ class CustomMixerPanel extends LitElement {
                         </td>
                     </tr>
                     <tr>
-                        <th><label for="arming-down">Armed when Down</label></th>
+                        <th><label for="arming-down">Armed when Down/Low</label></th>
                         <td>
                             <div class="mui-checkbox">
-                                <input id="arming-down" type="checkbox" ?checked="${this.getArmingRangeBit(2)}" @change="${(event) => this.updateArmingRangeBit(2, event.target.checked)}">
+                                <input id="arming-down" type="checkbox" ?checked="${this.getArmingRangeBit(0)}" @change="${(event) => this.updateArmingRangeBit(0, event.target.checked)}">
                             </div>
                         </td>
                     </tr>

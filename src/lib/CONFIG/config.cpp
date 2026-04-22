@@ -1680,13 +1680,19 @@ void RxConfig::SetOtherDefaults()
     uint32_t mix_chs = USE_DEFAULT_ARCADE_TANK_MIX;
     uint32_t mix_ch_thr = mix_chs & 0xFF;
     uint32_t mix_ch_str = (mix_chs & 0xFF00) >> 8;
-    uint32_t mix_ch_lft = (mix_chs & 0xFF00) >> 16;
-    uint32_t mix_ch_rgt = (mix_chs & 0xFF00) >> 24;
+    uint32_t mix_ch_lft = (mix_chs & 0xFF0000) >> 16;
+    uint32_t mix_ch_rgt = (mix_chs & 0xFF000000) >> 24;
     m_config.custom_mixer.ch_throttle = mix_ch_thr;
     m_config.custom_mixer.ch_steering = mix_ch_str;
     m_config.custom_mixer.ch_left     = mix_ch_lft;
     m_config.custom_mixer.ch_right    = mix_ch_rgt;
     #endif
+
+    #ifdef USE_DEFAULT_ARMING_SWITCH
+    m_config.custom_mixer.ch_arm = USE_DEFAULT_ARMING_SWITCH & 0xFF;
+    m_config.custom_mixer.arming_range = (USE_DEFAULT_ARMING_SWITCH & 0xFF00) >> 8;
+    #endif
+
     #endif // GPIO_PIN_PWM_OUTPUTS
 
     #if defined(USE_VESC_UART)
