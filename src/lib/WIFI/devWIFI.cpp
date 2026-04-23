@@ -761,7 +761,7 @@ static void WebUploadResponseHandler(AsyncWebServerRequest *request) {
   if (target_seen || Update.hasError()) {
     String msg;
     if (!Update.hasError() && Update.end()) {
-      #if defined(PLATFORM_ESP32)
+      #if defined(BUILD_EEPROM_EXPORT_IMPORT) && defined(PLATFORM_ESP32) && defined(TARGET_RX)
       // LoadFromMeta only works from here if the binary image is uncompressed
       // if it is compressed (like for ESP8285), then it's not uncompressed until the reboot, so there's nothing to read right now
       const int loadFromMetaResult = config.LoadFromMeta(totalSize, true, true);
@@ -770,7 +770,7 @@ static void WebUploadResponseHandler(AsyncWebServerRequest *request) {
       DBGLN("Update complete, rebooting");
       msg = String("{\"status\": \"ok\", \"msg\": \"Update complete. ");
 
-      #if defined(PLATFORM_ESP32) && defined(BUILD_EEPROM_EXPORT_IMPORT)
+      #if defined(BUILD_EEPROM_EXPORT_IMPORT) && defined(PLATFORM_ESP32) && defined(TARGET_RX)
       if (loadFromMetaResult == 0) {
         msg += "Old configuration pre-applied. ";
       }

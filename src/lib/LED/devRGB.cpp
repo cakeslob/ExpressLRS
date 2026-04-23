@@ -498,7 +498,7 @@ void rgbled_dynamicUpdate()
     bool use_dynamic_led = false;
     #ifdef USE_DYNAMIC_RGB_LED
     use_dynamic_led |= true;
-    #else
+    #elif defined(TARGET_RX)
     use_dynamic_led |= (config.GetFixedPacketRate() >= 0);
     #endif
 

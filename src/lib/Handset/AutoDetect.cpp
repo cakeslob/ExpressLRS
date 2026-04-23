@@ -116,7 +116,7 @@ void AutoDetect::handleInput()
     }
 }
 
-void CRSFHandset::FakeDataReceived()
+void AutoDetect::FakeDataReceived()
 {
 }
 

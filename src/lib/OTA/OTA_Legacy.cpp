@@ -175,6 +175,7 @@ bool ICACHE_RAM_ATTR ProcessRFPacket_v3(SX12xxDriverCommon::rx_status const stat
 
 bool ICACHE_RAM_ATTR HandleSendTelemetryResponse_v3()
 {
+    #ifdef TARGET_RX
     // this function tries to mimic the old telemetry sending function, and in v4 it is replaced with HandleSendDataDl
     // this functionality doesn't work yet, TODO: fix me
 
@@ -285,6 +286,8 @@ bool ICACHE_RAM_ATTR HandleSendTelemetryResponse_v3()
         // Defer TXdoneCallback() to prepare for TLM when the IRQ is normally triggered.
         deferExecutionMicros(ExpressLRS_currAirRate_RFperfParams->TOA, Radio.TXdoneCallback);
     }
+
+    #endif
 
     return true;
 }

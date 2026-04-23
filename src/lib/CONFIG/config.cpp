@@ -2,6 +2,7 @@
 #include "config_legacy.h"
 #include "common.h"
 #include "device.h"
+#include "OTA.h"
 #include "POWERMGNT.h"
 #include "crsf_protocol.h"
 #include "helpers.h"

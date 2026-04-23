@@ -2,8 +2,7 @@
 #include "common.h"
 #include "config.h"
 
-#if defined(BUILD_AM32_CONFIG)
-#if defined(PLATFORM_ESP32)
+#if defined(BUILD_AM32_CONFIG) && defined(TARGET_RX)
 
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
@@ -375,7 +374,7 @@ void am32_tick()
     }
 }
 
-#else // PLATFORM_ESP32
+#else
 
 #if defined(PLATFORM_ESP8266)
 #include <ESP8266WiFi.h>
@@ -394,7 +393,5 @@ void am32_tick()
 {
     // do nothing
 }
-
-#endif // PLATFORM_ESP32
 
 #endif
