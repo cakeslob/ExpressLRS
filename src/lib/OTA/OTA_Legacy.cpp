@@ -616,3 +616,257 @@ void FHSSrandomiseFHSSsequence_v3(const uint32_t seed)
     FHSSusePrimaryFreqBand = true;
 #endif
 }
+
+#ifdef TARGET_TX
+
+void SetRFLinkRate_v3(uint8_t index)
+{
+    #if 0
+    #endif
+}
+
+bool ICACHE_RAM_ATTR ProcessDownlinkPacket_v3(SX12xxDriverCommon::rx_status const status)
+{
+  #if 0
+  OTA_Packet_s * const otaPktPtr = (OTA_Packet_s * const)Radio.RXdataBuffer;
+  OTA_Packet_s * const otaPktPtrSecond = (OTA_Packet_s * const)Radio.RXdataBufferSecond;
+
+  if (!OtaValidatePacketCrc(otaPktPtr))
+  {
+    DBGLN("TLM crc error");
+    return false;
+  }
+
+  LastTLMpacketRecv_Ms = millis();
+  LqTQly.add();
+
+  Radio.CheckForSecondPacket();
+  if (Radio.hasSecondRadioGotData)
+  {
+    if (!OtaValidatePacketCrc(otaPktPtrSecond))
+    {
+      Radio.hasSecondRadioGotData = false;
+    }
+  }
+
+  Radio.GetLastPacketStats();
+  linkStats.downlink_SNR = SNR_DESCALE(Radio.LastPacketSNRRaw);
+  linkStats.downlink_RSSI_1 = Radio.LastPacketRSSI;
+  linkStats.downlink_RSSI_2 = Radio.LastPacketRSSI2;
+
+  // Full res mode
+  if (OtaIsFullRes)
+  {
+    OTA_Packet8_s * const ota8 = (OTA_Packet8_s * const)otaPktPtr;
+    OTA_Packet8_s * const ota8Second = (OTA_Packet8_s * const)otaPktPtrSecond;
+
+    switch (otaPktPtr->std.type)
+    {
+      case PACKET_TYPE_LINKSTATS:
+        LinkStatsFromOta(&ota8->data_dl.ul_link_stats.stats);
+
+        ProcessOtaDataDl(
+          ota8->data_dl.packageIndex, ota8Second->data_dl.packageIndex,
+          ota8->data_dl.ul_link_stats.payload,
+          ota8Second->data_dl.ul_link_stats.payload,
+          sizeof(ota8->data_dl.ul_link_stats.payload),
+          ota8->data_dl.stubbornAck
+        );
+        break;
+
+      case PACKET_TYPE_DATA:
+        if (firmwareOptions.is_airport)
+        {
+          OtaUnpackAirportData(otaPktPtr, &apOutputBuffer);
+        }
+        else
+        {
+          ProcessOtaDataDl(
+            ota8->data_dl.packageIndex, ota8Second->data_dl.packageIndex,
+            ota8->data_dl.payload,
+            ota8Second->data_dl.payload,
+            sizeof(ota8->data_dl.payload),
+            ota8->data_dl.stubbornAck
+          );
+        }
+        break;
+    }
+  }
+  // Std res mode
+  else
+  {
+    switch (otaPktPtr->std.type)
+    {
+      case PACKET_TYPE_LINKSTATS:
+        LinkStatsFromOta(&otaPktPtr->std.data_dl.ul_link_stats.stats);
+
+        ProcessOtaDataDl(
+          otaPktPtr->std.data_dl.packageIndex, otaPktPtrSecond->std.data_dl.packageIndex,
+          otaPktPtr->std.data_dl.ul_link_stats.payload,
+          otaPktPtrSecond->std.data_dl.ul_link_stats.payload,
+          sizeof(otaPktPtr->std.data_dl.ul_link_stats.payload),
+          otaPktPtr->std.data_dl.stubbornAck
+        );
+        break;
+
+      case PACKET_TYPE_DATA:
+        if (firmwareOptions.is_airport)
+        {
+          OtaUnpackAirportData(otaPktPtr, &apOutputBuffer);
+        }
+        else
+        {
+          ProcessOtaDataDl(
+            otaPktPtr->std.data_dl.packageIndex, otaPktPtrSecond->std.data_dl.packageIndex,
+            otaPktPtr->std.data_dl.payload,
+            otaPktPtrSecond->std.data_dl.payload,
+            sizeof(otaPktPtr->std.data_dl.payload),
+            otaPktPtr->std.data_dl.stubbornAck
+          );
+        }
+        break;
+    }
+  }
+  #endif
+
+  return true;
+}
+
+void ICACHE_RAM_ATTR SendRCdataToRF_v3()
+{
+  #if 0
+  // Do not send a stale channels packet to the RX if one has not been received from the handset
+  // *Do* send data if a packet has never been received from handset and the timer is running
+  // this is the case when bench testing and TXing without a handset
+  bool dontSendChannelData = false;
+  uint32_t lastRcData = handset->GetRCdataLastRecv();
+  if (lastRcData && (micros() - lastRcData > 1000000))
+  {
+    // The tx is in Mavlink mode and without a valid crsf or RC input.  Do not send stale or fake zero packet RC!
+    // Only send SYNC and DATA packets.
+    if (config.GetLinkMode() == TX_MAVLINK_MODE)
+    {
+      dontSendChannelData = true;
+    }
+    else
+    {
+      return;
+    }
+  }
+
+  busyTransmitting = true;
+
+  uint32_t const now = millis();
+  // ESP requires word aligned buffer
+  WORD_ALIGNED_ATTR OTA_Packet_s otaPkt = {0};
+  static uint8_t syncSlot;
+
+  const bool isTlmDisarmed = config.GetTlm() == TLM_RATIO_DISARMED;
+  uint32_t SyncInterval = (connectionState == connected && !isTlmDisarmed) ? ExpressLRS_currAirRate_RFperfParams->SyncPktIntervalConnected : ExpressLRS_currAirRate_RFperfParams->SyncPktIntervalDisconnected;
+  bool skipSync = InBindingMode ||
+    // TLM_RATIO_DISARMED keeps sending sync packets even when armed until the RX stops sending telemetry and the TLM=Off has taken effect
+    (isTlmDisarmed && handset->IsArmed() && (ExpressLRS_currTlmDenom == 1));
+
+  uint8_t NonceFHSSresult = OtaNonce % ExpressLRS_currAirRate_Modparams->FHSShopInterval;
+
+  // Sync spam only happens on slot 1 and 2 and can't be disabled
+  if ((syncSpamCounter || (syncSpamCounterAfterRateChange && FHSSonSyncChannel())) && (NonceFHSSresult == 1 || NonceFHSSresult == 2))
+  {
+    otaPkt.std.type = PACKET_TYPE_SYNC;
+    GenerateSyncPacketData(OtaIsFullRes ? &otaPkt.full.sync.sync : &otaPkt.std.sync);
+    syncSlot = 0; // reset the sync slot in case the new rate (after the syncspam) has a lower FHSShopInterval
+  }
+  // Regular sync rotates through 4x slots, twice on each slot, and telemetry pushes it to the next slot up
+  // But only on the sync FHSS channel and with a timed delay between them
+  else if ((!skipSync) && ((syncSlot / 2) <= NonceFHSSresult) && (now - SyncPacketLastSent > SyncInterval) && FHSSonSyncChannel())
+  {
+    otaPkt.std.type = PACKET_TYPE_SYNC;
+    GenerateSyncPacketData(OtaIsFullRes ? &otaPkt.full.sync.sync : &otaPkt.std.sync);
+    syncSlot = (syncSlot + 1) % (ExpressLRS_currAirRate_Modparams->FHSShopInterval * 2);
+  }
+  else
+  {
+    if (firmwareOptions.is_airport)
+    {
+      OtaPackAirportData(&otaPkt, &apInputBuffer);
+    }
+    else if ((NextPacketIsDataUl && DataUlSender.IsActive()) || dontSendChannelData)
+    {
+      otaPkt.std.type = PACKET_TYPE_DATA;
+      if (OtaIsFullRes)
+      {
+        otaPkt.full.data_ul.packageIndex = DataUlSender.GetCurrentPayload(
+          otaPkt.full.data_ul.payload,
+          sizeof(otaPkt.full.data_ul.payload));
+        if (config.GetLinkMode() == TX_MAVLINK_MODE)
+          otaPkt.full.data_ul.stubbornAck = DataDlReceiver.GetCurrentConfirm();
+      }
+      else
+      {
+        otaPkt.std.data_ul.packageIndex = DataUlSender.GetCurrentPayload(
+          otaPkt.std.data_ul.payload,
+          sizeof(otaPkt.std.data_ul.payload));
+        if (config.GetLinkMode() == TX_MAVLINK_MODE)
+          otaPkt.std.data_ul.stubbornAck = DataDlReceiver.GetCurrentConfirm();
+      }
+
+      // send channel data next so the channel messages also get sent during data uplink transmissions
+      NextPacketIsDataUl = false;
+      // counter can be increased even for normal DataUl messages since it's reset if a real bind message should be sent
+      BindingSendCount++;
+      // If not in TlmBurst, request a sync packet soon to trigger higher download bandwidth for reply
+      if (syncTelemBoostState == stbIdle)
+        syncSpamCounter = 1;
+      syncTelemBoostState = stbRequested;
+    }
+    else
+    {
+      // always enable DataUl after a channel package since the slot is only used if DataUlSender has data to send
+      NextPacketIsDataUl = true;
+
+      OtaPackChannelData(&otaPkt, ChannelData, DataDlReceiver.GetCurrentConfirm());
+    }
+  }
+
+  ///// Next, Calculate the CRC and put it into the buffer /////
+  OtaGeneratePacketCrc(&otaPkt);
+
+  SX12XX_Radio_Number_t transmittingRadio = SX12XX_Radio_All;
+
+  if (isDualRadio())
+  {
+    // Single antenna modes: tx on one antenna, and true diversity rx for tlm reception.
+    switch (config.GetAntennaMode())
+    {
+    case TX_RADIO_MODE_ANT_1:
+      transmittingRadio = SX12XX_Radio_1;
+      break;
+    case TX_RADIO_MODE_ANT_2:
+      transmittingRadio = SX12XX_Radio_2;
+      break;
+    case TX_RADIO_MODE_SWITCH:
+      transmittingRadio = OtaNonce%2 == 0 ? SX12XX_Radio_1 : SX12XX_Radio_2;
+      break;
+    default:
+      break;
+    }
+  }
+
+#if defined(Regulatory_Domain_EU_CE_2400)
+  transmittingRadio = LbtChannelIsClear(transmittingRadio);   // weed out the radio(s) if channel in use
+
+  if (transmittingRadio == SX12XX_Radio_NONE)
+  {
+    // No packet will be sent due to LBT.
+    // Defer TXdoneCallback() to prepare for TLM when the IRQ is normally triggered.
+    deferExecutionMicros(ExpressLRS_currAirRate_RFperfParams->TOA, Radio.TXdoneCallback);
+  }
+  else
+#endif
+  {
+    Radio.TXnb((uint8_t*)&otaPkt, false, (uint8_t*)&otaPkt, transmittingRadio);
+  }
+  #endif // #if 0
+}
+
+#endif

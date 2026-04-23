@@ -24,6 +24,7 @@ and Gemini will not work, and any newer additions to OTA functionality will not 
 #include "crc.h"
 #include "crsf_protocol.h"
 #include "FIFO.h"
+#include "SX12xxDriverCommon.h"
 
 // the defines below are pulled from the old telemetry_protocol.h but they've changed in v4, so the v3 versions are redefined here
 #define OTALEGACY_ELRS4_TELEMETRY_SHIFT 2
@@ -46,6 +47,12 @@ extern void OtaUpdateCrcInitFromUid_v3();
 extern void ota_cntNewVersionPkts(); // call this when an non-legacy packet is validated
 extern void ota_resetPktVersionCounters(); // call this when switching radio configs/rates
 extern bool ICACHE_RAM_ATTR HandleSendTelemetryResponse_v3();
+
+#ifdef TARGET_TX
+extern void SetRFLinkRate_v3(uint8_t index);
+extern void ICACHE_RAM_ATTR SendRCdataToRF_v3();
+extern bool ICACHE_RAM_ATTR ProcessDownlinkPacket_v3(SX12xxDriverCommon::rx_status const status);
+#endif
 
 extern uint16_t OtaCrcInitializer;
 extern uint16_t OtaCrcInitializer_v3;

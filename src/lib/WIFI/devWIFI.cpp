@@ -461,6 +461,9 @@ static void GetConfiguration(AsyncWebServerRequest *request)
     #endif
     settings["extra-features-avail"] = extra_feature_flags;
 
+    #ifdef TARGET_TX
+    // TODO: notify front-end if any models are set to using legacy v3 OTA protocol, via `settings[]`
+    #endif
   }
 
   response->setLength();

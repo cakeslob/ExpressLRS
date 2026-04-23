@@ -467,6 +467,8 @@ void SetRFLinkRate(uint8_t index) // Set speed of RF link
   FHSSusePrimaryFreqBand = !(ModParams->radio_type == RADIO_TYPE_LR1121_LORA_2G4) && !(ModParams->radio_type == RADIO_TYPE_LR1121_GFSK_2G4);
   FHSSuseDualBand = ModParams->radio_type == RADIO_TYPE_LR1121_LORA_DUAL;
 
+  // TODO: check ota_isLegacy here and make appropriate changes
+
   Radio.Config(ModParams->bw, ModParams->sf, ModParams->cr, FHSSgetInitialFreq(),
                ModParams->PreambleLen, invertIQ, ModParams->PayloadLength
 #if defined(RADIO_SX128X)
@@ -499,6 +501,7 @@ void SetRFLinkRate(uint8_t index) // Set speed of RF link
   OtaNonce = 0;
 
   OtaUpdateSerializers(newSwitchMode, ModParams->PayloadLength);
+
   DataUlSender.setMaxPackageIndex(ELRS_MSP_MAX_PACKAGES);
   DataDlReceiver.setMaxPackageIndex(OtaIsFullRes ? ELRS8_DATA_DL_MAX_PACKAGES : ELRS4_DATA_DL_MAX_PACKAGES);
 
@@ -711,7 +714,12 @@ void ICACHE_RAM_ATTR timerCallback()
 
   TelemetryRcvPhase = ttrpTransmitting;
 
-  SendRCdataToRF();
+  if (!ota_isLegacy) {
+    SendRCdataToRF();
+  }
+  else {
+    SendRCdataToRF_v3();
+  }
 }
 
 static void UARTdisconnected()
@@ -768,6 +776,15 @@ static void ChangeRadioParams()
 {
   ModelUpdatePending = false;
   ResetPower(); // Call before SetRFLinkRate(). The LR1121 Radio lib can now set the correct output power in Config().
+
+  if (config.GetLinkMode() == TX_LEGACY_V3_MODE) {
+    // do stuff such that the subsequent radio reconfigurations will use legacy v3 protocol code paths
+    ota_isLegacy = true;
+  }
+  else {
+    ota_isLegacy = false;
+  }
+
   SetRFLinkRate(config.GetRate());
   LbtEnableIfRequired();
 }
@@ -839,7 +856,7 @@ bool ICACHE_RAM_ATTR RXdoneISR(SX12xxDriverCommon::rx_status const status)
   }
 
   LbtCcaTimerStart();
-  const bool packetSuccessful = ProcessDownlinkPacket(status);
+  const bool packetSuccessful = !ota_isLegacy ? ProcessDownlinkPacket(status) : ProcessDownlinkPacket_v3(status);
   return packetSuccessful;
 }
 
