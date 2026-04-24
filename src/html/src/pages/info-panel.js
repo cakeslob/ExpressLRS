@@ -77,6 +77,9 @@ class InfoPanel extends LitElement {
                 `:
                 ''
             }
+            <!-- FEATURE: IS_TX -->
+            ${this._renderLegacyV3Models()}
+            <!-- /FEATURE: IS_TX -->
             <div class="mui-divider"></div>
             <div class="mui-panel">
                 <div class="mui--text-title">Offline Plugin</div>
@@ -163,4 +166,21 @@ class InfoPanel extends LitElement {
         // /FEATURE: IS_TX
         return custom
     }
+
+    // FEATURE: IS_TX
+    _renderLegacyV3Models() {
+        const models = elrsState.settings['legacy-v3-models']
+        if (models === undefined) return ''
+
+        return html`
+            <div class="mui-divider"></div>
+            <div class="mui-panel">
+                <div class="mui--text-title">Legacy V3 OTA Models</div>
+                <p>${models.length
+                    ? `${models.length === 1 ? 'Model' : 'Models'} ${models.join(', ')} ${models.length === 1 ? 'is' : 'are'} set to use the legacy v3 OTA protocol.`
+                    : 'No Models'}</p>
+            </div>
+        `
+    }
+    // /FEATURE: IS_TX
 }

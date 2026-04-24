@@ -61,15 +61,14 @@ static uint32_t packetCnt;
 #endif
 
 /******** Decimate 11bit to 10bit functions ********/
-typedef uint32_t (*Decimate11to10_fn)(uint32_t ch11bit);
 
-static uint32_t ICACHE_RAM_ATTR Decimate11to10_Limit(uint32_t ch11bit)
+uint32_t ICACHE_RAM_ATTR Decimate11to10_Limit(uint32_t ch11bit)
 {
     // Limit 10-bit result to the range CRSF_CHANNEL_VALUE_MIN/MAX
     return CRSF_to_UINT10(constrain(ch11bit, CRSF_CHANNEL_VALUE_MIN, CRSF_CHANNEL_VALUE_MAX));
 }
 
-static uint32_t ICACHE_RAM_ATTR Decimate11to10_Div2(uint32_t ch11bit)
+uint32_t ICACHE_RAM_ATTR Decimate11to10_Div2(uint32_t ch11bit)
 {
     // Simple divide-by-2 to discard the bit
     return ch11bit >> 1;
@@ -82,7 +81,7 @@ static uint32_t ICACHE_RAM_ATTR Decimate11to10_Div2(uint32_t ch11bit)
  *        Betaflight, but depends on which decimate function is used if it is legacy or CRSFv3 10-bit
  *        destChannels4x10 must be zeroed before this call, the channels are ORed into it
  ***/
-static void ICACHE_RAM_ATTR PackUInt11ToChannels4x10(uint32_t const * const src, OTA_Channels_4x10 * const destChannels4x10, Decimate11to10_fn decimate)
+void ICACHE_RAM_ATTR PackUInt11ToChannels4x10(uint32_t const * const src, OTA_Channels_4x10 * const destChannels4x10, Decimate11to10_fn decimate)
 {
     const unsigned DEST_PRECISION = 10; // number of bits for each dest, must be <SRC
     uint8_t *dest = (uint8_t *)destChannels4x10;

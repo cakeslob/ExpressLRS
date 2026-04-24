@@ -43,6 +43,7 @@ extern bool ota_isLegacy;
 extern uint32_t ota_legacySyncHoldUntilMs;
 extern bool ota_isLegacySyncHoldActive();
 extern uint32_t uidMacSeedGet_v3();
+extern void FHSSrandomiseFHSSsequence_v3(const uint32_t seed);
 extern void OtaUpdateCrcInitFromUid_v3();
 extern void ota_cntNewVersionPkts(); // call this when an non-legacy packet is validated
 extern void ota_resetPktVersionCounters(); // call this when switching radio configs/rates
@@ -82,10 +83,6 @@ typedef struct {
 } PACKED OTA_LinkStats_v3_s;
 
 typedef struct {
-    uint8_t raw[5]; // 4x 10-bit channels, see PackUInt11ToChannels4x10 for encoding
-} PACKED OTA_Channels_4x10_v3;
-
-typedef struct {
     // The packet type must always be the low two bits of the first byte of the
     // packet to match the same placement in OTA_Packet8_s
     uint8_t type: 2,
@@ -93,7 +90,7 @@ typedef struct {
     union {
         /** PACKET_TYPE_RCDATA **/
         struct {
-            OTA_Channels_4x10_v3 ch;
+            OTA_Channels_4x10 ch;
             uint8_t switches:7,
                     ch4:1;
         } rc;
@@ -143,8 +140,8 @@ typedef struct {
                     uplinkPower: 3, // CRSF_power_level - 1 (1-8 is 0-7 in the air)
                     isHighAux: 1, // true if chHigh are AUX6-9
                     ch4: 1;   // AUX1, included up here so ch0 starts on a byte boundary
-            OTA_Channels_4x10_v3 chLow;  // CH0-CH3
-            OTA_Channels_4x10_v3 chHigh; // AUX2-5 or AUX6-9
+            OTA_Channels_4x10 chLow;  // CH0-CH3
+            OTA_Channels_4x10 chHigh; // AUX2-5 or AUX6-9
         } PACKED rc;
         struct {
             uint8_t packetType; // actually struct rc's first byte

@@ -462,8 +462,17 @@ static void GetConfiguration(AsyncWebServerRequest *request)
     settings["extra-features-avail"] = extra_feature_flags;
 
     #ifdef TARGET_TX
-    // TODO: notify front-end if any models are set to using legacy v3 OTA protocol, via `settings[]`
+    JsonArray legacyV3Models = settings["legacy-v3-models"].to<JsonArray>();
+    for (uint8_t model = 0; model < CONFIG_TX_MODEL_CNT; ++model)
+    {
+      if (config.GetModelConfig(model).linkMode != TX_LEGACY_V3_MODE)
+      {
+        continue;
+      }
+      legacyV3Models.add(model);
+    }
     #endif
+
   }
 
   response->setLength();

@@ -9,8 +9,14 @@
 #include "stubborn_receiver.h"
 #include "deferred.h"
 #include "FHSS.h"
+#include "hwTimer.h"
+#include "handset.h"
 #include "LBT.h"
 #include <stdlib.h>
+#ifdef TARGET_TX
+#include "LQCALC.h"
+#include "TXModuleEndpoint.h"
+#endif
 #if defined(PLATFORM_ESP32)
 #include "esp_task_wdt.h"
 #endif
@@ -28,6 +34,7 @@ extern uint8_t telemetryBurstMax;
 extern uint8_t geminiMode;
 extern bool alreadyTLMresp;
 extern StubbornReceiver DataUlReceiver;
+extern uint32_t rfModeLastChangedMS;
 
 // used to determine if we are getting legacy packets or new packets
 static uint32_t consecutive_old_pkt_cnt = 0;
@@ -50,12 +57,16 @@ extern void ICACHE_RAM_ATTR GeneratePacketCrcStd(OTA_Packet_s * const otaPktPtr)
 extern void ICACHE_RAM_ATTR LinkStatsToOta(OTA_LinkStats_s * const ls);
 
 static uint8_t rateIdxXform(uint8_t x);
-static void FHSSrandomiseFHSSsequence_v3(const uint32_t seed);
 static bool mapSyncPacketV3ToV4(OTA_Packet_v3_s * const otaPktPtr);
 static void rewriteDataUplinkHeaderV3ToV4(OTA_Packet_v3_s * const otaPktPtr);
+#if defined(TARGET_RX)
 static void LinkStatsToOta_v3(OTA_LinkStats_v3_s * const ls);
+#endif
 
 static constexpr uint32_t LEGACY_SYNC_HOLD_TIMEOUT_MS = 2000U;
+static constexpr uint8_t PACKET_TYPE_TLM_V3 = 0x03;
+static constexpr uint8_t ELRS_TELEMETRY_TYPE_LINK_V3 = 0x01;
+static constexpr uint8_t ELRS_TELEMETRY_TYPE_DATA_V3 = 0x02;
 
 bool ota_isLegacySyncHoldActive()
 {
@@ -555,6 +566,7 @@ static void ICACHE_RAM_ATTR rewriteDataUplinkHeaderV3ToV4(OTA_Packet_v3_s * cons
     DBGVLN("legacy full uplink hdr remap pidx=%u ack=%u", packageIndex, stubbornAck);
 }
 
+#if defined(TARGET_RX)
 static void ICACHE_RAM_ATTR LinkStatsToOta_v3(OTA_LinkStats_v3_s * const ls)
 {
     ls->uplink_RSSI_1 = linkStats.uplink_RSSI_1;
@@ -565,6 +577,7 @@ static void ICACHE_RAM_ATTR LinkStatsToOta_v3(OTA_LinkStats_v3_s * const ls)
     ls->mspConfirm = DataUlReceiver.GetCurrentConfirm() ? 1 : 0;
     ls->SNR = linkStats.uplink_SNR;
 }
+#endif
 
 void ota_cntNewVersionPkts()
 {
@@ -619,32 +632,125 @@ void FHSSrandomiseFHSSsequence_v3(const uint32_t seed)
 
 #ifdef TARGET_TX
 
+// Implementing backwards compatibility mode for transmitter, so that a V4 transmitter can optionally send v3 packets (and work with v3 receivers in general)
+
+enum { stbIdle, stbRequested, stbBoosting };
+
+extern bool NextPacketIsDataUl;
+extern volatile uint8_t syncSpamCounter;
+extern volatile uint8_t syncSpamCounterAfterRateChange;
+extern uint32_t SyncPacketLastSent;
+extern uint8_t syncTelemBoostState;
+extern uint32_t LastTLMpacketRecv_Ms;
+extern LQCALC<100> LqTQly;
+extern volatile bool busyTransmitting;
+extern uint8_t BindingSendCount;
+extern StubbornReceiver DataDlReceiver;
+extern StubbornSender DataUlSender;
+
+extern expresslrs_tlm_ratio_e ICACHE_RAM_ATTR UpdateTlmRatioEffective();
+extern void ICACHE_RAM_ATTR LinkStatsFromOta(OTA_LinkStats_s * const ls);
+
+extern uint32_t ICACHE_RAM_ATTR Decimate11to10_Limit(uint32_t ch11bit);
+extern uint32_t ICACHE_RAM_ATTR Decimate11to10_Div2(uint32_t ch11bit);
+extern void ICACHE_RAM_ATTR PackUInt11ToChannels4x10(uint32_t const * const src, OTA_Channels_4x10 * const destChannels4x10, Decimate11to10_fn decimate);
+
+static inline uint8_t ICACHE_RAM_ATTR HybridWideNonceToSwitchIndex_v3(uint8_t const nonce)
+{
+    return ((nonce & 0b111) + ((nonce >> 3) & 0b1)) % 8;
+}
+
+#if defined(DEBUG_RCVR_LINKSTATS)
+static uint32_t legacyPacketCnt_v3;
+#endif
+static uint8_t Hybrid8NextSwitchIndex_v3;
+static bool FullResIsHighAux_v3;
+
+static uint8_t ICACHE_RAM_ATTR HybridWideSwitchToOta_v3(const uint32_t *channelData, uint8_t const switchIdx, bool const lowRes)
+{
+    uint16_t ch = channelData[switchIdx + 4];
+    uint8_t const binCount = lowRes ? 64 : 128;
+    ch = CRSF_to_N(ch, binCount);
+    return lowRes ? (ch & 0b111111) : (ch & 0b1111111);
+}
+
+static void ICACHE_RAM_ATTR GenerateSyncPacketData_v3(OTA_Sync_v3_s * const syncPtr)
+{
+    const uint8_t switchEncMode = config.GetSwitchMode();
+    const uint8_t index = syncSpamCounter ? config.GetRate() : ExpressLRS_currAirRate_Modparams->index;
+
+    if (syncSpamCounter)
+    {
+        --syncSpamCounter;
+    }
+
+    if (syncSpamCounterAfterRateChange && index == ExpressLRS_currAirRate_Modparams->index)
+    {
+        --syncSpamCounterAfterRateChange;
+        if (connectionState == connected)
+        {
+            syncSpamCounterAfterRateChange = 0;
+        }
+    }
+
+    SyncPacketLastSent = millis();
+
+    expresslrs_tlm_ratio_e const newTlmRatio = UpdateTlmRatioEffective();
+
+    syncPtr->fhssIndex = FHSSgetCurrIndex();
+    syncPtr->nonce = OtaNonce;
+    syncPtr->rateIndex = index;
+    syncPtr->newTlmRatio = newTlmRatio - TLM_RATIO_NO_TLM;
+    syncPtr->switchEncMode = switchEncMode;
+    syncPtr->UID3 = UID[3];
+    syncPtr->UID4 = UID[4];
+    syncPtr->UID5 = UID[5];
+
+    if (!InBindingMode && config.GetModelMatch())
+    {
+        syncPtr->UID5 ^= (~crsfTransmitter.modelId) & MODELMATCH_MASK;
+    }
+}
+
+static OTA_LinkStats_s ICACHE_RAM_ATTR translateLinkStatsV3ToV4(OTA_LinkStats_v3_s const * const lsV3)
+{
+    OTA_LinkStats_s lsV4 = {};
+    lsV4.uplink_RSSI_1 = lsV3->uplink_RSSI_1;
+    lsV4.antenna = lsV3->antenna;
+    lsV4.uplink_RSSI_2 = lsV3->uplink_RSSI_2;
+    lsV4.modelMatch = lsV3->modelMatch;
+    lsV4.lq = lsV3->lq;
+    lsV4.trueDiversityAvailable = 0;
+    lsV4.SNR = lsV3->SNR;
+    return lsV4;
+}
+
 static void ICACHE_RAM_ATTR PackChannelDataHybridCommon_v3(OTA_Packet4_v3_s * const ota4, const uint32_t *channelData)
 {
     ota4->type = PACKET_TYPE_RCDATA;
 #if defined(DEBUG_RCVR_LINKSTATS)
     // Incremental packet counter for verification on the RX side, 32 bits shoved into CH1-CH4
-    ota4->dbg_linkstats.packetNum = packetCnt++;
+    ota4->dbg_linkstats.packetNum = legacyPacketCnt_v3++;
 #else
     // CRSF input is 11bit and OTA will carry only 10bit. Discard the Extended Limits (E.Limits)
     // range and use the full 10bits to carry only 998us - 2012us
-    PackUInt11ToChannels4x10(&channelData[0], &ota4->rc.ch, &Decimate11to10_Limit);
+    PackUInt11ToChannels4x10(&channelData[0], (OTA_Channels_4x10*)&ota4->rc.ch, &Decimate11to10_Limit);
     ota4->rc.ch4 = CRSF_to_BIT(channelData[4]);
 #endif /* !DEBUG_RCVR_LINKSTATS */
 }
 
-void ICACHE_RAM_ATTR GenerateChannelData8ch12ch_v3(OTA_Packe_v3_s * const otaPktPtr, const uint32_t *channelData, bool const TelemetryStatus, bool isHighAux)
+void ICACHE_RAM_ATTR GenerateChannelData8ch12ch_v3(OTA_Packet8_v3_s * const ota8, const uint32_t *channelData, bool const telemetryStatus, bool isHighAux)
 {
     // All channel data is 10 bit apart from AUX1 which is 1 bit
     ota8->rc.packetType = PACKET_TYPE_RCDATA;
-    ota8->rc.telemetryStatus = TelemetryStatus;
+    ota8->rc.telemetryStatus = telemetryStatus;
     // uplinkPower has 8 items but only 3 bits, but 0 is 0 power which we never use, shift 1-8 -> 0-7
-    ota8->rc.uplinkPower = constrain(CRSF::LinkStatistics.uplink_TX_Power, 1, 8) - 1;
+    ota8->rc.uplinkPower = constrain(linkStats.uplink_TX_Power, 1, 8) - 1;
     ota8->rc.isHighAux = isHighAux;
     ota8->rc.ch4 = CRSF_to_BIT(channelData[4]);
 #if defined(DEBUG_RCVR_LINKSTATS)
     // Incremental packet counter for verification on the RX side, 32 bits shoved into CH1-CH4
-    ota8->dbg_linkstats.packetNum = packetCnt++;
+    ota8->dbg_linkstats.packetNum = legacyPacketCnt_v3++;
 #else
     // Sources:
     // 8ch always: low=0 high=5
@@ -673,8 +779,8 @@ void ICACHE_RAM_ATTR GenerateChannelData8ch12ch_v3(OTA_Packe_v3_s * const otaPkt
         chSrcLow = 0;
         chSrcHigh = isHighAux ? 9 : 5;
     }
-    PackUInt11ToChannels4x10(&channelData[chSrcLow], &ota8->rc.chLow, &Decimate11to10_Div2);
-    PackUInt11ToChannels4x10(&channelData[chSrcHigh], &ota8->rc.chHigh, &Decimate11to10_Div2);
+    PackUInt11ToChannels4x10(&channelData[chSrcLow], (OTA_Channels_4x10*)&ota8->rc.chLow, &Decimate11to10_Div2);
+    PackUInt11ToChannels4x10(&channelData[chSrcHigh], (OTA_Channels_4x10*)&ota8->rc.chHigh, &Decimate11to10_Div2);
 #endif
 }
 
@@ -684,7 +790,7 @@ void ICACHE_RAM_ATTR GenerateChannelDataHybridWide_v3(OTA_Packet_v3_s * const ot
     PackChannelDataHybridCommon_v3(ota4, channelData);
 
     uint8_t telemBit = TelemetryStatus << 6;
-    uint8_t nextSwitchIndex = HybridWideNonceToSwitchIndex(OtaNonce);
+    uint8_t nextSwitchIndex = HybridWideNonceToSwitchIndex_v3(OtaNonce);
     uint8_t value;
     // Using index 7 means the telemetry bit will always be sent in the packet
     // preceding the RX's telemetry slot for all tlmDenom >= 8
@@ -693,12 +799,12 @@ void ICACHE_RAM_ATTR GenerateChannelDataHybridWide_v3(OTA_Packet_v3_s * const ot
     // (technically we could squeeze 7-bits in for 2 channels with tlmDenom=4)
     if (nextSwitchIndex == 7)
     {
-        value = telemBit | CRSF::LinkStatistics.uplink_TX_Power;
+        value = telemBit | linkStats.uplink_TX_Power;
     }
     else
     {
         bool telemInEveryPacket = (tlmDenom > 1) && (tlmDenom < 8);
-        value = HybridWideSwitchToOta(channelData, nextSwitchIndex + 1, telemInEveryPacket);
+        value = HybridWideSwitchToOta_v3(channelData, nextSwitchIndex + 1, telemInEveryPacket);
         if (telemInEveryPacket)
             value |= telemBit;
     }
@@ -716,7 +822,7 @@ void ICACHE_RAM_ATTR GenerateChannelDataHybrid8_v3(OTA_Packet_v3_s * const otaPk
     // Actually send switchIndex - 1 in the packet, to shift down 1-7 (0b111) to 0-6 (0b110)
     // If the two high bits are 0b11, the receiver knows it is the last switch and can use
     // that bit to store data
-    uint8_t bitclearedSwitchIndex = Hybrid8NextSwitchIndex;
+    uint8_t bitclearedSwitchIndex = Hybrid8NextSwitchIndex_v3;
     uint8_t value;
     // AUX8 is High Resolution 16-pos (4-bit)
     if (bitclearedSwitchIndex == 6)
@@ -732,7 +838,7 @@ void ICACHE_RAM_ATTR GenerateChannelDataHybrid8_v3(OTA_Packet_v3_s * const otaPk
         value;
 
     // update the sent value
-    Hybrid8NextSwitchIndex = (bitclearedSwitchIndex + 1) % 7;
+    Hybrid8NextSwitchIndex_v3 = (bitclearedSwitchIndex + 1) % 7;
 }
 
 void ICACHE_RAM_ATTR OtaPackChannelData_v3(OTA_Packet_v3_s * const otaPktPtr, const uint32_t *channelData, bool const TelemetryStatus, uint8_t const tlmDenom)
@@ -741,11 +847,11 @@ void ICACHE_RAM_ATTR OtaPackChannelData_v3(OTA_Packet_v3_s * const otaPktPtr, co
     {
         bool isHighAux = false;
         if (OtaSwitchModeCurrent != smWideOr8ch) {
-            isHighAux = FullResIsHighAux;
+            isHighAux = FullResIsHighAux_v3;
         }
-        GenerateChannelData8ch12ch_v3(otaPktPtr, channelData, TelemetryStatus, isHighAux);
+        GenerateChannelData8ch12ch_v3(&otaPktPtr->full, channelData, TelemetryStatus, isHighAux);
         if (OtaSwitchModeCurrent != smWideOr8ch) {
-            FullResIsHighAux = !FullResIsHighAux;
+            FullResIsHighAux_v3 = !FullResIsHighAux_v3;
         }
     }
     else
@@ -826,7 +932,7 @@ void SetRFLinkRate_v3(uint8_t index)
   OtaNonce = 0;
 
   // OtaUpdateSerializers(newSwitchMode, ModParams->PayloadLength); // not called, we pick the serializers via if statements later instead of using pointers
-  OtaSwitchModeCurrent = newSwitchMode
+  OtaSwitchModeCurrent = newSwitchMode;
   OtaIsFullRes = (ModParams->PayloadLength == OTA8_PACKET_SIZE);
   if (OtaIsFullRes) {
     ota_crc.init(16, ELRS_CRC16_POLY);
@@ -840,87 +946,88 @@ void SetRFLinkRate_v3(uint8_t index)
 
   ExpressLRS_currAirRate_Modparams = ModParams;
   ExpressLRS_currAirRate_RFperfParams = RFperf;
-  CRSF::LinkStatistics.rf_Mode = ModParams->enum_rate;
+  linkStats.rf_Mode = ModParams->enum_rate;
 
   handset->setPacketInterval(interval * ExpressLRS_currAirRate_Modparams->numOfSends);
-  connectionState = disconnected;
+  setConnectionState(disconnected);
   rfModeLastChangedMS = millis();
 }
 
 bool ICACHE_RAM_ATTR ProcessDownlinkPacket_v3(SX12xxDriverCommon::rx_status const status)
 {
-  // NOTE: in v3, this is called ProcessTMLpacket
-  OTA_Packet_v3_s * const otaPktPtr = (OTA_Packetv3_s * const)Radio.RXdataBuffer;
+  if (status != SX12xxDriverCommon::SX12XX_RX_OK)
+  {
+    DBGLN("TLM HW CRC error");
+    return false;
+  }
+
+  OTA_Packet_v3_s * const otaPktPtr = (OTA_Packet_v3_s * const)Radio.RXdataBuffer;
   if ((OtaIsFullRes && !ValidatePacketCrcFull_v3(otaPktPtr)) || (!OtaIsFullRes && !ValidatePacketCrcStd_v3(otaPktPtr)))
   {
     DBGLN("TLM v3 crc error");
     return false;
   }
 
-  if (otaPktPtr->std.type != PACKET_TYPE_TLM)
+  if (otaPktPtr->std.type != PACKET_TYPE_TLM_V3)
   {
     DBGLN("TLM type error %d", otaPktPtr->std.type);
     return false;
   }
 
-  LastTLMpacketRecvMillis = millis();
-  LQCalc.add();
+  LastTLMpacketRecv_Ms = millis();
+  LqTQly.add();
 
   Radio.GetLastPacketStats();
-  CRSF::LinkStatistics.downlink_SNR = SNR_DESCALE(Radio.LastPacketSNRRaw);
-  CRSF::LinkStatistics.downlink_RSSI_1 = Radio.LastPacketRSSI;
-  CRSF::LinkStatistics.downlink_RSSI_2 = Radio.LastPacketRSSI2;
+  linkStats.downlink_SNR = SNR_DESCALE(Radio.LastPacketSNRRaw);
+  linkStats.downlink_RSSI_1 = Radio.LastPacketRSSI;
+  linkStats.downlink_RSSI_2 = Radio.LastPacketRSSI2;
 
-  // Full res mode
   if (OtaIsFullRes)
   {
-    OTA_Packet8_v3_s * const ota8_v3 = (OTA_Packet8_v3_s * const)otaPktPtr;
-    OTA_Packet8_s ota8_mem;
-    OTA_Packet8_s* ota8 = (OTA_Packet8_s*)&ota8_mem;
-
-    // TODO: carefully translate the data of `ota8_v3` into `ota8` so that the new LinkStatsFromOta can work with it, see if any of the code already existing in this file is useful
-
-    uint8_t *telemPtr;
+    OTA_Packet8_v3_s * const ota8_v3 = &otaPktPtr->full;
+    uint8_t const packageIndex = ota8_v3->tlm_dl.packageIndex & OTALEGACY_ELRS8_TELEMETRY_MAX_PACKAGES;
+    uint8_t const *telemPtr;
     uint8_t dataLen;
-    if (ota8->tlm_dl.containsLinkStats)
+    if (ota8_v3->tlm_dl.containsLinkStats)
     {
-      LinkStatsFromOta(&ota8->tlm_dl.ul_link_stats.stats);
-      telemPtr = ota8->tlm_dl.ul_link_stats.payload;
-      dataLen = sizeof(ota8->tlm_dl.ul_link_stats.payload);
+      OTA_LinkStats_s lsV4 = translateLinkStatsV3ToV4(&ota8_v3->tlm_dl.ul_link_stats.stats);
+      LinkStatsFromOta(&lsV4);
+      DataUlSender.ConfirmCurrentPayload(ota8_v3->tlm_dl.ul_link_stats.stats.mspConfirm != 0);
+      telemPtr = ota8_v3->tlm_dl.ul_link_stats.payload;
+      dataLen = sizeof(ota8_v3->tlm_dl.ul_link_stats.payload);
     }
     else
     {
       if (firmwareOptions.is_airport)
       {
-        // OtaUnpackAirportData(otaPktPtr, &apOutputBuffer); // DO NOT ATTEMPT, backward compatibility with Airport mode is not going to be implemented
         return true;
       }
-      telemPtr = ota8->tlm_dl.payload;
-      dataLen = sizeof(ota8->tlm_dl.payload);
+      telemPtr = ota8_v3->tlm_dl.payload;
+      dataLen = sizeof(ota8_v3->tlm_dl.payload);
     }
-    //DBGLN("pi=%u len=%u", ota8->tlm_dl.packageIndex, dataLen);
-    // TelemetryReceiver.ReceiveData(ota8->tlm_dl.packageIndex & ELRS8_TELEMETRY_MAX_PACKAGES, telemPtr, dataLen);
-    // TODO: TelemetryReceiver doesn't exist in v4 and is replaced with DataDlReceiver, so use DataDlReceiver appropriately
+    DataDlReceiver.ReceiveData(packageIndex, telemPtr, dataLen);
   }
-  // Std res mode
   else
   {
     switch (otaPktPtr->std.tlm_dl.type)
     {
-      case ELRS_TELEMETRY_TYPE_LINK:
-        LinkStatsFromOta(&otaPktPtr->std.tlm_dl.ul_link_stats.stats);
+      case ELRS_TELEMETRY_TYPE_LINK_V3:
+      {
+        OTA_LinkStats_s lsV4 = translateLinkStatsV3ToV4(&otaPktPtr->std.tlm_dl.ul_link_stats.stats);
+        LinkStatsFromOta(&lsV4);
+        DataUlSender.ConfirmCurrentPayload(otaPktPtr->std.tlm_dl.ul_link_stats.stats.mspConfirm != 0);
         break;
+      }
 
-      case ELRS_TELEMETRY_TYPE_DATA:
+      case ELRS_TELEMETRY_TYPE_DATA_V3:
         if (firmwareOptions.is_airport)
         {
-          // OtaUnpackAirportData(otaPktPtr, &apOutputBuffer); // DO NOT ATTEMPT, backward compatibility with Airport mode is not going to be implemented
           return true;
         }
-        //TelemetryReceiver.ReceiveData(otaPktPtr->std.tlm_dl.packageIndex & ELRS4_TELEMETRY_MAX_PACKAGES,
-        //  otaPktPtr->std.tlm_dl.payload,
-        //  sizeof(otaPktPtr->std.tlm_dl.payload));
-        // TODO: TelemetryReceiver doesn't exist in v4 and is replaced with DataDlReceiver, so use DataDlReceiver appropriately
+        DataDlReceiver.ReceiveData(
+          otaPktPtr->std.tlm_dl.packageIndex & OTALEGACY_ELRS4_TELEMETRY_MAX_PACKAGES,
+          otaPktPtr->std.tlm_dl.payload,
+          sizeof(otaPktPtr->std.tlm_dl.payload));
         break;
     }
   }
@@ -965,10 +1072,10 @@ void ICACHE_RAM_ATTR SendRCdataToRF_v3()
   uint8_t NonceFHSSresult = OtaNonce % ExpressLRS_currAirRate_Modparams->FHSShopInterval;
 
   // Sync spam only happens on slot 1 and 2 and can't be disabled
-  if ((syncSpamCounter || (syncSpamCounterAfterRateChange && FHSSonSyncChannel())) && (NonceFHSSresult == 1 || NonceFHSSresult == 2))
+    if ((syncSpamCounter || (syncSpamCounterAfterRateChange && FHSSonSyncChannel())) && (NonceFHSSresult == 1 || NonceFHSSresult == 2))
   {
     otaPkt.std.type = PACKET_TYPE_SYNC;
-    GenerateSyncPacketData(OtaIsFullRes ? &otaPkt.full.sync.sync : &otaPkt.std.sync);
+    GenerateSyncPacketData_v3(OtaIsFullRes ? &otaPkt.full.sync.sync : &otaPkt.std.sync);
     syncSlot = 0; // reset the sync slot in case the new rate (after the syncspam) has a lower FHSShopInterval
   }
   // Regular sync rotates through 4x slots, twice on each slot, and telemetry pushes it to the next slot up
@@ -976,7 +1083,7 @@ void ICACHE_RAM_ATTR SendRCdataToRF_v3()
   else if ((!skipSync) && ((syncSlot / 2) <= NonceFHSSresult) && (now - SyncPacketLastSent > SyncInterval) && FHSSonSyncChannel())
   {
     otaPkt.std.type = PACKET_TYPE_SYNC;
-    GenerateSyncPacketData(OtaIsFullRes ? &otaPkt.full.sync.sync : &otaPkt.std.sync);
+    GenerateSyncPacketData_v3(OtaIsFullRes ? &otaPkt.full.sync.sync : &otaPkt.std.sync);
     syncSlot = (syncSlot + 1) % (ExpressLRS_currAirRate_Modparams->FHSShopInterval * 2);
   }
   else
@@ -985,30 +1092,28 @@ void ICACHE_RAM_ATTR SendRCdataToRF_v3()
     {
       // OtaPackAirportData(&otaPkt, &apInputBuffer); // DO NOT ATTEMPT, backward compatibility with Airport mode is not going to be implemented
     }
-    else if ((NextPacketIsMspData && MspSender.IsActive()) || dontSendChannelData)
+    else if ((NextPacketIsDataUl && DataUlSender.IsActive()) || dontSendChannelData)
     {
-      otaPkt.std.type = PACKET_TYPE_MSPDATA;
+      otaPkt.std.type = PACKET_TYPE_DATA;
       if (OtaIsFullRes)
       {
-        otaPkt.full.msp_ul.packageIndex = MspSender.GetCurrentPayload(
+        otaPkt.full.msp_ul.packageIndex = DataUlSender.GetCurrentPayload(
           otaPkt.full.msp_ul.payload,
           sizeof(otaPkt.full.msp_ul.payload));
-        //if (config.GetLinkMode() == TX_MAVLINK_MODE)
-        //  otaPkt.full.msp_ul.tlmFlag = TelemetryReceiver.GetCurrentConfirm();
-        // It can't be in MAVLINK mode because the Legacy mode is mutually exclusive
+        if (config.GetLinkMode() == TX_MAVLINK_MODE)
+          otaPkt.full.msp_ul.tlmFlag = DataDlReceiver.GetCurrentConfirm();
       }
       else
       {
-        otaPkt.std.msp_ul.packageIndex = MspSender.GetCurrentPayload(
+        otaPkt.std.msp_ul.packageIndex = DataUlSender.GetCurrentPayload(
           otaPkt.std.msp_ul.payload,
           sizeof(otaPkt.std.msp_ul.payload));
-        //if (config.GetLinkMode() == TX_MAVLINK_MODE)
-        //  otaPkt.std.msp_ul.tlmFlag = TelemetryReceiver.GetCurrentConfirm();
-        // It can't be in MAVLINK mode because the Legacy mode is mutually exclusive
+        if (config.GetLinkMode() == TX_MAVLINK_MODE)
+          otaPkt.std.msp_ul.tlmFlag = DataDlReceiver.GetCurrentConfirm();
       }
 
       // send channel data next so the channel messages also get sent during msp transmissions
-      NextPacketIsMspData = false;
+      NextPacketIsDataUl = false;
       // counter can be increased even for normal msp messages since it's reset if a real bind message should be sent
       BindingSendCount++;
       // If not in TlmBurst, request a sync packet soon to trigger higher download bandwidth for reply
@@ -1019,10 +1124,10 @@ void ICACHE_RAM_ATTR SendRCdataToRF_v3()
     else
     {
       // always enable msp after a channel package since the slot is only used if MspSender has data to send
-      NextPacketIsMspData = true;
+      NextPacketIsDataUl = true;
 
       //injectBackpackPanTiltRollData(now); // unsupported in legacy mode
-      OtaPackChannelData_v3(&otaPkt, ChannelData, TelemetryReceiver.GetCurrentConfirm(), ExpressLRS_currTlmDenom);
+      OtaPackChannelData_v3(&otaPkt, ChannelData, DataDlReceiver.GetCurrentConfirm(), ExpressLRS_currTlmDenom);
     }
   }
 
@@ -1070,7 +1175,7 @@ void ICACHE_RAM_ATTR SendRCdataToRF_v3()
   else
 #endif
   {
-    Radio.TXnb((uint8_t*)&otaPkt, transmittingRadio);
+    Radio.TXnb((uint8_t*)&otaPkt, false, nullptr, transmittingRadio);
   }
 }
 

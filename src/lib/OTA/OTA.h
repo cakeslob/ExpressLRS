@@ -207,4 +207,6 @@ void OtaUnpackAirportData(OTA_Packet_s const * const otaPktPtr, FIFO<AP_MAX_BUF_
 extern uint32_t debugRcvrLinkstatsPacketId;
 #endif
 
+typedef uint32_t (*Decimate11to10_fn)(uint32_t ch11bit);
+
 #endif // H_OTA
