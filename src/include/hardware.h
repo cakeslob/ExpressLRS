@@ -1,3 +1,5 @@
+#include "extra_features.h"
+
 #include <stdint.h>
 
 typedef enum {
@@ -6,23 +8,28 @@ typedef enum {
     // Serial
     HARDWARE_serial_rx,
     HARDWARE_serial_tx,
+
+    #ifndef TRIM_UNNECESSARY_HW
     HARDWARE_serial1_rx,
     HARDWARE_serial1_tx,
+    #endif
 
     // Radio
     HARDWARE_radio_busy,
-    HARDWARE_radio_busy_2,
     HARDWARE_radio_dio0,
-    HARDWARE_radio_dio0_2,
     HARDWARE_radio_dio1,
-    HARDWARE_radio_dio1_2,
     HARDWARE_radio_miso,
     HARDWARE_radio_mosi,
     HARDWARE_radio_nss,
-    HARDWARE_radio_nss_2,
     HARDWARE_radio_rst,
-    HARDWARE_radio_rst_2,
     HARDWARE_radio_sck,
+    #ifndef TRIM_UNNECESSARY_HW
+    HARDWARE_radio_busy_2,
+    HARDWARE_radio_dio0_2,
+    HARDWARE_radio_dio1_2,
+    HARDWARE_radio_nss_2,
+    HARDWARE_radio_rst_2,
+    #endif
     HARDWARE_radio_dcdc,
     HARDWARE_radio_rfo_hf,
     HARDWARE_radio_rfsw_ctrl,
@@ -57,12 +64,14 @@ typedef enum {
     HARDWARE_power_values_dual_count,
 
     // Input
+    #ifndef TRIM_UNNECESSARY_HW
     HARDWARE_joystick,
     HARDWARE_joystick_values,
 
     HARDWARE_five_way1,
     HARDWARE_five_way2,
     HARDWARE_five_way3,
+    #endif
 
     HARDWARE_button,
     HARDWARE_button_led_index,
@@ -82,14 +91,17 @@ typedef enum {
     HARDWARE_led_rgb,
     // GPIO_PIN_LED_WS2812_FAST // stm32
     HARDWARE_led_rgb_isgrb,
+    #if !defined(TRIM_UNNECESSARY_HW) || !defined(BUILD_DISABLE_RGB_LED)
     HARDWARE_ledidx_rgb_status,
     HARDWARE_ledidx_rgb_status_count,
     HARDWARE_ledidx_rgb_vtx,
     HARDWARE_ledidx_rgb_vtx_count,
     HARDWARE_ledidx_rgb_boot,
     HARDWARE_ledidx_rgb_boot_count,
+    #endif
 
     // OLED/TFT
+    #ifndef TRIM_UNNECESSARY_HW
     HARDWARE_screen_cs,       // SPI
     HARDWARE_screen_dc,       // SPI
     HARDWARE_screen_mosi,     // SPI
@@ -123,6 +135,7 @@ typedef enum {
     HARDWARE_misc_fan_speeds_count,
     HARDWARE_gsensor_stk8xxx,
     HARDWARE_thermal_lm75a,
+    #endif
 
     // PWM
     HARDWARE_pwm_outputs,
@@ -135,6 +148,7 @@ typedef enum {
     HARDWARE_vbat_atten,
 
     // VTX
+    #ifndef TRIM_UNNECESSARY_HW
     HARDWARE_vtx_amp_pwm,
     HARDWARE_vtx_amp_vpd,
     HARDWARE_vtx_amp_vref,
@@ -146,6 +160,7 @@ typedef enum {
     HARDWARE_vtx_amp_vpd_100mW,
     HARDWARE_vtx_amp_pwm_25mW,
     HARDWARE_vtx_amp_pwm_100mW,
+    #endif
 
     HARDWARE_LAST
 } nameType;

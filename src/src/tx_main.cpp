@@ -70,10 +70,11 @@ volatile uint8_t syncSpamCounter = 0;
 volatile uint8_t syncSpamCounterAfterRateChange = 0;
 uint32_t rfModeLastChangedMS = 0;
 uint32_t SyncPacketLastSent = 0;
-static enum { stbIdle, stbRequested, stbBoosting } syncTelemBoostState = stbIdle;
+enum { stbIdle, stbRequested, stbBoosting };
+uint8_t syncTelemBoostState = stbIdle;
 ////////////////////////////////////////////////
 
-static uint32_t LastTLMpacketRecv_Ms = 0;
+uint32_t LastTLMpacketRecv_Ms = 0;
 static uint32_t LinkStatsLastReported_Ms = 0;
 static bool commitInProgress = false;
 
@@ -84,7 +85,7 @@ static volatile bool ModelUpdatePending;
 
 uint8_t MSPDataPackage[5];
 #define BindingSpamAmount 25
-static uint8_t BindingSendCount;
+uint8_t BindingSendCount;
 bool RxWiFiReadyToSend = false;
 
 static TxTlmRcvPhase_e TelemetryRcvPhase = ttrpTransmitting;
@@ -436,6 +437,11 @@ uint8_t adjustSwitchModeForAirRate(OtaSwitchMode_e eSwitchMode, uint8_t packetSi
 
 void SetRFLinkRate(uint8_t index) // Set speed of RF link
 {
+  if (ota_isLegacy) {
+    SetRFLinkRate_v3(index);
+    return;
+  }
+
   expresslrs_mod_settings_s *const ModParams = get_elrs_airRateConfig(index);
   expresslrs_rf_pref_params_s *const RFperf = get_elrs_RFperfParams(index);
   // Binding always uses invertIQ
@@ -466,6 +472,8 @@ void SetRFLinkRate(uint8_t index) // Set speed of RF link
 
   FHSSusePrimaryFreqBand = !(ModParams->radio_type == RADIO_TYPE_LR1121_LORA_2G4) && !(ModParams->radio_type == RADIO_TYPE_LR1121_GFSK_2G4);
   FHSSuseDualBand = ModParams->radio_type == RADIO_TYPE_LR1121_LORA_DUAL;
+
+  // TODO: check ota_isLegacy here and make appropriate changes
 
   Radio.Config(ModParams->bw, ModParams->sf, ModParams->cr, FHSSgetInitialFreq(),
                ModParams->PreambleLen, invertIQ, ModParams->PayloadLength
@@ -499,6 +507,7 @@ void SetRFLinkRate(uint8_t index) // Set speed of RF link
   OtaNonce = 0;
 
   OtaUpdateSerializers(newSwitchMode, ModParams->PayloadLength);
+
   DataUlSender.setMaxPackageIndex(ELRS_MSP_MAX_PACKAGES);
   DataDlReceiver.setMaxPackageIndex(OtaIsFullRes ? ELRS8_DATA_DL_MAX_PACKAGES : ELRS4_DATA_DL_MAX_PACKAGES);
 
@@ -513,6 +522,11 @@ void SetRFLinkRate(uint8_t index) // Set speed of RF link
 
 void ICACHE_RAM_ATTR SendRCdataToRF()
 {
+  if (ota_isLegacy) {
+    SendRCdataToRF_v3();
+    return;
+  }
+
   // Do not send a stale channels packet to the RX if one has not been received from the handset
   // *Do* send data if a packet has never been received from handset and the timer is running
   // this is the case when bench testing and TXing without a handset
@@ -711,7 +725,12 @@ void ICACHE_RAM_ATTR timerCallback()
 
   TelemetryRcvPhase = ttrpTransmitting;
 
-  SendRCdataToRF();
+  if (!ota_isLegacy) {
+    SendRCdataToRF();
+  }
+  else {
+    SendRCdataToRF_v3();
+  }
 }
 
 static void UARTdisconnected()
@@ -768,6 +787,19 @@ static void ChangeRadioParams()
 {
   ModelUpdatePending = false;
   ResetPower(); // Call before SetRFLinkRate(). The LR1121 Radio lib can now set the correct output power in Config().
+
+  if (config.GetLinkMode() == TX_LEGACY_V3_MODE) {
+    // do stuff such that the subsequent radio reconfigurations will use legacy v3 protocol code paths
+    ota_isLegacy = true;
+  }
+  else {
+    ota_isLegacy = false;
+  }
+
+  if (ota_isLegacy) {
+    FHSSrandomiseFHSSsequence_v3(uidMacSeedGet_v3());
+  }
+
   SetRFLinkRate(config.GetRate());
   LbtEnableIfRequired();
 }
@@ -839,7 +871,7 @@ bool ICACHE_RAM_ATTR RXdoneISR(SX12xxDriverCommon::rx_status const status)
   }
 
   LbtCcaTimerStart();
-  const bool packetSuccessful = ProcessDownlinkPacket(status);
+  const bool packetSuccessful = !ota_isLegacy ? ProcessDownlinkPacket(status) : ProcessDownlinkPacket_v3(status);
   return packetSuccessful;
 }
 
@@ -1043,6 +1075,7 @@ static void ExitBindingMode()
 
   // Reset CRCInit to UID-defined value
   OtaUpdateCrcInitFromUid();
+  OtaUpdateCrcInitFromUid_v3();
   InBindingMode = false; // Clear binding mode before SetRFLinkRate() for correct IQ
 
   UARTconnected();
@@ -1369,6 +1402,7 @@ static void setupBindingFromConfig()
     UID[0], UID[1], UID[2], UID[3], UID[4], UID[5]);
 
   OtaUpdateCrcInitFromUid();
+  OtaUpdateCrcInitFromUid_v3();
 }
 
 

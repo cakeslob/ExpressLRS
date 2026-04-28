@@ -9,6 +9,7 @@ public:
     void Begin() override;
     void End() override;
     void handleInput() override;
+    void FakeDataReceived() override;
 
 private:
     uint32_t lastPPM = 0;

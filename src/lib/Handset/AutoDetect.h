@@ -10,6 +10,7 @@ public:
     void Begin() override;
     void End() override;
     void handleInput() override;
+    void FakeDataReceived() override;
 
 private:
     void migrateTo(Handset *that) const;

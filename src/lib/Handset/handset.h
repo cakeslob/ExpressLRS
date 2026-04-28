@@ -126,6 +126,8 @@ public:
     void forceConnection() { if (connected) connected(); }
 #endif
 
+    virtual void FakeDataReceived() {};
+
 protected:
     virtual ~Handset() = default;
 
@@ -137,8 +139,9 @@ protected:
 
     int32_t RequestedRCpacketInterval = 5000; // default to 200hz as per 'normal'
 
-private:
     volatile uint32_t RCdataLastRecv = 0;
+
+private:
     bool moduleArmed = false;
 };
 

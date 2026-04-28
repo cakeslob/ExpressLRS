@@ -2,8 +2,7 @@
 #include "common.h"
 #include "config.h"
 
-#if defined(BUILD_AM32CONFIG)
-#if defined(PLATFORM_ESP32)
+#if defined(BUILD_AM32_CONFIG) && defined(TARGET_RX)
 
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
@@ -394,7 +393,7 @@ void am32_tick()
             servos_singleWrite(pin_num, 0);
         }
     }
-
+    
     #ifdef ENABLE_AM32_TCP_BRIDGE
     // AM32 TCP bridge requires the host PC to have some sort of driver that bridges a virtual serial port to a TCP pipe
     // start up a TCP server for the AM32 TCP bridge
@@ -450,7 +449,7 @@ void am32_tick()
     #endif
 }
 
-#else // PLATFORM_ESP32
+#else
 
 #if defined(PLATFORM_ESP8266)
 #include <ESP8266WiFi.h>
@@ -469,7 +468,5 @@ void am32_tick()
 {
     // do nothing
 }
-
-#endif // PLATFORM_ESP32
 
 #endif

@@ -1,0 +1,29 @@
+#pragma once
+
+#define DISABLE_POWER_ON_COUNT
+
+#if defined(PLATFORM_ESP32) || defined(PLATFORM_ESP32_C3) || defined(PLATFORM_ESP32_C3)
+
+#define BUILD_I2C_WIRE
+#define BUILD_EEPROM_EXPORT_IMPORT
+#define BUILD_CUSTOM_MIXER
+#define BUILD_WEB_BACKEND_WEBSOCKET
+#define BUILD_VESC_UART
+#define BUILD_AM32_CONFIG
+#define BUILD_SERVOS_MOVE_BLINK
+
+#endif
+
+#if defined(PLATFORM_ESP8266)
+
+#define BUILD_DISABLE_RGB_LED
+#define BUILD_EEPROM_EXPORT_IMPORT
+#define BUILD_CUSTOM_MIXER
+#define BUILD_WEB_BACKEND_WEBSOCKET
+#define BUILD_SERVOS_MOVE_BLINK
+
+#endif
+
+#if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266) && defined(TARGET_RX)
+#define TRIM_UNNECESSARY_HW // saves about 1KB after compression
+#endif

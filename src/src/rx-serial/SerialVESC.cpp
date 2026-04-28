@@ -48,6 +48,8 @@ static void vesc_sendTelemetry(vesc_telem_t* data);
 
 void SerialVESC::begin(uint8_t idx, int8_t pin, int8_t pin_rx)
 {
+    #ifdef BUILD_VESC_UART
+
     DBGVLN("SerialVESC::begin %u %d", idx, pin);
 
     this->idx = idx;
@@ -111,11 +113,15 @@ void SerialVESC::begin(uint8_t idx, int8_t pin, int8_t pin_rx)
     telem_cfg = config.GetVescCfgExtras();
 
     this->configed = true;
+
     resetReceiveState();
+
+    #endif
 }
 
 uint32_t SerialVESC::sendRCFrame(bool frameAvailable, bool frameMissed, uint32_t *channelData)
 {
+    #ifdef BUILD_VESC_UART
     if (!this->configed) {
         return DURATION_IMMEDIATELY;
     }
@@ -124,8 +130,6 @@ uint32_t SerialVESC::sendRCFrame(bool frameAvailable, bool frameMissed, uint32_t
     if (!frameAvailable) {
         return DURATION_IMMEDIATELY;
     }
-
-    custommixer_mix();
 
     for (int i = 0; i < 3; i++)
     {
@@ -541,6 +545,8 @@ static int16_t xy_magnitude(int16_t x, int16_t y)
 
 static int32_t xy_to_vesc_pos_offset(int16_t x, int16_t y, bool invert)
 {
+    #ifdef BUILD_VESC_UART
+
     if (x == 0 && y == 0) {
         return 0;
     }
@@ -569,4 +575,7 @@ static int32_t xy_to_vesc_pos_offset(int16_t x, int16_t y, bool invert)
     }
 
     return pos;
+    #else
+    return 0;
+    #endif
 }

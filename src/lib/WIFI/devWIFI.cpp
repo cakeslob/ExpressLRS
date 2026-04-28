@@ -14,7 +14,6 @@
 #include <esp_partition.h>
 #include <esp_ota_ops.h>
 #include <soc/uart_pins.h>
-#include "AM32.h"
 #else
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
@@ -43,6 +42,7 @@
 #include "WebContent.h"
 
 #include "config.h"
+#include "WebBackend.h"
 #include "CustomMixer.h"
 
 #if defined(RADIO_LR1121)
@@ -442,6 +442,38 @@ static void GetConfiguration(AsyncWebServerRequest *request)
     settings["reg_domain_low"] = FHSSconfig->domain;
     settings["reg_domain_high"] = FHSSconfigDualBand->domain;
 #endif
+
+    // Let the front-end know what extra compiled features are available.
+    uint32_t extra_feature_flags = 0;
+    #if defined(BUILD_EEPROM_EXPORT_IMPORT)
+    extra_feature_flags |= 1 << 0;
+    #endif
+    #if defined(BUILD_CUSTOM_MIXER)
+    extra_feature_flags |= 1 << 1;
+    #endif
+    #if defined(BUILD_WEB_BACKEND_WEBSOCKET)
+    extra_feature_flags |= 1 << 2;
+    #endif
+    #if defined(BUILD_VESC_UART)
+    extra_feature_flags |= 1 << 3;
+    #endif
+    #if defined(BUILD_AM32_CONFIG)
+    extra_feature_flags |= 1 << 4;
+    #endif
+    settings["extra-features-avail"] = extra_feature_flags;
+
+    #ifdef TARGET_TX
+    JsonArray legacyV3Models = settings["legacy-v3-models"].to<JsonArray>();
+    for (uint8_t model = 0; model < CONFIG_TX_MODEL_CNT; ++model)
+    {
+      if (config.GetModelConfig(model).linkMode != TX_LEGACY_V3_MODE)
+      {
+        continue;
+      }
+      legacyV3Models.add(model);
+    }
+    #endif
+
   }
 
   response->setLength();
@@ -743,7 +775,7 @@ static void WebUploadResponseHandler(AsyncWebServerRequest *request) {
   if (target_seen || Update.hasError()) {
     String msg;
     if (!Update.hasError() && Update.end()) {
-      #if defined(PLATFORM_ESP32)
+      #if defined(BUILD_EEPROM_EXPORT_IMPORT) && defined(PLATFORM_ESP32) && defined(TARGET_RX)
       // LoadFromMeta only works from here if the binary image is uncompressed
       // if it is compressed (like for ESP8285), then it's not uncompressed until the reboot, so there's nothing to read right now
       const int loadFromMetaResult = config.LoadFromMeta(totalSize, true, true);
@@ -752,7 +784,7 @@ static void WebUploadResponseHandler(AsyncWebServerRequest *request) {
       DBGLN("Update complete, rebooting");
       msg = String("{\"status\": \"ok\", \"msg\": \"Update complete. ");
 
-      #if defined(PLATFORM_ESP32)
+      #if defined(BUILD_EEPROM_EXPORT_IMPORT) && defined(PLATFORM_ESP32) && defined(TARGET_RX)
       if (loadFromMetaResult == 0) {
         msg += "Old configuration pre-applied. ";
       }
@@ -921,7 +953,9 @@ static size_t getFirmwareChunk(uint8_t *data, size_t len, size_t pos)
       {
         unsigned int metaAdr1 = adr - (sketchSize + ELRSOPTS_PRODUCTNAME_SIZE + ELRSOPTS_DEVICENAME_SIZE);
         unsigned int metaAdr2 = metaAdr1 - ELRSOPTS_OPTIONS_SIZE;
+        #if defined(BUILD_EEPROM_EXPORT_IMPORT)
         unsigned int metaAdr3 = metaAdr2 - ELRSOPTS_HARDWARE_SIZE;
+        #endif
         if (metaAdr1 < ELRSOPTS_OPTIONS_SIZE && file1 && !file1.isDirectory()) { // if writing options file region and the file exists
           if (metaAdr1 < file1.size()) { // if we are within the actual file size
             file1.seek(metaAdr1, SeekSet);
@@ -948,6 +982,7 @@ static size_t getFirmwareChunk(uint8_t *data, size_t len, size_t pos)
             dst[i] = 0; // blank out the rest of the file
           }
         }
+        #if defined(BUILD_EEPROM_EXPORT_IMPORT)
         if (metaAdr3 < ELRSOPTS_EEPROM_SIZE) {
           switch (metaAdr3) { // first 6 characters are used to indicate that the EEPROM exists, this is checked during file upload
             case 0: dst[i] = 'E'; break;
@@ -975,6 +1010,7 @@ static size_t getFirmwareChunk(uint8_t *data, size_t len, size_t pos)
             break;
           }
         }
+        #endif
       }
     }
     // close the files to be clean, they will be re-opened on the next chunk request
@@ -1271,9 +1307,7 @@ static void startServices()
 
   addCaptivePortalHandlers();
 
-  #ifdef BUILD_AM32CONFIG
-  am32_setupServer(&server);
-  #endif
+  webbe_install(&server);
 
   server.onNotFound(WebUpdateHandleNotFound);
 
@@ -1448,6 +1482,7 @@ static int timeout()
   if (wifiStarted)
   {
     HandleWebUpdate();
+    webbe_tick();
 #if defined(PLATFORM_ESP8266)
     // When in STA mode, a small delay reduces power use from 90mA to 30mA when idle
     // In AP mode, it doesn't seem to make a measurable difference, but does not hurt
@@ -1456,9 +1491,7 @@ static int timeout()
       delay(1);
     return DURATION_IMMEDIATELY;
 #else
-    // All the web traffic is async apart from changing modes and MSP2WIFI
-    // No need to run balls-to-the-wall; the wifi runs on this core too (0)
-    return 2;
+    return DURATION_IMMEDIATELY;
 #endif
   }
 

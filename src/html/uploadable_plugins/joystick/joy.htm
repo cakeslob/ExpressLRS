@@ -1,0 +1,54 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+    <title>Browser ELRS Control</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="joy.cfg.js"></script>
+    <script src="joylib.js"></script>
+    <script src="joy.js"></script>
+    <link href="joy.css" rel="stylesheet" type="text/css" />
+</head>
+
+<body onload="webjoy_onLoad()">
+<div><h2>Browser ELRS Control</h2></div>
+<div id="msg_wifidisconnected" class="hidden">Wi-Fi DISCONNECTED</div>
+<div id="msg_nocontrol" class="hidden">ERROR: TRANSMITTER NOT ACTIVE</div>
+<div id="msg_telemetry" class="hidden">&nbsp;</div>
+<div id="joystick_area" class="">
+    <div class="joy-row">
+        <div class="joy-column">
+            <div id="joy1Div" style="width:200px;height:200px;margin:50px"></div>
+        </div>
+        <div class="joy-column" id="second_column">
+            <div id="joy2Div" style="width:200px;height:200px;margin:50px"></div>
+        </div>
+    </div>
+    <div class="joy-row">
+        <div class="slidecontainer joy-column">
+            <div class="slider-with-ticks">
+                <input type="range" min="0" max="100" value="50" class="slider" id="slider_1">
+                <span class="slider-tick slider-tick-25" aria-hidden="true"></span>
+                <span class="slider-tick slider-tick-50" aria-hidden="true"></span>
+                <span class="slider-tick slider-tick-75" aria-hidden="true"></span>
+            </div>
+        </div>
+        <div class="slidecontainer joy-column hidden" style="min-width:50px;">&nbsp;&nbsp;&nbsp;&nbsp;</div>
+        <div class="slidecontainer joy-column hidden">
+            <div class="slider-with-ticks">
+                <input type="range" min="0" max="100" value="50" class="slider" id="slider_2">
+                <span class="slider-tick slider-tick-25" aria-hidden="true"></span>
+                <span class="slider-tick slider-tick-50" aria-hidden="true"></span>
+                <span class="slider-tick slider-tick-75" aria-hidden="true"></span>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="gamepad_area" class="hidden">
+    <div id="msg_gamepaddisconnected" class="hidden">GAMEPAD DISCONNECTED</div>
+    <div id="gamepad_id"></div>
+    <div id="gamepad_buttons" class="square-container"></div>
+    <div id="gamepad_axis" class="square-container"></div>
+</div>
+</body>
+</html>

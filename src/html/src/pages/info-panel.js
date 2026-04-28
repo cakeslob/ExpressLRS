@@ -2,7 +2,9 @@ import {html, LitElement} from "lit";
 import {customElement} from "lit/decorators.js";
 import {elrsState, formatBand} from "../utils/state.js";
 import {SERIAL_OPTIONS1} from '../utils/globals.js'
+import {cuteAlert} from "../utils/feedback.js";
 import '../assets/mui.js';
+import '../components/filedrag.js'
 
 @customElement('info-panel')
 class InfoPanel extends LitElement {
@@ -75,7 +77,74 @@ class InfoPanel extends LitElement {
                 `:
                 ''
             }
+            <!-- FEATURE: IS_TX -->
+            ${this._renderLegacyV3Models()}
+            <!-- /FEATURE: IS_TX -->
+            <div class="mui-divider"></div>
+            <div class="mui-panel">
+                <div class="mui--text-title">Offline Plugin</div>
+                <p>Load a offline JavaScript plugin into the current web UI session.</p>
+                <file-drop id="plugin-upload" label="Select plugin file" @file-drop="${this._fileSelectHandler}">or drop plugin file here</file-drop>
+            </div>
         `
+    }
+
+    async _fileSelectHandler(e) {
+        const files = e.detail.files
+        const file = files?.[0]
+        if (!file) return
+
+        if (!file.name.toLowerCase().endsWith('.js')) {
+            await cuteAlert({
+                type: 'error',
+                title: 'Incorrect File Format',
+                message: 'You selected the file &quot;' + file.name.toString() + '&quot;.<br />The plugin file must be a .js file.'
+            })
+            return
+        }
+
+        const reader = new FileReader()
+        reader.onload = async (event) => {
+            try {
+                globalThis.elrs_plugin_init = undefined
+                globalThis.eval(event.target?.result?.toString() ?? '')
+                if (typeof globalThis.elrs_plugin_init !== 'function') {
+                    await cuteAlert({
+                        type: 'error',
+                        title: 'Plugin Load Failed',
+                        message: 'The plugin did not define <code>elrs_plugin_init()</code>.'
+                    })
+                    return
+                }
+
+                const pluginContext = {
+                    config:   {...elrsState.config},
+                    options:  {...elrsState.options},
+                    settings: {...elrsState.settings}
+                }
+                await globalThis.elrs_plugin_init(pluginContext)
+                //await cuteAlert({
+                //    type: 'success',
+                //    title: 'Plugin Loaded',
+                //    message: 'The plugin was loaded successfully.'
+                //})
+            } catch (err) {
+                console.log(err);
+                await cuteAlert({
+                    type: 'error',
+                    title: 'Plugin Load Failed',
+                    message: err instanceof Error ? err.message : String(err)
+                })
+            }
+        }
+        reader.onerror = async () => {
+            await cuteAlert({
+                type: 'error',
+                title: 'Plugin Load Failed',
+                message: 'The plugin file could not be read.'
+            })
+        }
+        reader.readAsText(file)
     }
 
     _hasCustomSettings() {
@@ -97,4 +166,21 @@ class InfoPanel extends LitElement {
         // /FEATURE: IS_TX
         return custom
     }
+
+    // FEATURE: IS_TX
+    _renderLegacyV3Models() {
+        const models = elrsState.settings['legacy-v3-models']
+        if (models === undefined) return ''
+
+        return html`
+            <div class="mui-divider"></div>
+            <div class="mui-panel">
+                <div class="mui--text-title">Legacy V3 OTA Models</div>
+                <p>${models.length
+                    ? `${models.length === 1 ? 'Model' : 'Models'} ${models.join(', ')} ${models.length === 1 ? 'is' : 'are'} set to use the legacy v3 OTA protocol.`
+                    : 'No Models'}</p>
+            </div>
+        `
+    }
+    // /FEATURE: IS_TX
 }

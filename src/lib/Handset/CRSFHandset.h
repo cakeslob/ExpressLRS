@@ -39,6 +39,8 @@ public:
     uint8_t GetMaxPacketBytes() const override { return maxPacketBytes; }
     int getMinPacketInterval() const override;
 
+    void FakeDataReceived() override;
+
 private:
     uint8_t inBuffer[CRSF_MAX_PACKET_LEN] = {};
 

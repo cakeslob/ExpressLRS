@@ -13,6 +13,7 @@ const POSITION_RANGE_SNAP_MAX = POSITION_RANGE_SNAP_TO + 500000
 // We intentionally use 1000000000 instead so the configured ceiling is a clean
 // round number instead of looking like random digits.
 const VESC_RANGE_MAX = 1000000000
+const EXTRA_FEATURE_VESC_BIT = 3
 const PROTOCOL_VESC = 10
 const PROTOCOL_SERIAL1_VESC = 12
 const VESC_TELEM_CFG_POWER = 1 << 0
@@ -152,14 +153,27 @@ class VescPanel extends LitElement {
     @state() accessor rows = []
     @state() accessor extras = 0
 
-    createRenderRoot() {
+    constructor() {
+        super()
         this.rows = getStoredConfig().map((item) => decodeRow(item))
         this.extras = getStoredExtras()
         this._save = this._save.bind(this)
+    }
+
+    createRenderRoot() {
         return this
     }
 
     render() {
+        if (!this._isFeatureAvailable()) {
+            return html`
+                <div class="mui-panel mui--text-title">VESC</div>
+                <div class="mui-panel">
+                    <p>This firmware does not support this feature.</p>
+                </div>
+            `
+        }
+
         return html`
             <style>
                 .vesc-table {
@@ -278,6 +292,11 @@ class VescPanel extends LitElement {
                 </div>
             </div>
         `
+    }
+
+    _isFeatureAvailable() {
+        const extraFeatureFlags = Number(elrsState.settings["extra-features-avail"]) || 0
+        return (extraFeatureFlags & (1 << EXTRA_FEATURE_VESC_BIT)) !== 0
     }
 
     _renderGroup({title, startIndex, enabled, message}) {

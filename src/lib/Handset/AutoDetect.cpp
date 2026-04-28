@@ -116,4 +116,8 @@ void AutoDetect::handleInput()
     }
 }
 
+void AutoDetect::FakeDataReceived()
+{
+}
+
 #endif

@@ -1,6 +1,9 @@
 #include "targets.h"
 #include "common.h"
 #include "devLED.h"
+#if defined(TARGET_RX)
+#include "devServoOutput.h"
+#endif
 
 #if defined(TARGET_TX)
 #include "POWERMGNT.h"
@@ -20,6 +23,14 @@ static uint8_t _count;
 static uint8_t _counter = 0;
 static bool hasRGBLeds = false;
 static bool hasGBLeds = false;
+
+#if defined(TARGET_RX) && defined(BUILD_SERVOS_MOVE_BLINK)
+static int8_t activity_pin = UNDEF_PIN;
+static uint8_t activity_restore_value = LOW;
+static uint32_t activity_until = 0;
+#endif
+
+static int event();
 
 static uint16_t updateLED()
 {
@@ -83,8 +94,47 @@ static bool initialize()
     return hasLED || hasRGBLeds || hasGBLeds;
 }
 
+#if defined(TARGET_RX) && defined(BUILD_SERVOS_MOVE_BLINK)
+static int startServoActivityPulse()
+{
+    servos_movedBlinkLed = false;
+    if (connectionState != connected || !connectionHasModelMatch || !teamraceHasModelMatch)
+    {
+        return DURATION_IGNORE;
+    }
+
+    if (GPIO_PIN_LED_RED != UNDEF_PIN)
+    {
+        activity_pin = GPIO_PIN_LED_RED;
+        activity_restore_value = HIGH ^ GPIO_LED_RED_INVERTED;
+        digitalWrite(activity_pin, LOW ^ GPIO_LED_RED_INVERTED);
+    }
+    else
+    {
+        return DURATION_IGNORE;
+    }
+
+    activity_until = millis() + 100;
+    return 100;
+}
+#endif
+
 static int timeout()
 {
+#if defined(TARGET_RX) && defined(BUILD_SERVOS_MOVE_BLINK)
+    if (activity_pin != UNDEF_PIN)
+    {
+        uint32_t now = millis();
+        if (now < activity_until)
+        {
+            return activity_until - now;
+        }
+
+        digitalWrite(activity_pin, activity_restore_value);
+        activity_pin = UNDEF_PIN;
+        return event();
+    }
+#endif
     return updateLED();
 }
 
@@ -118,6 +168,16 @@ static void setPowerLEDs()
 
 static int event()
 {
+    #if defined(TARGET_RX) && defined(BUILD_SERVOS_MOVE_BLINK)
+        if (servos_movedBlinkLed)
+        {
+            int delay = startServoActivityPulse();
+            if (delay != DURATION_IGNORE)
+            {
+                return delay;
+            }
+        }
+    #endif
     #if defined(TARGET_TX)
         setPowerLEDs();
     #else
@@ -226,5 +286,5 @@ device_t LED_device = {
     .start = start,
     .event = event,
     .timeout = timeout,
-    .subscribe = EVENT_CONNECTION_CHANGED | EVENT_ENTER_BIND_MODE | EVENT_EXIT_BIND_MODE
+    .subscribe = EVENT_CONNECTION_CHANGED | EVENT_ENTER_BIND_MODE | EVENT_EXIT_BIND_MODE | EVENT_SERVO_ACTIVITY
 };

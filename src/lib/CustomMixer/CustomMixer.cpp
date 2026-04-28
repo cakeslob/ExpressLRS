@@ -17,6 +17,8 @@ static int32_t apply_scale(int32_t x, int8_t scale);
 static int32_t apply_kickstart(int32_t x, uint8_t ks);
 static int32_t apply_offset(int32_t x, int8_t offset);
 
+extern bool webbe_installed;
+
 void custommixer_init(const custom_mixer_t* cfg_ptr)
 {
     custom_mixer = (custom_mixer_t*)cfg_ptr;
@@ -27,18 +29,30 @@ void custommixer_mix()
     // copy first to make sure that even if nothing happens, the PWM code still has data to use
     memcpy(ChannelDataMixed, ChannelData, sizeof(uint32_t) * CRSF_NUM_CHANNELS);
 
+    #ifdef BUILD_CUSTOM_MIXER
     custommixer_arcadetankmix();
     custommixer_mixaux();
     custommixer_customarmswitch();
+    #endif
 }
 
 bool custommixer_isArmed()
 {
+    #ifdef BUILD_CUSTOM_MIXER
+    if (webbe_installed) {
+        // allow the servos to run if using the websocket
+        return true;
+    }
     return armed_switch_armed;
+    #else
+    return true;
+    #endif
 }
 
 static void custommixer_arcadetankmix()
 {
+    #ifdef BUILD_CUSTOM_MIXER
+
     uint8_t ch_thr   = custom_mixer->ch_throttle;
     uint8_t ch_str   = custom_mixer->ch_steering;
     uint8_t ch_left  = custom_mixer->ch_left;
@@ -100,10 +114,14 @@ static void custommixer_arcadetankmix()
     if (ch_right != 0) {
         ChannelDataMixed[ch_right - 1] = val_r;
     }
+
+    #endif
 }
 
 static void custommixer_customarmswitch()
 {
+    #ifdef BUILD_CUSTOM_MIXER
+
     uint8_t sw_ch = custom_mixer->ch_arm;
     uint8_t sw_pos = custom_mixer->arming_range;
 
@@ -134,10 +152,14 @@ static void custommixer_customarmswitch()
             armed_switch_armed = true;
         }
     }
+
+    #endif
 }
 
 static void custommixer_mixaux()
 {
+    #ifdef BUILD_CUSTOM_MIXER
+
     for (int i = 0; i < 2; i++)
     {
         uint8_t ch = (i == 1) ? custom_mixer->ch_aux2 : custom_mixer->ch_aux1;
@@ -154,6 +176,8 @@ static void custommixer_mixaux()
             ChannelDataMixed[ch] = v; // write back into array
         }
     }
+
+    #endif
 }
 
 static int32_t apply_deadzone(int32_t x, uint8_t dz)
@@ -167,6 +191,8 @@ static int32_t apply_deadzone(int32_t x, uint8_t dz)
 
 static int32_t apply_expo(int32_t x, int8_t curve)
 {
+    #ifdef BUILD_CUSTOM_MIXER
+
     if (x == 0 || curve == 0) {
         return x;
     }
@@ -207,6 +233,10 @@ static int32_t apply_expo(int32_t x, int8_t curve)
     int32_t y = (int32_t)roundf(shaped * (float)input_max);
 
     return s * y;
+
+    #else
+    return x;
+    #endif
 }
 
 static int32_t apply_scale(int32_t x, int8_t scale)
@@ -240,6 +270,8 @@ static int32_t apply_offset(int32_t x, int8_t offset)
 */
 static void mixercurve_to_json(const mixercurve_t* curve, JsonObject obj)
 {
+    #ifdef BUILD_CUSTOM_MIXER
+
     if (!curve || obj.isNull()) {
         return;
     }
@@ -249,6 +281,8 @@ static void mixercurve_to_json(const mixercurve_t* curve, JsonObject obj)
     obj["scale"]        = curve->scale;
     obj["antideadzone"] = curve->antideadzone;
     obj["offset"]       = curve->offset;
+
+    #endif
 }
 
 
@@ -260,6 +294,8 @@ static void mixercurve_to_json(const mixercurve_t* curve, JsonObject obj)
 */
 static void json_to_mixercurve(JsonObjectConst obj, mixercurve_t* curve)
 {
+    #ifdef BUILD_CUSTOM_MIXER
+
     if (!curve || obj.isNull()) {
         return;
     }
@@ -283,6 +319,8 @@ static void json_to_mixercurve(JsonObjectConst obj, mixercurve_t* curve)
     if (obj["offset"].is<int>()) {
         curve->offset = (int8_t)obj["offset"].as<int>();
     }
+
+    #endif
 }
 
 
@@ -293,6 +331,8 @@ static void json_to_mixercurve(JsonObjectConst obj, mixercurve_t* curve)
 */
 void custom_mixer_to_json(const custom_mixer_t* mixer, JsonObject obj)
 {
+    #ifdef BUILD_CUSTOM_MIXER
+
     if (!mixer || obj.isNull()) {
         return;
     }
@@ -315,6 +355,8 @@ void custom_mixer_to_json(const custom_mixer_t* mixer, JsonObject obj)
 
     obj["ch_arm"]       = mixer->ch_arm;
     obj["arming_range"] = mixer->arming_range;
+
+    #endif
 }
 
 
@@ -326,6 +368,8 @@ void custom_mixer_to_json(const custom_mixer_t* mixer, JsonObject obj)
 */
 void json_to_custom_mixer(JsonObjectConst obj, custom_mixer_t* mixer)
 {
+    #ifdef BUILD_CUSTOM_MIXER
+
     if (!mixer || obj.isNull()) {
         return;
     }
@@ -368,4 +412,6 @@ void json_to_custom_mixer(JsonObjectConst obj, custom_mixer_t* mixer)
     if (obj["arming_range"].is<uint8_t>()) {
         mixer->arming_range = obj["arming_range"].as<uint8_t>();
     }
+
+    #endif
 }

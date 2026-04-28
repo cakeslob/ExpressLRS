@@ -1,4 +1,6 @@
+#if (defined(BUILD_SHREW_UNNECESSARY) && defined(BUILD_I2C_WIRE)) || !defined(PLATFORM_ESP8266)
 #include <Wire.h>
+#endif
 
 /****
  * Calculations used in this code taken from iNav's SPL006 (sic) implementation
@@ -12,6 +14,7 @@
 
 uint8_t SPL06::oversampleToRegVal(const uint8_t oversamples) const
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     switch (oversamples)
     {
         default: // fallthrough
@@ -24,10 +27,14 @@ uint8_t SPL06::oversampleToRegVal(const uint8_t oversamples) const
         case 64: return 6;
         case 128: return 7;
     }
+    #else
+    return 0;
+    #endif
 }
 
 int32_t SPL06::oversampleToScaleFactor(const uint8_t oversamples) const
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     switch (oversamples)
     {
         default: // falthrough
@@ -40,10 +47,14 @@ int32_t SPL06::oversampleToScaleFactor(const uint8_t oversamples) const
         case 64: return 1040384;
         case 128: return 2088960;
     }
+    #else
+    return 0;
+    #endif
 }
 
 void SPL06::initialize()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     if (m_initialized)
         return;
 
@@ -83,21 +94,29 @@ void SPL06::initialize()
 
     // Done!
     m_initialized = true;
+    #endif
 }
 
 uint8_t SPL06::getTemperatureDuration()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     return SPL06_MEASUREMENT_TIME(OVERSAMPLING_TEMPERATURE);
+    #else
+    return 0;
+    #endif
 }
 
 void SPL06::startTemperature()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     uint8_t reg_value = SPL06_MEAS_TEMPERATURE;
     writeRegister(SPL06_MODE_AND_STATUS_REG, &reg_value, sizeof(reg_value));
+    #endif
 }
 
 int32_t SPL06::getTemperature()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     uint8_t status;
     readRegister(SPL06_MODE_AND_STATUS_REG, &status, sizeof(status));
     if ((status & SPL06_MEAS_CFG_TEMPERATURE_RDY) == 0)
@@ -114,21 +133,31 @@ int32_t SPL06::getTemperature()
     const float temp_comp = (float)m_calib.c0 / 2 + m_temperatureLast * m_calib.c1;
 
     return temp_comp * 100;
+    #else
+    return 0;
+    #endif
 }
 
 uint8_t SPL06::getPressureDuration()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     return SPL06_MEASUREMENT_TIME(OVERSAMPLING_PRESSURE);
+    #else
+    return 0;
+    #endif
 }
 
 void SPL06::startPressure()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     uint8_t reg_value = SPL06_MEAS_PRESSURE;
     writeRegister(SPL06_MODE_AND_STATUS_REG, &reg_value, sizeof(reg_value));
+    #endif
 }
 
 uint32_t SPL06::getPressure()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     uint8_t status;
     readRegister(SPL06_MODE_AND_STATUS_REG, &status, sizeof(status));
     if ((status & SPL06_MEAS_CFG_PRESSURE_RDY) == 0)
@@ -146,10 +175,14 @@ uint32_t SPL06::getPressure()
     const float p_temp_comp = m_temperatureLast * ((float)m_calib.c01 + p_raw_sc * ((float)m_calib.c11 + p_raw_sc * m_calib.c21));
 
     return (pressure_cal + p_temp_comp) * 10.0;
+    #else
+    return PRESSURE_INVALID;
+    #endif
 }
 
 bool SPL06::detect()
 {
+    #if defined(BUILD_SHREW_UNNECESSARY) || !defined(PLATFORM_ESP8266)
     // Assumes Wire.begin() has already been called
     uint8_t chipid = 0;
 
@@ -164,4 +197,7 @@ bool SPL06::detect()
     m_address = SPL06_I2C_ADDR_ALT;
     readRegister(SPL06_CHIP_ID_REG, &chipid, sizeof(chipid));
     return chipid == SPL06_DEFAULT_CHIP_ID;
+    #else
+    return false;
+    #endif
 }
