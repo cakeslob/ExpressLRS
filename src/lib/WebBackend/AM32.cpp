@@ -431,17 +431,37 @@ void am32_tick()
             // data from host PC is available
             int available = wclient.available();
             if (available <= 0) {
-                break;
+                break;// nothing to do
             }
 
             // pass data from host PC to serial port
             size_t readSize = min((size_t)available, sizeof(bridgeBuffer));
             int bytesRead = wclient.read(bridgeBuffer, readSize);
+
             if (bytesRead <= 0) {
-                break;
+                break; // nothing to do
             }
+
             if (am32_serial_ready && pin_num >= 0) {
-                Serial.write(bridgeBuffer, bytesRead);
+                am32_setPinMode(pin_num, true); // pin to TX mode
+
+                // calculate estimated time for transmission
+                uint64_t ts = esp_timer_get_time();
+                uint64_t deadline = ts + (520 * bytesRead) + 26;
+
+                Serial.write(bridgeBuffer, bytesRead); // send the data (to DMA or FIFO buffer, of the serial port)
+
+                // wait for transmission
+                if (bytesRead >= 24) {
+                    uart_wait_tx_done(0, pdMS_TO_TICKS(100));
+                }
+                else {
+                    while (esp_timer_get_time() < deadline) {
+                        // do nothing
+                    }
+                }
+
+                am32_setPinMode(pin_num, false); // pin back to RX mode
             }
             wclient.write(bridgeBuffer, bytesRead); // this causes an echo, which is what the PC host software expects, since these serial ports are supposed to have TX pin connected to RX pin
         }

@@ -12,9 +12,6 @@
 #include <ESP8266WiFi.h>
 #endif
 
-#define ENABLE_VESC_TCP_BRIDGE
-#define ENABLE_VESC_TELEMETRY
-
 constexpr int32_t DUTY_RANGE_SNAP_TO_MAX = 99500; // 99.5%
 constexpr int32_t POSITION_RANGE_SNAP_TO = 360000000; // 360 deg
 constexpr int32_t POSITION_RANGE_SNAP_MIN = POSITION_RANGE_SNAP_TO - 500000;
@@ -215,6 +212,8 @@ uint32_t SerialVESC::sendRCFrame(bool frameAvailable, bool frameMissed, uint32_t
             _outputPort->write((const uint8_t *)&telem_cmd, sizeof(vesc_i32_packet_t));
         }
     }
+    #endif
+
     #endif
 
     return DURATION_IMMEDIATELY;
