@@ -18,7 +18,7 @@ Summary:
 
 I am writing this in April of 2026, and ExpressLRS release v4.0.0 was released in Feburary of 2026. ExpressRLS V4 is not compatible with V3, so a V3 transmitter cannot talk with v4 receivers, and a V4 receiver cannot talk with a V3 transmitter. If somebody wants, or is forced to have a V4 transmitter, they will need to update all of their receivers to V4.
 
-This can be quite annoying. So to overcome this, all Shrew branch firmware is written with an additional backwards compatibility layer. It is able to seamlessly automatically work with V4 and V3 transmitters.
+This can be quite annoying. So to overcome this, all Shrew branch firmware is written with an additional backwards compatibility layer. It is able to seamlessly automatically work with V4 and V3 transmitters. Hence, there's no reason to avoid using Shrew branch firmware.
 
 If you build the transmitter firmware using the Shrew branch, it will become a V4 transmitter, with an additional option to transmit in a legacy V3 mode, in case you still have receivers that are not updated, or need to loan out your transmitter to somebody else.
 
@@ -26,7 +26,7 @@ If you build the transmitter firmware using the Shrew branch, it will become a V
 
 With the Shrew branch of ELRS firmware, you can now download a copy of the currently running firmware that has all of your current configurations embedded in the firmware's metadata. When this firmware is uploaded or flashed from serial port, the metadata is extracted and applied automatically.
 
-This can save some time if you are preparing multiple receivers for the same purpose. You can just configure one of them, and apply the same configuration to other receivers without having to fill in all the form fields.
+This can save some time if you are preparing multiple receivers for the same purpose. You can just configure one of them, and apply the same configuration to other receivers without having to fill in all the form fields. This also facilitates manufacturing of receivers with more intricate built-in default settings.
 
 ### AM32 Configurator
 
@@ -63,7 +63,7 @@ This can be extremely useful for identifying which receiver is linked to which t
 
 ### Unique Wi-Fi SSID
 
-Original ELRS firmware always used a SSID like `ExpressLRS RX` or `ExpressLRS TX`. With Shrew branch firmware, the SSIDs used are like `ELRS-RX-XXXX` or `ELRS-RX-XXXX` where the `XXXX` is a unique hexadecimal number, unique to each unit. This can help users connect to the correct device when multiple devices are in Wi-Fi mode.
+Original ELRS firmware always used a SSID like `ExpressLRS RX` or `ExpressLRS TX`. With Shrew branch firmware, the SSIDs used are like `ELRS-RX-XXXX` or `ELRS-TX-XXXX` where the `XXXX` is a unique hexadecimal number, unique to each unit (based on its Wi-Fi MAC address). This can help users connect to the correct device when multiple devices within an area are in Wi-Fi mode.
 
 # Original ExpressRLS Readme
 ----------
