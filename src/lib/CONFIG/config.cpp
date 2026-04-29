@@ -1684,6 +1684,17 @@ void RxConfig::SetOtherDefaults()
                     pwm->val.mode = somDShot;
                 }
         #endif
+        #if defined(USE_VESC_UART)
+        if (GPIO_PIN_PWM_OUTPUTS[ch] == U0TXD_GPIO_NUM)
+        {
+            pwm->val.mode = somSerial;
+        }
+        #elif defined(USE_VESC_UART_1) && defined(GPIO_PIN_SERIAL1_TX)
+        if (GPIO_PIN_PWM_OUTPUTS[ch] == GPIO_PIN_SERIAL1_TX)
+        {
+            pwm->val.mode = somSerial1TX;
+        }
+        #endif
     }
     #ifdef USE_DEFAULT_ARCADE_TANK_MIX
     // use this define to setup a custom mixer right into the firmware
@@ -1707,13 +1718,16 @@ void RxConfig::SetOtherDefaults()
 
     #if defined(USE_VESC_UART)
     m_config.serialProtocol = PROTOCOL_VESC;
+    m_config.vesc_cfg[0] = USE_VESC_UART; // make sure the hex representation is calculated such that it represents vesc_cfg_t
+    firmwareOptions.uart_baud = 115200;
     #endif
     #if defined(USE_VESC_UART_1) && defined(GPIO_PIN_SERIAL1_TX)
-    m_config.serialProtocol = PROTOCOL_SERIAL1_VESC;
+    m_config.serial1Protocol = PROTOCOL_SERIAL1_VESC;
+    m_config.vesc_cfg[3] = USE_VESC_UART_1; // make sure the hex representation is calculated such that it represents vesc_cfg_t
+    firmwareOptions.uart_baud = 115200;
     #endif
-
-    #if defined(USE_VESC_UART_JEFF)
-    
+    #if defined(USE_VESC_TELEM)
+    m_config.vescConfigExtras = USE_VESC_TELEM;
     #endif
 }
 

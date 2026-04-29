@@ -30,3 +30,7 @@
 #if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266) && defined(TARGET_RX)
 #define TRIM_UNNECESSARY_HW // saves about 1KB after compression
 #endif
+
+#if defined(USE_VESC_UART) && !defined(BUILD_VESC_UART)
+#define BUILD_VESC_UART
+#endif

@@ -34,6 +34,13 @@ typedef struct __attribute__((packed))
 }
 vesc_cfg_t; // we need this to be 32 bits (4 bytes)
 
+#define VESC_CFG_U32(bidirectional, cmd, channel_x, channel_y, range) \
+    ((((uint32_t)(bidirectional) & 0x01U)   <<  0) | \
+     (((uint32_t)(cmd)           & 0x7FU)   <<  1) | \
+     (((uint32_t)(channel_x)     & 0x0FU)   <<  8) | \
+     (((uint32_t)(channel_y)     & 0x0FU)   << 12) | \
+     (((uint32_t)(range)         & 0xFFFFU) << 16))
+
 typedef struct {
     float avgMotorCurrent;
     float avgInputCurrent;

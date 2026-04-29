@@ -32,6 +32,8 @@ static int8_t first_rx_pin = -1;
 
 static SerialVESC* main_vesc_instance = NULL;
 
+bool vesc_tcp_bridge_started = false;
+
 #if defined(ENABLE_VESC_TCP_BRIDGE)
 static WiFiServer* wserver = NULL;
 static WiFiClient wclient;
@@ -47,7 +49,7 @@ void SerialVESC::begin(uint8_t idx, int8_t pin, int8_t pin_rx)
 {
     #ifdef BUILD_VESC_UART
 
-    DBGVLN("SerialVESC::begin %u %d", idx, pin);
+    DBGLN("SerialVESC::begin %u %d", idx, pin);
 
     this->idx = idx;
 
@@ -148,7 +150,7 @@ uint32_t SerialVESC::sendRCFrame(bool frameAvailable, bool frameMissed, uint32_t
 
         // for duty cycle, limit the duty to a max of 100%, and also account for the loss of precision from user settings
         if (pcfg->cmd == COMM_SET_DUTY) {
-            if (range >= DUTY_RANGE_SNAP_TO_MAX) {
+            if (range >= DUTY_RANGE_SNAP_TO_MAX || range == 0) {
                 range = 100000;
             }
         }
@@ -396,6 +398,7 @@ bool SerialVESC::handleTcpBridge(uint8_t *bytes, uint16_t size)
             // start the TCP server
             wserver = new WiFiServer(TCP_VESC_DEFAULT_PORT);
             wserver->begin();
+            vesc_tcp_bridge_started = true;
         }
         // check for new tcp client
         wclient = wserver->available();
@@ -495,6 +498,29 @@ static void vesc_sendTelemetry(vesc_telem_t* data)
         crsfRouter.SetHeaderAndCrc((crsf_header_t *)&crsfrpm, CRSF_FRAMETYPE_RPM, CRSF_FRAME_SIZE(4));
         crsfRouter.deliverMessageTo(CRSF_ADDRESS_RADIO_TRANSMITTER, &crsfrpm.h);
     }
+}
+
+static void vesc_stopTcpBridge()
+{
+    #if defined(ENABLE_VESC_TCP_BRIDGE)
+    wclient.stop();
+    if (wserver != NULL) {
+        delete wserver;
+        wserver = NULL;
+    }
+    #endif
+    vesc_tcp_bridge_started = false;
+}
+
+SerialVESC::~SerialVESC()
+{
+    DBGLN("SerialVESC::destruct");
+    if (this->is_main_vesc) {
+        vesc_stopTcpBridge();
+        main_vesc_instance = NULL;
+        first_rx_pin = -1;
+    }
+    crsfRouter.removeConnector(this);
 }
 
 static int32_t i32map(int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, int32_t out_max)

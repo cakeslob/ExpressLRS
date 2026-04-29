@@ -190,7 +190,7 @@ let eeprom_useful_length = 0x30;
 let eeprom_total_length = 0xB0; // 176
 
 let plain_checkboxes = [
-    // Name                  , def  , byte
+    // Name                  , def  , byte, true-value
     ["Reverse Rotation",       false, 17, ],
     ["Complementary PWM",      true , 20, ],
     ["Variable PWM",           true , 21, ],
@@ -692,7 +692,7 @@ function generateBin()
     {
         let c = all_checkboxes[i];
         let ele = getEleById("chk_" + text_to_id(c[0]));
-        buffer8[c[2]] = ele.checked ? (c.length <= 3 ? 1 : c[3]) : 0;
+        buffer8[c[2]] = ele.checked ? (c.length <= 3 ? 1 : c[3]) : 0; // apply truth-value if available, otherwise, apply 1
     }
     for (let i = 0; i < all_sliders.length; i++)
     {

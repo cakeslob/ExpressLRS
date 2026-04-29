@@ -100,6 +100,10 @@ static const char VERSION[] = {LATEST_VERSION, 0};
 
 static const char* makeUniqueSsid();
 
+#if defined(TARGET_RX) && defined(BUILD_VESC_UART)
+extern bool vesc_tcp_bridge_started;
+#endif
+
 void setWifiUpdateMode()
 {
   // No need to ExitBindingMode(), the radio will be stopped stopped when start the Wifi service.
@@ -459,6 +463,12 @@ static void GetConfiguration(AsyncWebServerRequest *request)
     #endif
     #if defined(BUILD_AM32_CONFIG)
     extra_feature_flags |= 1 << 4;
+    #endif
+    #if defined(TARGET_RX) && defined(BUILD_VESC_UART)
+    if (vesc_tcp_bridge_started)
+    {
+      extra_feature_flags |= 1 << 5;
+    }
     #endif
     settings["extra-features-avail"] = extra_feature_flags;
 

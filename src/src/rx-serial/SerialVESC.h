@@ -10,10 +10,7 @@ public:
     {
         crsfRouter.addConnector(this);
     }
-    ~SerialVESC() override
-    {
-        crsfRouter.removeConnector(this);
-    }
+    ~SerialVESC() override;
 
     void begin(uint8_t idx, int8_t pin = -1, int8_t pin_rx = -1);
 

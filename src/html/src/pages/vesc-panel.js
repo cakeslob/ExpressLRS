@@ -14,6 +14,7 @@ const POSITION_RANGE_SNAP_MAX = POSITION_RANGE_SNAP_TO + 500000
 // round number instead of looking like random digits.
 const VESC_RANGE_MAX = 1000000000
 const EXTRA_FEATURE_VESC_BIT = 3
+const EXTRA_FEATURE_VESC_TCP_BRIDGE_STARTED_BIT = 5
 const PROTOCOL_VESC = 10
 const PROTOCOL_SERIAL1_VESC = 12
 const VESC_TELEM_CFG_POWER = 1 << 0
@@ -270,7 +271,9 @@ class VescPanel extends LitElement {
                         />
                         <label for="vesc-extra-tcp">Enable TCP Bridge</label>
                     </div>
-                    <p class="vesc-group-note vesc-muted">TCP bridge port: <code>65102</code></p>
+                    <p class="vesc-group-note vesc-muted">
+                        TCP bridge port: <code>65102</code> ${this._isTcpBridgeStarted() ? "✅" : "❌"}
+                    </p>
                 </fieldset>
 
                 <button
@@ -297,6 +300,11 @@ class VescPanel extends LitElement {
     _isFeatureAvailable() {
         const extraFeatureFlags = Number(elrsState.settings["extra-features-avail"]) || 0
         return (extraFeatureFlags & (1 << EXTRA_FEATURE_VESC_BIT)) !== 0
+    }
+
+    _isTcpBridgeStarted() {
+        const extraFeatureFlags = Number(elrsState.settings["extra-features-avail"]) || 0
+        return (extraFeatureFlags & (1 << EXTRA_FEATURE_VESC_TCP_BRIDGE_STARTED_BIT)) !== 0
     }
 
     _renderGroup({title, startIndex, enabled, message}) {

@@ -216,10 +216,6 @@ export class App extends LitElement {
             imports.push(import('./pages/rx-options-panel.js'))
             imports.push(import('./pages/connections-panel.js'))
             imports.push(import('./pages/serial-panel.js'))
-            // FEATURE:NOT IS_8285
-            imports.push(import('./pages/am32-panel.js'))
-            // /FEATURE:NOT IS_8285
-            imports.push(import('./pages/vesc-panel.js'))
             // /FEATURE:NOT IS_TX
             await Promise.all(imports)
         } finally {
@@ -239,6 +235,12 @@ export class App extends LitElement {
             // FEATURE:HAS_LR1121
             imports.push(import('./pages/lr1121-updater.js'))
             // /FEATURE:HAS_LR1121
+            // FEATURE:NOT IS_TX
+            // FEATURE:NOT IS_8285
+            imports.push(import('./pages/am32-panel.js'))
+            // /FEATURE:NOT IS_8285
+            imports.push(import('./pages/vesc-panel.js'))
+            // /FEATURE:NOT IS_TX
             await Promise.all(imports)
         } finally {
             this.advancedGroupLoaded = true
