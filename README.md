@@ -1,3 +1,74 @@
+# Shrew Firmware of ExpressLRS
+
+You have stumbled upon the Shrew development branch of ExpressLRS
+
+This is a branch of firmware based on ExpressLRS V4, containing additional features that are not in the official ELRS releases. The additional features mainly target the robot combat hobby (instead of drones).
+
+Summary:
+
+ * Backwards Compatibility with V3
+ * Configuration Cloning
+ * AM32 Configurator
+ * VESC Serial Protocol
+ * Custom Mixer
+ * Activity Indicator LED
+ * Unique Wi-Fi SSID
+
+### Backwards Compatibility with V3
+
+I am writing this in April of 2026, and ExpressLRS release v4.0.0 was released in Feburary of 2026. ExpressRLS V4 is not compatible with V3, so a V3 transmitter cannot talk with v4 receivers, and a V4 receiver cannot talk with a V3 transmitter. If somebody wants, or is forced to have a V4 transmitter, they will need to update all of their receivers to V4.
+
+This can be quite annoying. So to overcome this, all Shrew branch firmware is written with an additional backwards compatibility layer. It is able to seamlessly automatically work with V4 and V3 transmitters.
+
+If you build the transmitter firmware using the Shrew branch, it will become a V4 transmitter, with an additional option to transmit in a legacy V3 mode, in case you still have receivers that are not updated, or need to loan out your transmitter to somebody else.
+
+### Configuration Cloning
+
+With the Shrew branch of ELRS firmware, you can now download a copy of the currently running firmware that has all of your current configurations embedded in the firmware's metadata. When this firmware is uploaded or flashed from serial port, the metadata is extracted and applied automatically.
+
+This can save some time if you are preparing multiple receivers for the same purpose. You can just configure one of them, and apply the same configuration to other receivers without having to fill in all the form fields.
+
+### AM32 Configurator
+
+This feature is only available on more modern receivers built using ESP32 microcontrollers. (Any of the RadioMaster XR series, or any receiver with the LR1121 radio, or any receiver using diversity)
+
+There is a web configurator built into the Shrew branch ELRS firmware. If you have one or more AM32 firmware ESCs, you can configure any one of them through the ELRS Wi-Fi web UI.
+
+### VESC Serial Protocol
+
+For big robots or big motors, the VESC serial protocol is implemented in the Shrew branch of ELRS firmware.
+
+This feature is very experimental as I personally do not actually have large motors to play with. This feature is here because I was requested by a few BattleBot teams. If you want to help test this, that'd be great!
+
+### Custom Mixer
+
+To lower the cost for people, there is a custom arcade-tank-drive mixer in the Shrew branch ELRS firmware. This allows for the usage of cheap transmitters that don't have a screen or a way to do mixing internally.
+
+The mixer features a very customizable parametric curve, including options for:
+
+ * deadzone and anti-deadzone
+ * scaling (aka gain, sensitivity)
+ * offset (aka trim)
+ * exponential curve (aka ease)
+
+It also lets you pick two additional channels to apply curves to
+
+It also features a way to dictate a safety switch that can force a fail-safe state if a switch on the transmitter is in a certain position.
+
+### Activity Indicator LED
+
+The LED on receivers running Shrew branch firmware will now either blink or change colours when there is activity from the transmitter (like a stick that is actually moving).
+
+This can be extremely useful for identifying which receiver is linked to which transmitter, especially when a robot can be using two isolated radio systems.
+
+### Unique Wi-Fi SSID
+
+Original ELRS firmware always used a SSID like `ExpressLRS RX` or `ExpressLRS TX`. With Shrew branch firmware, the SSIDs used are like `ELRS-RX-XXXX` or `ELRS-RX-XXXX` where the `XXXX` is a unique hexadecimal number, unique to each unit. This can help users connect to the correct device when multiple devices are in Wi-Fi mode.
+
+# Original ExpressRLS Readme
+----------
+----------
+----------
 ![Banner](https://github.com/ExpressLRS/ExpressLRS-Hardware/blob/master/img/banner.png?raw=true)
 
 <center>
