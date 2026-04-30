@@ -490,16 +490,12 @@ static void vesc_sendTelemetry(vesc_telem_t* data)
         rpmValue = (int32_t)data->rpm;
     }
 
-    rpm = (uint32_t)rpmValue & 0xFFFFFFU;
-#if (__BYTE_ORDER__ != __ORDER_BIG_ENDIAN__)
-    rpm = ((rpm & 0x0000FFU) << 16) | (rpm & 0x00FF00U) | ((rpm & 0xFF0000U) >> 16);
-#endif
+    rpm = htobe24((uint32_t)rpmValue & 0xFFFFFFU);
 
     if ((telem_cfg & VESC_TELEM_CFG_RPM) != 0U) {
-        constexpr uint8_t CRSF_RPM_PAYLOAD_SIZE = 1 + 3 + 3;
-        crsfrpm.p.source_id = 3; // mimic a ESC
+        constexpr uint8_t CRSF_RPM_PAYLOAD_SIZE = 1 + 3;
+        crsfrpm.p.source_id = 1; // mimic a EAM device
         crsfrpm.p.rpm0 = rpm;
-        crsfrpm.p.rpm1 = rpm;
         crsfRouter.SetHeaderAndCrc((crsf_header_t *)&crsfrpm, CRSF_FRAMETYPE_RPM, CRSF_FRAME_SIZE(CRSF_RPM_PAYLOAD_SIZE));
         crsfRouter.deliverMessageTo(CRSF_ADDRESS_RADIO_TRANSMITTER, &crsfrpm.h);
     }
