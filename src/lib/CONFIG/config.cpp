@@ -1689,11 +1689,23 @@ void RxConfig::SetOtherDefaults()
         {
             pwm->val.mode = somSerial;
         }
+        #if defined(USE_VESC_TELEM)
+        if (GPIO_PIN_PWM_OUTPUTS[ch] == U0RXD_GPIO_NUM)
+        {
+            pwm->val.mode = somSerial;
+        }
+        #endif
         #elif defined(USE_VESC_UART_1) && defined(GPIO_PIN_SERIAL1_TX)
         if (GPIO_PIN_PWM_OUTPUTS[ch] == GPIO_PIN_SERIAL1_TX)
         {
             pwm->val.mode = somSerial1TX;
         }
+        #if defined(USE_VESC_TELEM)
+        if (GPIO_PIN_PWM_OUTPUTS[ch] == GPIO_PIN_SERIAL1_RX)
+        {
+            pwm->val.mode = somSerial1RX;
+        }
+        #endif
         #endif
     }
     #ifdef USE_DEFAULT_ARCADE_TANK_MIX

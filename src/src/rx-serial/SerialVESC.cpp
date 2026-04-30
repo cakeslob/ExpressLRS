@@ -39,7 +39,7 @@ static WiFiServer* wserver = NULL;
 static WiFiClient wclient;
 static constexpr uint32_t TCP_VESC_DEFAULT_PORT = 65102;
 static constexpr uint32_t TCP_SEND_TIMEOUT = 0;
-static constexpr size_t TCP_BRIDGE_BUFFER_SIZE = 64;
+static constexpr size_t TCP_BRIDGE_BUFFER_SIZE = 256;
 #endif
 
 static uint8_t telem_cfg = 0; // // bit 0 = enable power telemetry, bit 1 = enable RPM telemetry, bit 2 = enable TCP bridge
@@ -211,7 +211,7 @@ uint32_t SerialVESC::sendRCFrame(bool frameAvailable, bool frameMissed, uint32_t
             telem_cmd.payload_length = 1;
             telem_cmd.command_byte = COMM_GET_VALUES;
             telem_cmd.crc = __builtin_bswap16(vesc_crc->calc(&(telem_cmd.command_byte), 1, 0));
-            _outputPort->write((const uint8_t *)&telem_cmd, sizeof(vesc_i32_packet_t));
+            _outputPort->write((const uint8_t *)&telem_cmd, sizeof(vesc_cmd_packet_t));
         }
     }
     #endif
@@ -320,7 +320,7 @@ void SerialVESC::processBytes(uint8_t *bytes, uint16_t size) {
     #endif
 }
 
-bool SerialVESC::processPacketPayload(const uint8_t *payload, uint8_t payloadLength, uint8_t cachedLength)
+bool SerialVESC::processPacketPayload(const uint8_t *payload, uint8_t payloadLength, uint16_t cachedLength)
 {
     (void)payload;
     (void)payloadLength;
@@ -328,6 +328,10 @@ bool SerialVESC::processPacketPayload(const uint8_t *payload, uint8_t payloadLen
     #ifdef ENABLE_VESC_TELEMETRY
     COMM_PACKET_ID packetId;
     int32_t index = 0;
+
+    if (payloadLength == 0 || cachedLength < payloadLength) {
+        return false;
+    }
 
     packetId = (COMM_PACKET_ID)payload[0];
     payload++; // Removes the packetId from the actual payload (payload)
@@ -357,7 +361,6 @@ bool SerialVESC::processPacketPayload(const uint8_t *payload, uint8_t payloadLen
             telem_data.pidPos            = buffer_get_float32(payload, 1000000.0, &index);           // 4 bytes - mc_interface_get_pid_pos_now()
             telem_data.id                = payload[index++];                                         // 1 byte  - app_get_configuration()->controller_id
             vesc_sendTelemetry(&telem_data);
-
             return true;
 
         break;
@@ -456,7 +459,7 @@ static void vesc_sendTelemetry(vesc_telem_t* data)
     uint32_t rpm = 0;
 
     if (data->inpVoltage > 0.0f) {
-        float scaledVoltage = data->inpVoltage * 100.0f;
+        float scaledVoltage = data->inpVoltage * 10.0f;
         voltage = (scaledVoltage >= 65535.0f) ? 0xFFFFU : (uint16_t)scaledVoltage;
     }
 
@@ -465,7 +468,7 @@ static void vesc_sendTelemetry(vesc_telem_t* data)
     }
 
     if (data->avgInputCurrent > 0.0f) {
-        float scaledCurrent = data->avgInputCurrent * 100.0f;
+        float scaledCurrent = data->avgInputCurrent * 10.0f;
         current = (scaledCurrent >= 65535.0f) ? 0xFFFFU : (uint16_t)scaledCurrent;
     }
 
@@ -493,9 +496,11 @@ static void vesc_sendTelemetry(vesc_telem_t* data)
 #endif
 
     if ((telem_cfg & VESC_TELEM_CFG_RPM) != 0U) {
-        crsfrpm.p.source_id = 0;
+        constexpr uint8_t CRSF_RPM_PAYLOAD_SIZE = 1 + 3 + 3;
+        crsfrpm.p.source_id = 3; // mimic a ESC
         crsfrpm.p.rpm0 = rpm;
-        crsfRouter.SetHeaderAndCrc((crsf_header_t *)&crsfrpm, CRSF_FRAMETYPE_RPM, CRSF_FRAME_SIZE(4));
+        crsfrpm.p.rpm1 = rpm;
+        crsfRouter.SetHeaderAndCrc((crsf_header_t *)&crsfrpm, CRSF_FRAMETYPE_RPM, CRSF_FRAME_SIZE(CRSF_RPM_PAYLOAD_SIZE));
         crsfRouter.deliverMessageTo(CRSF_ADDRESS_RADIO_TRANSMITTER, &crsfrpm.h);
     }
 }

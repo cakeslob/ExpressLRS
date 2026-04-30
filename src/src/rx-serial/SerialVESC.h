@@ -21,7 +21,7 @@ public:
 
 private:
     void processBytes(uint8_t *bytes, uint16_t size) override;
-    bool processPacketPayload(const uint8_t *message, uint8_t payloadLength, uint8_t cachedLength);
+    bool processPacketPayload(const uint8_t *message, uint8_t payloadLength, uint16_t cachedLength);
     void resetReceiveState();
     bool handleTcpBridge(uint8_t *bytes, uint16_t size);
 
@@ -37,7 +37,7 @@ private:
     // COMM_GET_VALUES currently consumes 59 payload bytes total:
     // 1 byte packet id + 58 bytes of decoded/skipped fields. Keep a little
     // headroom so minor payload growth does not immediately require resizing.
-    static constexpr uint8_t PAYLOAD_CACHE_SIZE = 64;
+    static constexpr uint16_t PAYLOAD_CACHE_SIZE = 256;
 
     bool configed = false; // indicate if begin() has been called
     uint8_t idx;           // either 0 for main Serial, or 1 for Serial1
@@ -50,8 +50,8 @@ private:
 
     receive_state_e receiveState = RECEIVE_WAIT_START;
     uint8_t payloadLength = 0;
-    uint8_t payloadBytesReceived = 0;
-    uint8_t payloadBytesCached = 0;
+    uint16_t payloadBytesReceived = 0;
+    uint16_t payloadBytesCached = 0;
     uint8_t payloadCache[PAYLOAD_CACHE_SIZE] = {};
     uint16_t calculatedCrc = 0;
     uint16_t receivedCrc = 0;
