@@ -3,6 +3,7 @@ import {customElement, state} from "lit/decorators.js"
 import "../assets/mui.js"
 import FEATURES from "../features.js"
 import {elrsState, saveConfig} from "../utils/state.js"
+import {PWM_MODE_SERIAL2RX} from "./connections-panel.js"
 
 const DUTY_RANGE_SNAP_TO_MAX = 99500 // 99.5%
 const POSITION_RANGE_SNAP_TO = 360000000 // 360 deg
@@ -221,6 +222,10 @@ class VescPanel extends LitElement {
                 .vesc-group-note {
                     margin: 0 0 1rem;
                 }
+
+                .vesc-warning {
+                    margin-bottom: 1rem;
+                }
             </style>
             <div class="mui-panel mui--text-title">VESC</div>
             <div class="mui-panel">
@@ -244,6 +249,7 @@ class VescPanel extends LitElement {
 
                 <fieldset>
                     <legend>Extras</legend>
+                    ${this._renderTelemetryWarning()}
                     <div class="mui-checkbox">
                         <input
                             id="vesc-extra-power"
@@ -404,6 +410,45 @@ class VescPanel extends LitElement {
 
     _isSerial2Enabled() {
         return this._hasSerial2() && elrsState.config["serial1-protocol"] === PROTOCOL_SERIAL1_VESC
+    }
+
+    _renderTelemetryWarning() {
+        const message = this._getTelemetryWarningMessage()
+        if (!message) {
+            return ""
+        }
+
+        return html`
+            <div class="warning-bg vesc-warning">
+                ${message}
+            </div>
+        `
+    }
+
+    _getTelemetryWarningMessage() {
+        if (FEATURES.IS_8285) {
+            return this._hasDefinedPin(elrsState.config["serial_rx"])
+                ? ""
+                : "Telemetry requires serial_rx."
+        }
+
+        return (this._hasDefinedPin(elrsState.config["serial_rx"]) || this._hasSecondarySerialRxPin())
+            ? ""
+            : "Telemetry requires at least one serial RX pin to be defined."
+    }
+
+    _hasDefinedPin(value) {
+        const pin = Number(value)
+        return Number.isFinite(pin) && pin >= 0
+    }
+
+    _hasSecondarySerialRxPin() {
+        const pwm = elrsState.config["pwm"]
+        if (!Array.isArray(pwm)) {
+            return false
+        }
+
+        return pwm.some((item) => (((item.config >>> 16) & 0x0F) === PWM_MODE_SERIAL2RX))
     }
 
     _encodeRows() {
