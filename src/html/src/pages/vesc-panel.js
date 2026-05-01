@@ -20,7 +20,9 @@ const PROTOCOL_VESC = 10
 const PROTOCOL_SERIAL1_VESC = 12
 const VESC_TELEM_CFG_POWER = 1 << 0
 const VESC_TELEM_CFG_RPM = 1 << 1
-const VESC_CFG_TCP_BRIDGE = 1 << 2
+const VESC_TELEM_CFG_TEMPERATURE = 1 << 2
+const VESC_CFG_TCP_BRIDGE = 1 << 3
+const VESC_CFG_EXTRAS_MASK = 0x0F
 
 const COMMAND_OPTIONS = [
     {value: 0, label: "DISABLED"},
@@ -147,7 +149,7 @@ function getStoredConfig() {
 }
 
 function getStoredExtras() {
-    return Number(elrsState.config["vesc-cfg-extras"] || 0) & 0x07
+    return Number(elrsState.config["vesc-cfg-extras"] || 0) & VESC_CFG_EXTRAS_MASK
 }
 
 @customElement("vesc-panel")
@@ -267,6 +269,15 @@ class VescPanel extends LitElement {
                             @change="${(e) => this._setExtraFlag(VESC_TELEM_CFG_RPM, e.target.checked)}"
                         />
                         <label for="vesc-extra-rpm">Enable RPM Telemetry</label>
+                    </div>
+                    <div class="mui-checkbox">
+                        <input
+                            id="vesc-extra-temperature"
+                            type="checkbox"
+                            ?checked="${(this.extras & VESC_TELEM_CFG_TEMPERATURE) !== 0}"
+                            @change="${(e) => this._setExtraFlag(VESC_TELEM_CFG_TEMPERATURE, e.target.checked)}"
+                        />
+                        <label for="vesc-extra-temperature">Enable Temperature Telemetry</label>
                     </div>
                     <div class="mui-checkbox">
                         <input
@@ -452,7 +463,7 @@ class VescPanel extends LitElement {
 
     _setExtraFlag(flag, enabled) {
         if (enabled) {
-            this.extras = (this.extras | flag) & 0x07
+            this.extras = (this.extras | flag) & VESC_CFG_EXTRAS_MASK
         }
         else {
             this.extras = this.extras & ~flag
@@ -463,7 +474,7 @@ class VescPanel extends LitElement {
         e.preventDefault()
         saveConfig({
             "vesc-cfg": this._encodeRows(),
-            "vesc-cfg-extras": this.extras & 0x07,
+            "vesc-cfg-extras": this.extras & VESC_CFG_EXTRAS_MASK,
         }, () => {
             this.requestUpdate()
         })
@@ -477,6 +488,6 @@ class VescPanel extends LitElement {
                 return true
             }
         }
-        return getStoredExtras() !== (this.extras & 0x07)
+        return getStoredExtras() !== (this.extras & VESC_CFG_EXTRAS_MASK)
     }
 }

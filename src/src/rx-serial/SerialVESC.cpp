@@ -11,6 +11,7 @@
 #elif defined(PLATFORM_ESP8266)
 #include <ESP8266WiFi.h>
 #endif
+#include <math.h>
 
 constexpr int32_t DUTY_RANGE_SNAP_TO_MAX = 99500; // 99.5%
 constexpr int32_t POSITION_RANGE_SNAP_TO = 360000000; // 360 deg
@@ -199,7 +200,7 @@ uint32_t SerialVESC::sendRCFrame(bool frameAvailable, bool frameMissed, uint32_t
     }
 
     #ifdef ENABLE_VESC_TELEMETRY
-    if (is_main_vesc && (telem_cfg & (VESC_TELEM_CFG_POWER | VESC_TELEM_CFG_RPM)) != 0U)
+    if (is_main_vesc && (telem_cfg & (VESC_TELEM_CFG_POWER | VESC_TELEM_CFG_RPM | VESC_TELEM_CFG_TEMPERATURE)) != 0U)
     {
         // see if it is time to send telemetry
         uint32_t now = millis();
@@ -498,6 +499,23 @@ static void vesc_sendTelemetry(vesc_telem_t* data)
         crsfrpm.p.rpm0 = rpm;
         crsfRouter.SetHeaderAndCrc((crsf_header_t *)&crsfrpm, CRSF_FRAMETYPE_RPM, CRSF_FRAME_SIZE(CRSF_RPM_PAYLOAD_SIZE));
         crsfRouter.deliverMessageTo(CRSF_ADDRESS_RADIO_TRANSMITTER, &crsfrpm.h);
+    }
+
+    if ((telem_cfg & VESC_TELEM_CFG_TEMPERATURE) != 0U) {
+        constexpr uint8_t CRSF_TEMP_PAYLOAD_SIZE_ONE_SENSOR = 1 + 2;
+        constexpr uint8_t CRSF_TEMP_PAYLOAD_SIZE_TWO_SENSORS = 1 + 4;
+        CRSF_MK_FRAME_T(crsf_sensor_temp_t) crsftemp = { 0 };
+        crsftemp.p.source_id = 1; // mimic a EAM device
+        crsftemp.p.temperature[0] = htobe16((int16_t)(data->tempMosfet * 10.0f));
+
+        uint8_t payloadSize = CRSF_TEMP_PAYLOAD_SIZE_ONE_SENSOR;
+        if (isfinite(data->tempMotor)) {
+            crsftemp.p.temperature[1] = htobe16((int16_t)(data->tempMotor * 10.0f));
+            payloadSize = CRSF_TEMP_PAYLOAD_SIZE_TWO_SENSORS;
+        }
+
+        crsfRouter.SetHeaderAndCrc((crsf_header_t *)&crsftemp, CRSF_FRAMETYPE_TEMP, CRSF_FRAME_SIZE(payloadSize));
+        crsfRouter.deliverMessageTo(CRSF_ADDRESS_RADIO_TRANSMITTER, &crsftemp.h);
     }
 }
 

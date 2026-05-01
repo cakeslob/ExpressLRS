@@ -1741,6 +1741,9 @@ void RxConfig::SetOtherDefaults()
     #if defined(USE_VESC_TELEM)
     m_config.vescConfigExtras = USE_VESC_TELEM;
     #endif
+    #if defined(USE_AM32KISS)
+    m_config.serialProtocol = PROTOCOL_AM32KISS;
+    #endif
 }
 
 #endif
