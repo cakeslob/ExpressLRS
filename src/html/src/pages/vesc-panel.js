@@ -427,28 +427,22 @@ class VescPanel extends LitElement {
 
     _getTelemetryWarningMessage() {
         if (FEATURES.IS_8285) {
-            return this._hasDefinedPin(elrsState.config["serial_rx"])
+            return this._hasMainSerialRxPin()
                 ? ""
                 : "Telemetry requires serial_rx."
         }
 
-        return (this._hasDefinedPin(elrsState.config["serial_rx"]) || this._hasSecondarySerialRxPin())
+        return (this._hasMainSerialRxPin() || this._hasSecondarySerialRxPin())
             ? ""
             : "Telemetry requires at least one serial RX pin to be defined."
     }
 
-    _hasDefinedPin(value) {
-        const pin = Number(value)
-        return Number.isFinite(pin) && pin >= 0
+    _hasMainSerialRxPin() {
+        return !!elrsState.settings.has_serial_pins
     }
 
     _hasSecondarySerialRxPin() {
-        const pwm = elrsState.config["pwm"]
-        if (!Array.isArray(pwm)) {
-            return false
-        }
-
-        return pwm.some((item) => (((item.config >>> 16) & 0x0F) === PWM_MODE_SERIAL2RX))
+        return false
     }
 
     _encodeRows() {
