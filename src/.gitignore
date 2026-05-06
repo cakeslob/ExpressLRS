@@ -5,6 +5,7 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 python/__pycache__/
+batch_build_results/
 *.pyc
 super_defines.txt
 include/WebContent.h

@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import struct
 import sys
 
@@ -86,7 +87,7 @@ def doConfiguration(file, defines, config, moduletype, frequency, platform, devi
     if config is not None:
         config ='.'.join(map(lambda s: f'"{s}"', config.split('.')))
         config = jmespath.search(config, targets)
-    elif not sys.stdin.isatty():
+    elif os.environ.get("ELRS_BATCH_BUILD") == "1" or not sys.stdin.isatty():
         print('Not running in an interactive shell, leaving the firmware "bare".\n')
         print('The current compile options (user defines) have been included.')
         print('You will be able to configure the hardware via the web UI on the device.')
