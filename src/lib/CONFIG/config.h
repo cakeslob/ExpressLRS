@@ -259,6 +259,7 @@ typedef struct __attribute__((packed)) {
 
     int8_t      fixedPacketRate; // -1 means automatic, otherwise stores expresslrs_RFrates_e
     uint32_t    vescConfig[2]; // bit 31 is the single or bidirection indicator, bits 30 and 29 are indicators for what command mode, bits 28 and down is the range maximum
+    uint8_t     vescConfigExtras; // bit 0 = enable power telemetry, bit 1 = enable RPM telemetry, bit 2 = enable TCP bridge
 
     uint8_t     targetSysId;
     uint8_t     sourceSysId;
@@ -307,6 +308,7 @@ public:
     int8_t GetFixedPacketRate() const { return m_config.fixedPacketRate; }
     const custom_mixer_t* GetCustomMixer() const { return &(m_config.custom_mixer); }
     const uint32_t* GetVescCfg() const { return (const uint32_t*)(m_config.vesc_cfg); }
+    const uint8_t GetVescCfgExtras() const { return m_config.vescConfigExtras; }
 
     // Setters
     void SetUID(uint8_t* uid);
@@ -336,6 +338,7 @@ public:
     void SetFixedPacketRate(int8_t x);
     void SetCustomMixer(const custom_mixer_t*);
     void SetVescCfg(const uint32_t*);
+    void SetVescCfgExtras(uint8_t x);
 
 private:
     void CheckUpdateFlashedUid(bool skipDescrimCheck);

@@ -78,6 +78,23 @@
                 "platform": "esp8285",
                 "firmware": "Unified_ShrewForER4_2400_RX"
             },
+            "shrewforer4kiss": {
+                "product_name": "Shrew for ER4 KISS",
+                "lua_name": "Shrew-for-ER4-KISS",
+                "layout_file": "Generic 2400 PWMP5.json",
+                "overlay": {
+                    "radio_dcdc": true,
+                    "serial_rx": 3,
+                    "serial_tx": -1,
+                    "pwm_outputs": [0,1,9],
+                    "vbat_offset": -10,
+                    "vbat_scale": 292
+                },
+                "upload_methods": ["uart", "wifi"],
+                "min_version": "3.5.0",
+                "platform": "esp8285",
+                "firmware": "Unified_ShrewForER4_2400_RX"
+            },
             "shrewforer4vesc": {
                 "product_name": "Shrew for ER4 VESC",
                 "lua_name": "Shrew-for-ER4-VESC",

@@ -8,6 +8,8 @@
 #include <ESPAsyncWebServer.h>
 #include "driver/uart.h"
 
+#define ENABLE_AM32_TCP_BRIDGE
+
 typedef struct
 {
     int pin;
@@ -36,6 +38,7 @@ enum
 static int pin_num = -1;
 static bool test_mode_started = false;
 static uint32_t last_test_time = 0;
+static bool am32_serial_ready = false;
 
 void am32_setPinMode(int pin, bool isTx);
 void am32_freeStruct(am32_request_t* x);
@@ -44,6 +47,16 @@ extern void WebUpdateSendContent(AsyncWebServerRequest *request);
 extern void servos_singleWrite(int selected_pin, int us);
 extern bool servos_singleInit(int selected_pin);
 extern void servos_deinitAll();
+//extern SerialIO *serialIO;
+extern void serialShutdown();
+
+#ifdef ENABLE_AM32_TCP_BRIDGE
+static WiFiServer* wserver = NULL;
+static WiFiClient wclient;
+static constexpr uint32_t TCP_AM32_DEFAULT_PORT = 65103; // 65103 is 65102 + 1, kept next to the VESC TCP bridge default port.
+static constexpr uint32_t TCP_SEND_TIMEOUT = 0;
+static constexpr size_t TCP_BRIDGE_BUFFER_SIZE = 64;
+#endif
 
 void am32_handleIo(AsyncWebServerRequest *request)
 {
@@ -100,6 +113,7 @@ void am32_handleIo(AsyncWebServerRequest *request)
             servos_deinitAll();
             test_mode_started = false;
             last_test_time = 0;
+            am32_serial_ready = false;
             pinMatrixOutDetach(req_data.pin, false, false);
             pinMatrixInDetach(req_data.pin, false, false);
             pinMode(req_data.pin, OUTPUT);
@@ -110,6 +124,7 @@ void am32_handleIo(AsyncWebServerRequest *request)
             servos_deinitAll();
             test_mode_started = false;
             last_test_time = 0;
+            am32_serial_ready = false;
             pinMatrixOutDetach(req_data.pin, false, false);
             pinMatrixInDetach(req_data.pin, true, false);
             pinMode(req_data.pin, OUTPUT);
@@ -120,13 +135,18 @@ void am32_handleIo(AsyncWebServerRequest *request)
             servos_deinitAll();
             test_mode_started = false;
             last_test_time = 0;
+            am32_serial_ready = false;
+
             Serial.end();
+            serialShutdown();
+
             pinMode(req_data.pin, INPUT_PULLUP);
             pinMatrixOutDetach(req_data.pin, false, false);
             pinMatrixInDetach(req_data.pin, true, false);
             Serial.begin(19200, SERIAL_8N1, req_data.pin, req_data.pin);
             Serial.flush();
             am32_setPinMode(req_data.pin, false);
+            am32_serial_ready = true;
             default_response = true;
             break;
         case AM32_ACTION_PIN_LIST:
@@ -244,6 +264,7 @@ void am32_handleIo(AsyncWebServerRequest *request)
         case AM32_ACTION_TEST_START:
             {
                 test_mode_started = true;
+                am32_serial_ready = false;
                 pinMatrixOutDetach(req_data.pin, false, false);
                 pinMatrixInDetach(req_data.pin, false, false);
                 Serial.end();
@@ -372,6 +393,80 @@ void am32_tick()
             servos_singleWrite(pin_num, 0);
         }
     }
+    
+    #ifdef ENABLE_AM32_TCP_BRIDGE
+    // AM32 TCP bridge requires the host PC to have some sort of driver that bridges a virtual serial port to a TCP pipe
+    // start up a TCP server for the AM32 TCP bridge
+    if (!wclient.connected() && WiFi.getMode() != WIFI_OFF)
+    {
+        if (wserver == NULL) {
+            wserver = new WiFiServer(TCP_AM32_DEFAULT_PORT);
+            wserver->begin();
+        }
+        wclient = wserver->available();
+        if (wclient) {
+            wclient.setNoDelay(true);
+            wclient.setTimeout(TCP_SEND_TIMEOUT);
+        }
+    }
+
+    if (wclient.connected()) // somebody connected
+    {
+        uint8_t bridgeBuffer[TCP_BRIDGE_BUFFER_SIZE];
+        if (am32_serial_ready && pin_num >= 0)
+        {
+            // pass data from serial port to host PC
+            while (Serial.available() > 0) {
+                size_t readSize = min((size_t)Serial.available(), sizeof(bridgeBuffer));
+                size_t bytesRead = Serial.readBytes(bridgeBuffer, readSize);
+                if (bytesRead == 0) {
+                    break;
+                }
+                wclient.write(bridgeBuffer, bytesRead);
+            }
+        }
+
+        while (wclient.connected())
+        {
+            // data from host PC is available
+            int available = wclient.available();
+            if (available <= 0) {
+                break;// nothing to do
+            }
+
+            // pass data from host PC to serial port
+            size_t readSize = min((size_t)available, sizeof(bridgeBuffer));
+            int bytesRead = wclient.read(bridgeBuffer, readSize);
+
+            if (bytesRead <= 0) {
+                break; // nothing to do
+            }
+
+            if (am32_serial_ready && pin_num >= 0) {
+                am32_setPinMode(pin_num, true); // pin to TX mode
+
+                // calculate estimated time for transmission
+                uint64_t ts = esp_timer_get_time();
+                uint64_t deadline = ts + (520 * bytesRead) + 26;
+
+                Serial.write(bridgeBuffer, bytesRead); // send the data (to DMA or FIFO buffer, of the serial port)
+
+                // wait for transmission
+                if (bytesRead >= 24) {
+                    uart_wait_tx_done(0, pdMS_TO_TICKS(100));
+                }
+                else {
+                    while (esp_timer_get_time() < deadline) {
+                        // do nothing
+                    }
+                }
+
+                am32_setPinMode(pin_num, false); // pin back to RX mode
+            }
+            wclient.write(bridgeBuffer, bytesRead); // this causes an echo, which is what the PC host software expects, since these serial ports are supposed to have TX pin connected to RX pin
+        }
+    }
+    #endif
 }
 
 #else

@@ -29,6 +29,7 @@
 #include "rx-serial/SerialDisplayport.h"
 #include "rx-serial/SerialGPS.h"
 #include "rx-serial/SerialVESC.h"
+#include "rx-serial/SerialAM32KISS.h"
 
 #include "devAnalogVbat.h"
 #include "devBaro.h"
@@ -40,6 +41,7 @@
 #include "RXEndpoint.h"
 #include "RXOTAConnector.h"
 #include "rx-serial/devSerialIO.h"
+#include "AM32.h"
 
 #include <LittleFS.h>
 #if defined(PLATFORM_ESP8266)
@@ -1283,6 +1285,7 @@ static void setupSerial()
     bool mavlinkSerialOutput = false;
     bool hottTlmSerial = false;
     bool vescSerialOutput = false;
+    bool am32kissSerialInput = false;
 
     if (OPT_CRSF_RCVR_NO_SERIAL)
     {
@@ -1337,6 +1340,11 @@ static void setupSerial()
     else if (config.GetSerialProtocol() == PROTOCOL_VESC)
     {
         vescSerialOutput = true;
+        serialBaud = 115200;
+    }
+    else if (config.GetSerialProtocol() == PROTOCOL_AM32KISS)
+    {
+        am32kissSerialInput = true;
         serialBaud = 115200;
     }
     bool invert = config.GetSerialProtocol() == PROTOCOL_SBUS || config.GetSerialProtocol() == PROTOCOL_INVERTED_CRSF || config.GetSerialProtocol() == PROTOCOL_DJI_RS_PRO;
@@ -1412,6 +1420,11 @@ static void setupSerial()
         serialIO = new SerialVESC(SERIAL_PROTOCOL_TX, SERIAL_PROTOCOL_RX);
         ((SerialVESC*)serialIO)->begin(0, GPIO_PIN_RCSIGNAL_TX);
     }
+    else if (am32kissSerialInput)
+    {
+        serialIO = new SerialAM32KISS(SERIAL_PROTOCOL_TX, SERIAL_PROTOCOL_RX);
+        ((SerialAM32KISS*)serialIO)->begin(0, GPIO_PIN_RCSIGNAL_RX);
+    }
     else
     {
         serialIO = new SerialCRSF(SERIAL_PROTOCOL_TX, SERIAL_PROTOCOL_RX);
@@ -1430,7 +1443,7 @@ static void setupSerial()
 }
 
 #if defined(PLATFORM_ESP32)
-static void serial1Shutdown()
+void serial1Shutdown()
 {
     if(serial1IO != nullptr)
     {
@@ -1515,7 +1528,12 @@ static void setupSerial1()
         case PROTOCOL_SERIAL1_VESC:
             Serial1.begin(115200, SERIAL_8N1, -1, serial1TXpin, false);
             serial1IO = new SerialVESC(SERIAL1_PROTOCOL_TX, SERIAL1_PROTOCOL_RX);
-            ((SerialVESC*)serial1IO)->begin(1, serial1TXpin);
+            ((SerialVESC*)serial1IO)->begin(1, serial1TXpin, serial1RXpin);
+            break;
+        case PROTOCOL_SERIAL1_AM32KISS:
+            Serial1.begin(115200, SERIAL_8N1, serial1RXpin, serial1TXpin, false);
+            serial1IO = new SerialAM32KISS(SERIAL1_PROTOCOL_TX, SERIAL1_PROTOCOL_RX);
+            ((SerialAM32KISS*)serial1IO)->begin(1, serial1RXpin);
             break;
     }
 }
@@ -1530,7 +1548,7 @@ void reconfigureSerial1()
     void reconfigureSerial1() {};
 #endif
 
-static void serialShutdown()
+void serialShutdown()
 {
     BackpackOrLogStrm = new NullStream();
     if(serialIO != nullptr)
@@ -2144,6 +2162,10 @@ void loop()
 
     // read and process any data from serial ports, send any queued non-RC data
     handleSerialIO();
+
+    #ifdef BUILD_AM32CONFIG
+    am32_tick();
+    #endif
 
     // If the reboot time is set and the current time is past the reboot time then reboot.
     if (rebootTime != 0 && now > rebootTime) {

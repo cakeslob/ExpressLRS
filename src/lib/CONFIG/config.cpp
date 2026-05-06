@@ -1487,6 +1487,15 @@ void RxConfig::SetFixedPacketRate(int8_t value)
     }
 }
 
+void RxConfig::SetVescCfgExtras(uint8_t value)
+{
+    if (m_config.vescConfigExtras != value)
+    {
+        m_config.vescConfigExtras = value;
+        m_modified = EVENT_CONFIG_MODEL_CHANGED;
+    }
+}
+
 int RxConfig::LoadFromMeta(uint32_t fw_size, bool from_wifi, bool to_commit)
 {
     // fw_size is 0 (or super small) if an estimate is needed, otherwise the fw_size can be specified
@@ -1675,6 +1684,29 @@ void RxConfig::SetOtherDefaults()
                     pwm->val.mode = somDShot;
                 }
         #endif
+        #if defined(USE_VESC_UART)
+        if (GPIO_PIN_PWM_OUTPUTS[ch] == U0TXD_GPIO_NUM)
+        {
+            pwm->val.mode = somSerial;
+        }
+        #if defined(USE_VESC_TELEM)
+        if (GPIO_PIN_PWM_OUTPUTS[ch] == U0RXD_GPIO_NUM)
+        {
+            pwm->val.mode = somSerial;
+        }
+        #endif
+        #elif defined(USE_VESC_UART_1) && defined(GPIO_PIN_SERIAL1_TX)
+        if (GPIO_PIN_PWM_OUTPUTS[ch] == GPIO_PIN_SERIAL1_TX)
+        {
+            pwm->val.mode = somSerial1TX;
+        }
+        #if defined(USE_VESC_TELEM)
+        if (GPIO_PIN_PWM_OUTPUTS[ch] == GPIO_PIN_SERIAL1_RX)
+        {
+            pwm->val.mode = somSerial1RX;
+        }
+        #endif
+        #endif
     }
     #ifdef USE_DEFAULT_ARCADE_TANK_MIX
     // use this define to setup a custom mixer right into the firmware
@@ -1698,13 +1730,19 @@ void RxConfig::SetOtherDefaults()
 
     #if defined(USE_VESC_UART)
     m_config.serialProtocol = PROTOCOL_VESC;
+    m_config.vesc_cfg[0] = USE_VESC_UART; // make sure the hex representation is calculated such that it represents vesc_cfg_t
+    firmwareOptions.uart_baud = 115200;
     #endif
     #if defined(USE_VESC_UART_1) && defined(GPIO_PIN_SERIAL1_TX)
-    m_config.serialProtocol = PROTOCOL_SERIAL1_VESC;
+    m_config.serial1Protocol = PROTOCOL_SERIAL1_VESC;
+    m_config.vesc_cfg[3] = USE_VESC_UART_1; // make sure the hex representation is calculated such that it represents vesc_cfg_t
+    firmwareOptions.uart_baud = 115200;
     #endif
-
-    #if defined(USE_VESC_UART_JEFF)
-    
+    #if defined(USE_VESC_TELEM)
+    m_config.vescConfigExtras = USE_VESC_TELEM;
+    #endif
+    #if defined(USE_AM32KISS)
+    m_config.serialProtocol = PROTOCOL_AM32KISS;
     #endif
 }
 

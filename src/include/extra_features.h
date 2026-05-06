@@ -11,6 +11,9 @@
 #define BUILD_VESC_UART
 #define BUILD_AM32_CONFIG
 #define BUILD_SERVOS_MOVE_BLINK
+#define ENABLE_AM32_TCP_BRIDGE
+#define ENABLE_VESC_TELEMETRY
+#define ENABLE_VESC_TCP_BRIDGE
 
 #endif
 
@@ -26,4 +29,8 @@
 
 #if !defined(BUILD_SHREW_UNNECESSARY) && defined(PLATFORM_ESP8266) && defined(TARGET_RX)
 #define TRIM_UNNECESSARY_HW // saves about 1KB after compression
+#endif
+
+#if defined(USE_VESC_UART) && !defined(BUILD_VESC_UART)
+#define BUILD_VESC_UART
 #endif

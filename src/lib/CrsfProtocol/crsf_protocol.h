@@ -501,6 +501,21 @@ static inline uint16_t htobe16(uint16_t val)
 #endif
 }
 
+static inline uint32_t htobe24(uint32_t val)
+{
+#if (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+    return val;
+#else
+    uint8_t *ptrByte = (uint8_t *)&val;
+
+    uint8_t swp = ptrByte[0];
+    ptrByte[0] = ptrByte[2];
+    ptrByte[2] = swp;
+
+    return val;
+#endif
+}
+
 static inline uint16_t be16toh(uint16_t val)
 {
 #if (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)

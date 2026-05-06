@@ -3,6 +3,7 @@ import {customElement, state} from "lit/decorators.js"
 import "../assets/mui.js"
 import FEATURES from "../features.js"
 import {elrsState, saveConfig} from "../utils/state.js"
+import {PWM_MODE_SERIAL2RX} from "./connections-panel.js"
 
 const DUTY_RANGE_SNAP_TO_MAX = 99500 // 99.5%
 const POSITION_RANGE_SNAP_TO = 360000000 // 360 deg
@@ -14,8 +15,14 @@ const POSITION_RANGE_SNAP_MAX = POSITION_RANGE_SNAP_TO + 500000
 // round number instead of looking like random digits.
 const VESC_RANGE_MAX = 1000000000
 const EXTRA_FEATURE_VESC_BIT = 3
+const EXTRA_FEATURE_VESC_TCP_BRIDGE_STARTED_BIT = 5
 const PROTOCOL_VESC = 10
 const PROTOCOL_SERIAL1_VESC = 12
+const VESC_TELEM_CFG_POWER = 1 << 0
+const VESC_TELEM_CFG_RPM = 1 << 1
+const VESC_TELEM_CFG_TEMPERATURE = 1 << 2
+const VESC_CFG_TCP_BRIDGE = 1 << 3
+const VESC_CFG_EXTRAS_MASK = 0x0F
 
 const COMMAND_OPTIONS = [
     {value: 0, label: "DISABLED"},
@@ -141,13 +148,19 @@ function getStoredConfig() {
     return output
 }
 
+function getStoredExtras() {
+    return Number(elrsState.config["vesc-cfg-extras"] || 0) & VESC_CFG_EXTRAS_MASK
+}
+
 @customElement("vesc-panel")
 class VescPanel extends LitElement {
     @state() accessor rows = []
+    @state() accessor extras = 0
 
     constructor() {
         super()
         this.rows = getStoredConfig().map((item) => decodeRow(item))
+        this.extras = getStoredExtras()
         this._save = this._save.bind(this)
     }
 
@@ -211,6 +224,10 @@ class VescPanel extends LitElement {
                 .vesc-group-note {
                     margin: 0 0 1rem;
                 }
+
+                .vesc-warning {
+                    margin-bottom: 1rem;
+                }
             </style>
             <div class="mui-panel mui--text-title">VESC</div>
             <div class="mui-panel">
@@ -231,6 +248,50 @@ class VescPanel extends LitElement {
                     available: true,
                     message: "Use the Serial panel to set Serial 2 Protocol to VESC before these mappings will be active.",
                 }) : ""}
+
+                <fieldset>
+                    <legend>Extras</legend>
+                    ${this._renderTelemetryWarning()}
+                    <div class="mui-checkbox">
+                        <input
+                            id="vesc-extra-power"
+                            type="checkbox"
+                            ?checked="${(this.extras & VESC_TELEM_CFG_POWER) !== 0}"
+                            @change="${(e) => this._setExtraFlag(VESC_TELEM_CFG_POWER, e.target.checked)}"
+                        />
+                        <label for="vesc-extra-power">Enable Power Telemetry</label>
+                    </div>
+                    <div class="mui-checkbox">
+                        <input
+                            id="vesc-extra-rpm"
+                            type="checkbox"
+                            ?checked="${(this.extras & VESC_TELEM_CFG_RPM) !== 0}"
+                            @change="${(e) => this._setExtraFlag(VESC_TELEM_CFG_RPM, e.target.checked)}"
+                        />
+                        <label for="vesc-extra-rpm">Enable RPM Telemetry</label>
+                    </div>
+                    <div class="mui-checkbox">
+                        <input
+                            id="vesc-extra-temperature"
+                            type="checkbox"
+                            ?checked="${(this.extras & VESC_TELEM_CFG_TEMPERATURE) !== 0}"
+                            @change="${(e) => this._setExtraFlag(VESC_TELEM_CFG_TEMPERATURE, e.target.checked)}"
+                        />
+                        <label for="vesc-extra-temperature">Enable Temperature Telemetry</label>
+                    </div>
+                    <div class="mui-checkbox">
+                        <input
+                            id="vesc-extra-tcp"
+                            type="checkbox"
+                            ?checked="${(this.extras & VESC_CFG_TCP_BRIDGE) !== 0}"
+                            @change="${(e) => this._setExtraFlag(VESC_CFG_TCP_BRIDGE, e.target.checked)}"
+                        />
+                        <label for="vesc-extra-tcp">Enable TCP Bridge</label>
+                    </div>
+                    <p class="vesc-group-note vesc-muted">
+                        TCP bridge port: <code>65102</code> ${this._isTcpBridgeStarted() ? "✅" : "❌"}
+                    </p>
+                </fieldset>
 
                 <button
                     class="mui-btn mui-btn--small mui-btn--primary"
@@ -256,6 +317,11 @@ class VescPanel extends LitElement {
     _isFeatureAvailable() {
         const extraFeatureFlags = Number(elrsState.settings["extra-features-avail"]) || 0
         return (extraFeatureFlags & (1 << EXTRA_FEATURE_VESC_BIT)) !== 0
+    }
+
+    _isTcpBridgeStarted() {
+        const extraFeatureFlags = Number(elrsState.settings["extra-features-avail"]) || 0
+        return (extraFeatureFlags & (1 << EXTRA_FEATURE_VESC_TCP_BRIDGE_STARTED_BIT)) !== 0
     }
 
     _renderGroup({title, startIndex, enabled, message}) {
@@ -357,15 +423,58 @@ class VescPanel extends LitElement {
         return this._hasSerial2() && elrsState.config["serial1-protocol"] === PROTOCOL_SERIAL1_VESC
     }
 
+    _renderTelemetryWarning() {
+        const message = this._getTelemetryWarningMessage()
+        if (!message) {
+            return ""
+        }
+
+        return html`
+            <div class="warning-bg vesc-warning">
+                ${message}
+            </div>
+        `
+    }
+
+    _getTelemetryWarningMessage() {
+        if (FEATURES.IS_8285) {
+            return this._hasMainSerialRxPin()
+                ? ""
+                : "Telemetry requires serial_rx."
+        }
+
+        return (this._hasMainSerialRxPin() || this._hasSecondarySerialRxPin())
+            ? ""
+            : "Telemetry requires at least one serial RX pin to be defined."
+    }
+
+    _hasMainSerialRxPin() {
+        return !!elrsState.settings.has_serial_pins
+    }
+
+    _hasSecondarySerialRxPin() {
+        return false
+    }
+
     _encodeRows() {
         const source = this.rows.length === 6 ? this.rows : getStoredConfig().map((item) => decodeRow(item))
         return source.map((row) => encodeRow(row))
     }
 
+    _setExtraFlag(flag, enabled) {
+        if (enabled) {
+            this.extras = (this.extras | flag) & VESC_CFG_EXTRAS_MASK
+        }
+        else {
+            this.extras = this.extras & ~flag
+        }
+    }
+
     _save(e) {
         e.preventDefault()
         saveConfig({
-            "vesc-cfg": this._encodeRows()
+            "vesc-cfg": this._encodeRows(),
+            "vesc-cfg-extras": this.extras & VESC_CFG_EXTRAS_MASK,
         }, () => {
             this.requestUpdate()
         })
@@ -379,6 +488,6 @@ class VescPanel extends LitElement {
                 return true
             }
         }
-        return false
+        return getStoredExtras() !== (this.extras & VESC_CFG_EXTRAS_MASK)
     }
 }
