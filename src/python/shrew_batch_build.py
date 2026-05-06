@@ -1,25 +1,10 @@
-
-# when I want to build `Unified_ShrewForXR2_Laceration_2400_RX_via_UART`, it will create a file called `.pio\build\Unified_ShrewForXR2_Laceration_2400_RX_via_UART\firmware.bin`
-# this file should be renamed `fw_ShrewForXR2_Laceration_YYYYMMDDHHmm.bin`
-# where `YYYYMMDDHHmm` is the date and time
-# and saved to `batch_build_results`
-
-# To transform the name, first remove `Unified_`, then remove `_via_UART` or `_via_WIFI`, then remove `_RX` (if it is a TX, leave it alone and stop transforming the name), then remove the number indicating frequency. Then trim all `_`.
-
-# If the result is a `.bin.gz` file then the result file should also end in `.bin.gz`
-
-# this python file will build a list of targets
-
-# This script will also check `user_defines.txt`, `-DMY_BINDING_PHRASE` must not be defined, as this is a security risk. Also all `#-DDEBUG_X` items must be disabled. Fatal error on these.
-
-# assume this script will be called from the `python` directory
-
 BUILD_TARGETS = [
     ["Unified_ShrewForXR2_2400_RX_via_UART", None],
     ["Unified_ShrewForRP4TD_2400_RX_via_UART", None],
+    ["Unified_ShrewForRP4TD_VESC_2400_RX_via_UART", None],
     ["Unified_ShrewForER4_ESP8285_2400_RX_via_WIFI", None],
-    ["Unified_ESP32_2400_TX_via_UART", "mt12"], # fw_ESP32_2400_TX_mt12_YYYYMMDDHHmm.bin
-    ["Unified_ESP32_2400_TX_via_UART", "boxer"], # fw_ESP32_2400_TX_boxer_YYYYMMDDHHmm.bin
+    ["Unified_ShrewForER4_VESC_ESP8285_2400_RX_via_WIFI", None],
+    ["Unified_ESP32_2400_TX_via_UART", ["mt12", "boxer", "zorro", "pocket"]],
 ]
 
 import gzip
@@ -160,6 +145,14 @@ def build_target(target, built_targets):
     built_targets.add(target)
 
 
+def hardware_names(hardware):
+    if hardware is None:
+        return [None]
+    if isinstance(hardware, str):
+        return [hardware]
+    return hardware
+
+
 def git_output(args):
     return subprocess.check_output(["git", *args], cwd=PROJECT_DIR, text=True).strip()
 
@@ -239,9 +232,12 @@ def main():
     write_readme()
     built_targets = set()
 
-    for target, hardware_name in BUILD_TARGETS:
+    for target, hardware in BUILD_TARGETS:
         build_target(target, built_targets)
-        copy_target_result(target, hardware_name)
+        for hardware_name in hardware_names(hardware):
+            copy_target_result(target, hardware_name)
+
+    print(f"Batch build complete. Results are in {RUN_RESULTS_DIR}")
 
 
 if __name__ == "__main__":
