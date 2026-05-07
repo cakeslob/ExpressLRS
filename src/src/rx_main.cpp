@@ -2163,10 +2163,6 @@ void loop()
     // read and process any data from serial ports, send any queued non-RC data
     handleSerialIO();
 
-    #ifdef BUILD_AM32CONFIG
-    am32_tick();
-    #endif
-
     // If the reboot time is set and the current time is past the reboot time then reboot.
     if (rebootTime != 0 && now > rebootTime) {
         ESP.restart();

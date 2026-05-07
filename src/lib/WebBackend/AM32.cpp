@@ -64,6 +64,7 @@ static constexpr uint32_t TCP_AM32_DEFAULT_PORT = 65103; // 65103 is 65102 + 1, 
 static constexpr uint32_t TCP_SEND_TIMEOUT = 0;
 static constexpr size_t TCP_BRIDGE_BUFFER_SIZE = 384;
 static constexpr size_t TCP_BRIDGE_PACKET_BUFFER_SIZE = 384;
+static constexpr uint32_t TCP_BRIDGE_ACCEPT_INTERVAL_MS = 50;
 static constexpr uint32_t TCP_BRIDGE_RESET_GAP_MS = 200;
 static constexpr uint32_t TCP_BRIDGE_SET_BUFFER_DELAY_US = 800;
 
@@ -77,6 +78,7 @@ static am32_tcp_bridge_state_t tcpBridgeState = AM32_TCP_BRIDGE_WAITING;
 static uint8_t tcpBridgePacketBuffer[TCP_BRIDGE_PACKET_BUFFER_SIZE];
 static size_t tcpBridgePacketLength = 0;
 static size_t tcpBridgeExpectedLength = 0;
+static uint32_t tcpBridgeLastAcceptTime = 0;
 #ifdef ENABLE_AM32_TCP_BRIDGE_IMMEDIATE_ECHO
 static size_t tcpBridgeEchoBytesToDrop = 0;
 #endif
@@ -444,11 +446,16 @@ void am32_tick()
             wserver = new WiFiServer(TCP_AM32_DEFAULT_PORT);
             wserver->begin();
         }
-        wclient = wserver->available();
-        if (wclient) {
-            wclient.setNoDelay(true);
-            wclient.setTimeout(TCP_SEND_TIMEOUT);
-            am32_tcpBridge_reset(true);
+
+        uint32_t now = millis();
+        if ((now - tcpBridgeLastAcceptTime) >= TCP_BRIDGE_ACCEPT_INTERVAL_MS) {
+            tcpBridgeLastAcceptTime = now;
+            wclient = wserver->available();
+            if (wclient) {
+                wclient.setNoDelay(true);
+                wclient.setTimeout(TCP_SEND_TIMEOUT);
+                am32_tcpBridge_reset(true);
+            }
         }
     }
 
@@ -518,8 +525,6 @@ void am32_tick()
         }
     }
     #endif
-
-    taskYIELD();
 }
 
 void am32_servoDeinit()
