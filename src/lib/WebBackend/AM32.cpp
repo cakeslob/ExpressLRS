@@ -9,7 +9,7 @@
 #include "driver/uart.h"
 
 #define ENABLE_AM32_TCP_BRIDGE
-#define ENABLE_AM32_TCP_BRIDGE_IMMEDIATE_ECHO
+#define ENABLE_AM32_TCP_BRIDGE_IMMEDIATE_ECHO // this is required, otherwise firmware flashing will fail
 
 typedef struct
 {
@@ -462,6 +462,9 @@ void am32_tick()
                     break;
                 }
 #ifdef ENABLE_AM32_TCP_BRIDGE_IMMEDIATE_ECHO
+                // com2tcp appears to wait for echoed bytes before sending the
+                // next TCP fragment. Echo immediately so it can finish sending
+                // a full AM32 payload while we keep buffering it for UART.
                 size_t writeOffset = 0;
                 if (tcpBridgeEchoBytesToDrop > 0) {
                     size_t drop = min(bytesRead, tcpBridgeEchoBytesToDrop);
@@ -494,6 +497,9 @@ void am32_tick()
             }
 
 #ifdef ENABLE_AM32_TCP_BRIDGE_IMMEDIATE_ECHO
+            // The single-wire UART naturally echoes transmitted bytes back to
+            // RX. Since we already gave com2tcp the immediate echo above, count
+            // these bytes so the later physical echo is not forwarded twice.
             if (am32_serial_ready && pin_num >= 0) {
                 wclient.write(bridgeBuffer, bytesRead);
                 tcpBridgeEchoBytesToDrop += bytesRead;
