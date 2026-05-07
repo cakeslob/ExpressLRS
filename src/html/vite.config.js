@@ -1,5 +1,5 @@
 import { defineConfig, loadEnv } from 'vite'
-import { transformAsync } from '@babel/core'
+import babel from 'vite-plugin-babel'
 import { promises as fs } from 'fs'
 import path from 'path'
 import Zopfli from 'node-zopfli-es'
@@ -116,35 +116,6 @@ function pruneAm32AssetsPlugin(options = {}) {
       } catch {
         // ignore if it was never emitted
       }
-    },
-  }
-}
-
-function babelDecoratorsPlugin() {
-  let root = process.cwd()
-
-  return {
-    name: 'babel-decorators',
-    configResolved(config) {
-      root = config.root || process.cwd()
-    },
-    async transform(code, id) {
-      const file = id.split('?')[0]
-      const normalized = file.split(path.sep).join('/')
-      const srcRoot = path.resolve(root, 'src').split(path.sep).join('/') + '/'
-
-      if (!normalized.startsWith(srcRoot) || !normalized.endsWith('.js')) {
-        return null
-      }
-
-      const result = await transformAsync(code, {
-        cwd: root,
-        root,
-        filename: file,
-        sourceMaps: true,
-      })
-
-      return result ? { code: result.code ?? code, map: result.map ?? null } : null
     },
   }
 }
@@ -279,16 +250,11 @@ export default defineConfig(({ command, mode }) => {
           ]
         : []),
     ],
-    optimizeDeps: {
-      rolldownOptions: {
-        plugins: [htmlFeatureBlocksPlugin(env)],
-      },
-    },
     esbuild: {
       legalComments: 'none'
     },
     build: {
-      rolldownOptions: {
+      rollupOptions: {
         input: {
           app: path.resolve(__dirname, 'index.html'),
         },
@@ -298,6 +264,7 @@ export default defineConfig(({ command, mode }) => {
           manualChunks(id) {
             const p = id.split('\\').join('/');
             const is = (name) => p.includes(`/src/pages/${name}.js`);
+            // Group General route modules
             if (
               is('binding-panel') ||
               is('wifi-panel') ||
@@ -311,6 +278,7 @@ export default defineConfig(({ command, mode }) => {
             ) {
               return 'general';
             }
+            // Group Advanced route modules
             if (
               is('hardware-layout') ||
               //is('continuous-wave') ||
@@ -321,7 +289,8 @@ export default defineConfig(({ command, mode }) => {
             ) {
               return 'advanced';
             }
-            return undefined;
+            // Force everything else (including node_modules) into the main chunk
+            return 'main';
           },
         },
       },
