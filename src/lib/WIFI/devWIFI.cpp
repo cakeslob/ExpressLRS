@@ -1387,7 +1387,7 @@ static void HandleWebUpdate()
         WiFi.setTxPower(WIFI_POWER_19_5dBm);
         #endif
         WiFi.softAPConfig(ipAddress, ipAddress, netMsk);
-        WiFi.softAP(makeUniqueSsid(), wifi_ap_password);
+        WiFi.softAP(makeUniqueSsid(), wifi_ap_password, webbe_getRandomWifiChannel(), false, 4);
         startServices();
         break;
       case WIFI_STA:

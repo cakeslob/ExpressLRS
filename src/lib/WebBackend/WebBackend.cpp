@@ -216,3 +216,19 @@ void webbe_install(AsyncWebServer* srv)
 
     webbe_installed = true; // do not repeat
 }
+
+uint8_t webbe_getRandomWifiChannel()
+{
+    /*
+    to combat Wi-Fi channel congestion, Wi-Fi channel is randomly selected every time
+    */
+    uint32_t bootRand =
+    #if defined(PLATFORM_ESP32)
+        esp_random()
+    #elif defined(PLATFORM_ESP8266)
+        ESP.random()
+    #endif
+        ^ micros() ^ millis();
+    static const uint8_t channels[] = {1, 6, 11};
+    return channels[bootRand % 3];
+}
