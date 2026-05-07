@@ -45,10 +45,15 @@ void am32_setPinMode(int pin, bool isTx);
 void am32_waitTxDone(size_t bytes);
 void am32_freeStruct(am32_request_t* x);
 void am32_hexDecode(const char* str, uint8_t* outbuf, int len);
+void am32_servoDeinit();
 extern void WebUpdateSendContent(AsyncWebServerRequest *request);
+
+extern bool servo_initialized;
 extern void servos_singleWrite(int selected_pin, int us);
 extern bool servos_singleInit(int selected_pin);
 extern void servos_deinitAll();
+extern void servo_initializeEnable();
+
 //extern SerialIO *serialIO;
 extern void serialShutdown();
 
@@ -138,7 +143,7 @@ void am32_handleIo(AsyncWebServerRequest *request)
     switch (req_data.action)
     {
         case AM32_ACTION_PIN_LOW:
-            servos_deinitAll();
+            am32_servoDeinit();
             test_mode_started = false;
             last_test_time = 0;
             am32_serial_ready = false;
@@ -149,7 +154,7 @@ void am32_handleIo(AsyncWebServerRequest *request)
             default_response = true;
             break;
         case AM32_ACTION_PIN_HIGH:
-            servos_deinitAll();
+            am32_servoDeinit();
             test_mode_started = false;
             last_test_time = 0;
             am32_serial_ready = false;
@@ -160,7 +165,7 @@ void am32_handleIo(AsyncWebServerRequest *request)
             default_response = true;
             break;
         case AM32_ACTION_PIN_INIT:
-            servos_deinitAll();
+            am32_servoDeinit();
             test_mode_started = false;
             last_test_time = 0;
             am32_serial_ready = false;
@@ -179,7 +184,7 @@ void am32_handleIo(AsyncWebServerRequest *request)
             break;
         case AM32_ACTION_PIN_LIST:
             {
-                servos_deinitAll();
+                am32_servoDeinit();
                 test_mode_started = false;
                 last_test_time = 0;
                 char pin_str[64];
@@ -513,6 +518,19 @@ void am32_tick()
         }
     }
     #endif
+
+    taskYIELD();
+}
+
+void am32_servoDeinit()
+{
+    #if 0
+    if (!servo_initialized)
+    {
+        servo_initializeEnable();
+    }
+    #endif
+    servos_deinitAll();
 }
 
 #ifdef ENABLE_AM32_TCP_BRIDGE

@@ -14,7 +14,6 @@
 static int8_t servoPins[PWM_MAX_CHANNELS];
 static pwm_channel_t pwmChannels[PWM_MAX_CHANNELS];
 static uint16_t pwmChannelValues[PWM_MAX_CHANNELS];
-static bool initialized = false;
 
 #if defined(PLATFORM_ESP32)
 static DShotRMT *dshotInstances[PWM_MAX_CHANNELS] = {nullptr};
@@ -26,6 +25,7 @@ static bool newChannelsAvailable;
 // Absolute max failsafe time if no update is received, regardless of LQ
 static constexpr uint32_t FAILSAFE_ABS_TIMEOUT_MS = 1000U;
 
+bool servo_initialized = false;
 void servo_initializeEnable();
 typedef void (*servoWrite_fn)(uint8_t ch, uint16_t us);
 
@@ -132,9 +132,9 @@ static void servoWrite(uint8_t ch, uint16_t us)
 
 void servosFailsafe(bool no_pulse)
 {
-    if (!initialized) {
+    if (!servo_initialized) {
         // we might be running the servos from another place in the code
-        initialized = true;
+        servo_initialized = true;
         servo_initializeEnable();
     }
 
@@ -232,9 +232,9 @@ void servosUpdate(unsigned long now)
 {
     static uint32_t lastUpdate;
 
-    if (!initialized) {
+    if (!servo_initialized) {
         // we might be running the servos from another place in the code
-        initialized = true;
+        servo_initialized = true;
         servo_initializeEnable();
     }
 
@@ -397,9 +397,9 @@ static int event()
         servosFailsafe(!webbe_installed || !webbe_ws_started);
         return DURATION_NEVER;
     }
-    if (!initialized && connectionState == connected)
+    if (!servo_initialized && connectionState == connected)
     {
-        initialized = true;
+        servo_initialized = true;
         servo_initializeEnable();
     }
     return DURATION_IMMEDIATELY;
