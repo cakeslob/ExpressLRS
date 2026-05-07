@@ -1,4 +1,4 @@
-import FEATURES from "./features.js";
+import FEATURES from "./src/features.js";
 
 export function devMockPlugin() {
     function sendJSON(res, obj, status = 200) {
