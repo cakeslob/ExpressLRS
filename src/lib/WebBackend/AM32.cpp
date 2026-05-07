@@ -9,6 +9,7 @@
 #include "driver/uart.h"
 
 #define ENABLE_AM32_TCP_BRIDGE
+#define ENABLE_AM32_TCP_BRIDGE_IMMEDIATE_ECHO
 
 typedef struct
 {
@@ -41,6 +42,7 @@ static uint32_t last_test_time = 0;
 static bool am32_serial_ready = false;
 
 void am32_setPinMode(int pin, bool isTx);
+void am32_waitTxDone(size_t bytes);
 void am32_freeStruct(am32_request_t* x);
 void am32_hexDecode(const char* str, uint8_t* outbuf, int len);
 extern void WebUpdateSendContent(AsyncWebServerRequest *request);
@@ -55,7 +57,33 @@ static WiFiServer* wserver = NULL;
 static WiFiClient wclient;
 static constexpr uint32_t TCP_AM32_DEFAULT_PORT = 65103; // 65103 is 65102 + 1, kept next to the VESC TCP bridge default port.
 static constexpr uint32_t TCP_SEND_TIMEOUT = 0;
-static constexpr size_t TCP_BRIDGE_BUFFER_SIZE = 64;
+static constexpr size_t TCP_BRIDGE_BUFFER_SIZE = 384;
+static constexpr size_t TCP_BRIDGE_PACKET_BUFFER_SIZE = 384;
+static constexpr uint32_t TCP_BRIDGE_RESET_GAP_MS = 200;
+static constexpr uint32_t TCP_BRIDGE_SET_BUFFER_DELAY_US = 800;
+
+enum am32_tcp_bridge_state_t {
+    AM32_TCP_BRIDGE_WAITING,
+    AM32_TCP_BRIDGE_COMMAND,
+    AM32_TCP_BRIDGE_PAYLOAD,
+};
+
+static am32_tcp_bridge_state_t tcpBridgeState = AM32_TCP_BRIDGE_WAITING;
+static uint8_t tcpBridgePacketBuffer[TCP_BRIDGE_PACKET_BUFFER_SIZE];
+static size_t tcpBridgePacketLength = 0;
+static size_t tcpBridgeExpectedLength = 0;
+#ifdef ENABLE_AM32_TCP_BRIDGE_IMMEDIATE_ECHO
+static size_t tcpBridgeEchoBytesToDrop = 0;
+#endif
+static uint32_t tcpBridgeLastByteTime = 0;
+static bool tcpBridgeDelayBeforePayload = false;
+
+static size_t am32_tcpBridge_commandLength(uint8_t cmd);
+static void am32_tcpBridge_flush();
+static void am32_tcpBridge_handleByte(uint8_t b);
+static void am32_tcpBridge_checkTimeout();
+static void am32_tcpBridge_reset(bool flush);
+static void am32_tcpBridge_write(const uint8_t *data, size_t len);
 #endif
 
 void am32_handleIo(AsyncWebServerRequest *request)
@@ -224,7 +252,7 @@ void am32_handleIo(AsyncWebServerRequest *request)
                     Serial.write((uint8_t)req_data.buffer1[j]);
                 }
                 if (total_bytes >= 24) {
-                    uart_wait_tx_done(0, pdMS_TO_TICKS(100));
+                    am32_waitTxDone(req_data.buffer1_len);
                 }
                 else {
                     while (esp_timer_get_time() < deadline) {
@@ -241,7 +269,7 @@ void am32_handleIo(AsyncWebServerRequest *request)
                         Serial.write((uint8_t)req_data.buffer2[j]);
                     }
                     if (total_bytes >= 24) {
-                        uart_wait_tx_done(0, pdMS_TO_TICKS(100));
+                        am32_waitTxDone(req_data.buffer2_len);
                     }
                     else {
                         while (esp_timer_get_time() < deadline) {
@@ -344,6 +372,14 @@ void am32_setPinMode(int pin, bool isTx)
     }
 }
 
+void am32_waitTxDone(size_t bytes)
+{
+    // One byte at 19200 baud is about 520us. Use a transfer-sized timeout so
+    // large TCP bridge chunks finish before the pin is switched back to RX.
+    uint32_t timeout_ms = ((bytes * 520U) + 26000U + 999U) / 1000U;
+    uart_wait_tx_done(0, pdMS_TO_TICKS(timeout_ms));
+}
+
 void am32_freeStruct(am32_request_t* x) {
     if (x->buffer1_len > 0) {
         free(x->buffer1);
@@ -407,12 +443,15 @@ void am32_tick()
         if (wclient) {
             wclient.setNoDelay(true);
             wclient.setTimeout(TCP_SEND_TIMEOUT);
+            am32_tcpBridge_reset(true);
         }
     }
 
     if (wclient.connected()) // somebody connected
     {
         uint8_t bridgeBuffer[TCP_BRIDGE_BUFFER_SIZE];
+        am32_tcpBridge_checkTimeout();
+
         if (am32_serial_ready && pin_num >= 0)
         {
             // pass data from serial port to host PC
@@ -422,7 +461,19 @@ void am32_tick()
                 if (bytesRead == 0) {
                     break;
                 }
+#ifdef ENABLE_AM32_TCP_BRIDGE_IMMEDIATE_ECHO
+                size_t writeOffset = 0;
+                if (tcpBridgeEchoBytesToDrop > 0) {
+                    size_t drop = min(bytesRead, tcpBridgeEchoBytesToDrop);
+                    tcpBridgeEchoBytesToDrop -= drop;
+                    writeOffset = drop;
+                }
+                if (writeOffset < bytesRead) {
+                    wclient.write(bridgeBuffer + writeOffset, bytesRead - writeOffset);
+                }
+#else
                 wclient.write(bridgeBuffer, bytesRead);
+#endif
             }
         }
 
@@ -442,32 +493,160 @@ void am32_tick()
                 break; // nothing to do
             }
 
+#ifdef ENABLE_AM32_TCP_BRIDGE_IMMEDIATE_ECHO
             if (am32_serial_ready && pin_num >= 0) {
-                am32_setPinMode(pin_num, true); // pin to TX mode
-
-                // calculate estimated time for transmission
-                uint64_t ts = esp_timer_get_time();
-                uint64_t deadline = ts + (520 * bytesRead) + 26;
-
-                Serial.write(bridgeBuffer, bytesRead); // send the data (to DMA or FIFO buffer, of the serial port)
-
-                // wait for transmission
-                if (bytesRead >= 24) {
-                    uart_wait_tx_done(0, pdMS_TO_TICKS(100));
-                }
-                else {
-                    while (esp_timer_get_time() < deadline) {
-                        // do nothing
-                    }
-                }
-
-                am32_setPinMode(pin_num, false); // pin back to RX mode
+                wclient.write(bridgeBuffer, bytesRead);
+                tcpBridgeEchoBytesToDrop += bytesRead;
             }
-            //wclient.write(bridgeBuffer, bytesRead); // this causes an echo, which is what the PC host software expects, since these serial ports are supposed to have TX pin connected to RX pin
+#endif
+
+            for (int i = 0; i < bytesRead; i++)
+            {
+                am32_tcpBridge_handleByte(bridgeBuffer[i]);
+            }
         }
     }
     #endif
 }
+
+#ifdef ENABLE_AM32_TCP_BRIDGE
+
+/*
+The AM32 bootloader has a very short timeout, 250 microseconds, so if a large packet for firmware gets chunked up, the bootloader sends a 0xC2 meaning "send_BAD_CRC_ACK"
+
+The strategy is to decode the packets, figure out how long they need to be, and then always send in full packet chunks. This is done by a state machine that reads every byte
+
+The state machine resets after 200ms of inactivity. Bytes that are not understood are never thrown away, they are still sent out the UART. CRC is not being enforced.
+*/
+
+static size_t am32_tcpBridge_commandLength(uint8_t cmd)
+{
+    switch (cmd) {
+        case 0xFF: // SET_ADDRESS: cmd, 0, addr_hi, addr_lo, crc_lo, crc_hi
+        case 0xFE: // SET_BUFFER: cmd, 0, x256, len, crc_lo, crc_hi
+            return 6;
+        case 0x00:
+            // The AM32 init query starts with zero padding and is 21 bytes
+            // long. Short RUN sequences are flushed by the idle timer.
+            return 21;
+        case 0x01: // PROG_FLASH
+        case 0x02: // ERASE_FLASH
+        case 0x03: // READ_FLASH / VERIFY
+        case 0x04: // READ_EEPROM / VERIFY
+        case 0x05: // PROG_EEPROM on some bootloader variants
+        case 0x06: // READ_SRAM on some bootloader variants
+        case 0x07: // READ_FLASH_ATM on some bootloader variants
+        case 0xFD: // KEEP_ALIVE
+            return 4;
+        default:
+            return 1;
+    }
+}
+
+static void am32_tcpBridge_flush()
+{
+    if (tcpBridgePacketLength == 0) {
+        return;
+    }
+    if (tcpBridgeDelayBeforePayload) {
+        delayMicroseconds(TCP_BRIDGE_SET_BUFFER_DELAY_US);
+    }
+    am32_tcpBridge_write(tcpBridgePacketBuffer, tcpBridgePacketLength);
+    tcpBridgePacketLength = 0;
+    tcpBridgeDelayBeforePayload = false;
+}
+
+static void am32_tcpBridge_handleByte(uint8_t b)
+{
+    uint32_t now = millis();
+    if (tcpBridgeLastByteTime != 0 && (now - tcpBridgeLastByteTime) >= TCP_BRIDGE_RESET_GAP_MS) {
+        am32_tcpBridge_reset(true);
+    }
+    tcpBridgeLastByteTime = now;
+
+    if (tcpBridgeState == AM32_TCP_BRIDGE_WAITING) {
+        tcpBridgeState = AM32_TCP_BRIDGE_COMMAND;
+        tcpBridgeExpectedLength = am32_tcpBridge_commandLength(b);
+    }
+
+    if (tcpBridgePacketLength >= sizeof(tcpBridgePacketBuffer)) {
+        am32_tcpBridge_reset(true);
+        tcpBridgeState = AM32_TCP_BRIDGE_COMMAND;
+        tcpBridgeExpectedLength = am32_tcpBridge_commandLength(b);
+        tcpBridgeLastByteTime = now;
+    }
+
+    tcpBridgePacketBuffer[tcpBridgePacketLength++] = b;
+
+    if (tcpBridgePacketLength < tcpBridgeExpectedLength) {
+        return;
+    }
+
+    if (tcpBridgeState == AM32_TCP_BRIDGE_COMMAND) {
+        uint8_t cmd = tcpBridgePacketBuffer[0];
+        size_t payloadLength = 0;
+        if (cmd == 0xFE && tcpBridgePacketLength >= 4) {
+            payloadLength = (tcpBridgePacketBuffer[2] == 0x01) ? 256U : tcpBridgePacketBuffer[3];
+        }
+
+        am32_tcpBridge_flush();
+
+        if (cmd == 0xFE) {
+            tcpBridgeState = AM32_TCP_BRIDGE_PAYLOAD;
+            tcpBridgeExpectedLength = payloadLength + 2U; // payload plus CRC
+            tcpBridgeDelayBeforePayload = true;
+            tcpBridgeLastByteTime = now;
+        }
+        else {
+            am32_tcpBridge_reset(false);
+        }
+        return;
+    }
+
+    am32_tcpBridge_reset(true);
+}
+
+static void am32_tcpBridge_checkTimeout()
+{
+    if (tcpBridgeLastByteTime != 0 && (millis() - tcpBridgeLastByteTime) >= TCP_BRIDGE_RESET_GAP_MS) {
+        am32_tcpBridge_reset(true);
+    }
+}
+
+static void am32_tcpBridge_reset(bool flush)
+{
+    if (flush) {
+        am32_tcpBridge_flush();
+    }
+    tcpBridgeState = AM32_TCP_BRIDGE_WAITING;
+    tcpBridgePacketLength = 0;
+    tcpBridgeExpectedLength = 0;
+    tcpBridgeLastByteTime = 0;
+    tcpBridgeDelayBeforePayload = false;
+}
+
+static void am32_tcpBridge_write(const uint8_t *data, size_t len)
+{
+    if (!am32_serial_ready || pin_num < 0 || data == NULL || len == 0) {
+        return;
+    }
+
+    am32_setPinMode(pin_num, true);
+    Serial.write(data, len);
+
+    if (len >= 24) {
+        am32_waitTxDone(len);
+    }
+    else {
+        uint64_t deadline = esp_timer_get_time() + (520ULL * len) + 26;
+        while (esp_timer_get_time() < deadline) {
+            // wait for short packets without the uart_wait_tx_done latency
+        }
+    }
+
+    am32_setPinMode(pin_num, false);
+}
+#endif
 
 #else
 
