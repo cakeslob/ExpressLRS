@@ -13,6 +13,7 @@ Summary:
  * Custom Mixer
  * Activity Indicator LED
  * Unique Wi-Fi SSID
+ * Randomized Wi-Fi Channel
 
 ### Backwards Compatibility with V3
 
@@ -65,10 +66,14 @@ This can be extremely useful for identifying which receiver is linked to which t
 
 Original ELRS firmware always used a SSID like `ExpressLRS RX` or `ExpressLRS TX`. With Shrew branch firmware, the SSIDs used are like `ELRS-RX-XXXX` or `ELRS-TX-XXXX` where the `XXXX` is a unique hexadecimal number, unique to each unit (based on its Wi-Fi MAC address). This can help users connect to the correct device when multiple devices within an area are in Wi-Fi mode.
 
+### Randomized Wi-Fi Channel
+
+There is a high probability that the original ELRS firmware only used the default Wi-Fi channel (1), which can cause congestion related problems, such as having difficulty seeing the SSID when scanning, or signal problems in general.
+
+My branch of the firmware adds a randomization of used Wi-Fi channel, every time the AP starts, it randomly chooses between channel 1, 6, and 11.
+
 # Original ExpressRLS Readme
-----------
-----------
-----------
+
 ![Banner](https://github.com/ExpressLRS/ExpressLRS-Hardware/blob/master/img/banner.png?raw=true)
 
 <center>

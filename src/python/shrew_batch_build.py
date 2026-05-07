@@ -1,10 +1,16 @@
 BUILD_TARGETS = [
     ["Unified_ShrewForXR2_2400_RX_via_UART", None],
-    ["Unified_ShrewForRP4TD_2400_RX_via_UART", None],
+    #["Unified_ShrewForRP4TD_2400_RX_via_UART", None],
     ["Unified_ShrewForRP4TD_VESC_2400_RX_via_UART", None],
-    ["Unified_ShrewForER4_ESP8285_2400_RX_via_WIFI", None],
+    #["Unified_ShrewForER4_ESP8285_2400_RX_via_WIFI", None],
     ["Unified_ShrewForER4_VESC_ESP8285_2400_RX_via_WIFI", None],
-    ["Unified_ESP32_2400_TX_via_UART", ["mt12", "boxer", "zorro", "pocket"]],
+    ["Unified_ESP32C3_LR1121_RX_via_WIFI", ["xr1", "xr2", "xr3"]],
+    ["Unified_ESP32_LR1121_RX_via_WIFI", ["xr4"]],
+    ["Unified_ESP8285_2400_RX_via_WIFI", ["er3", "er4", "er5", "er5c-i", "er5-v2", "rp1", "rp2"]],
+    ["Unified_ESP32_2400_RX_via_WIFI", ["er6", "er8", "rp4", "rp4m"]],
+    ["Unified_ESP32_2400_TX_via_WIFI", ["mt12", "boxer", "zorro", "pocket", "tx16s", "tx12", "ranger", "ranger-micro", "ranger-nano", "t8l"]],
+    ["Unified_ESP32_LR1121_TX_via_WIFI", ["nomad", "gx12", "tx15"]],
+    #["Unified_ESP32S3_2400_TX", ["t12-1w"]]
 ]
 
 import gzip
@@ -31,6 +37,24 @@ RUN_RESULTS_DIR = RESULTS_DIR / BATCH_TIMESTAMP
 
 def fail(message):
     raise SystemExit(f"ERROR: {message}")
+
+
+def platformio_executable():
+    pio = shutil.which("pio")
+    if pio:
+        return pio
+
+    home = Path.home()
+    candidates = [
+        home / ".platformio" / "penv" / "Scripts" / "pio.exe",
+        home / ".platformio" / "penv" / "bin" / "pio",
+    ]
+
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+
+    fail("could not find PlatformIO executable; install it or add `pio` to PATH")
 
 
 def validate_user_defines():
@@ -141,7 +165,7 @@ def build_target(target, built_targets):
     target_dir.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env["ELRS_BATCH_BUILD"] = "1"
-    subprocess.run(["pio", "run", "-e", target], cwd=PROJECT_DIR, env=env, stdin=subprocess.DEVNULL, check=True)
+    subprocess.run([platformio_executable(), "run", "-e", target], cwd=PROJECT_DIR, env=env, stdin=subprocess.DEVNULL, check=True)
     built_targets.add(target)
 
 
