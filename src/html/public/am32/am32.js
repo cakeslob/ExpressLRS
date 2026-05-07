@@ -1213,7 +1213,6 @@ async function btn_connect_onclick_a()
         }
         data = await serport_ajax("init serial port", srvaction_ser_init);
         await new Promise(resolve => setTimeout(resolve, 200));
-        pin_been_tried[pinnum] = true;
 
         let mcu = null;
 
@@ -1277,6 +1276,7 @@ async function btn_connect_onclick_a()
         if (current_chip != null) {
             current_chip["mcu"] = mcu;
         }
+        pin_been_tried[pinnum] = true;
         fill_version_box();
         offer_experimental();
 
@@ -1310,6 +1310,7 @@ async function btn_connect_onclick_a()
 
     }
     catch (e) {
+        pin_been_tried[getEleById("drop_selpin").value] = false;
         cuteAlert({
             type: 'error',
             title: 'Error during EEPROM read',

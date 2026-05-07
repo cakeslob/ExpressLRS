@@ -338,9 +338,9 @@ void am32_setPinMode(int pin, bool isTx)
     }
     else
     {
+        pinMatrixOutDetach(pin, false, false);
         pinMode(pin, INPUT_PULLUP);
         pinMatrixInAttach(pin, U0RXD_IN_IDX, false);
-        //pinMatrixOutDetach(pin, false, false);
     }
 }
 
@@ -463,7 +463,7 @@ void am32_tick()
 
                 am32_setPinMode(pin_num, false); // pin back to RX mode
             }
-            wclient.write(bridgeBuffer, bytesRead); // this causes an echo, which is what the PC host software expects, since these serial ports are supposed to have TX pin connected to RX pin
+            //wclient.write(bridgeBuffer, bytesRead); // this causes an echo, which is what the PC host software expects, since these serial ports are supposed to have TX pin connected to RX pin
         }
     }
     #endif
