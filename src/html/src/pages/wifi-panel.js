@@ -1,8 +1,11 @@
 import {html, LitElement} from "lit"
 import {customElement, query, state} from "lit/decorators.js"
 import {elrsState} from "../utils/state.js"
-import {postWithFeedback} from "../utils/feedback.js"
+import {errorAlert, postWithFeedback} from "../utils/feedback.js"
+// FEATURE:NOT IS_8285
 import {autocomplete} from "../utils/autocomplete.js"
+// /FEATURE:NOT IS_8285
+import {_smartEqual} from "../utils/libs.js";
 
 @customElement('wifi-panel')
 class WifiPanel extends LitElement {
@@ -11,7 +14,7 @@ class WifiPanel extends LitElement {
     @query('[name="network"]') accessor network
     @query('[name="password"]') accessor password
 
-    @state() accessor selectedValue = '0'
+    @state() accessor selectedValue = elrsState.settings.mode !== 'STA' ? '3' : '0'
     @state() accessor showLoader = true
     @state() accessor wifiOnInterval
     @state() accessor passwordVisible = false
@@ -39,8 +42,10 @@ class WifiPanel extends LitElement {
     }
 
     updated(_) {
+        // FEATURE:NOT IS_8285
         if (!this.running) this._getNetworks()
         this.running = true
+        // /FEATURE:NOT IS_8285
     }
 
     _togglePasswordVisibility() {
@@ -61,7 +66,7 @@ class WifiPanel extends LitElement {
                 </p>
                 <form id="sethome" class="mui-form">
                     <div class="mui-radio">
-                        <input id="home" type="radio" name="networktype" value="0" checked @change="${this._handleChange}">
+                        <input id="home" type="radio" name="networktype" value="0" @change="${this._handleChange}" ?checked="${this.selectedValue === '0'}">
                         <label for="home">Set new home network</label>
                     </div>
                     <div class="mui-radio">
@@ -73,7 +78,7 @@ class WifiPanel extends LitElement {
                         <label for="ap">Temporarily enable "Access Point" mode, retain current home network setting</label>
                     </div>
                     <div class="mui-radio">
-                        <input id="forget" type="radio" name="networktype" value="3" @change="${this._handleChange}">
+                        <input id="forget" type="radio" name="networktype" value="3" @change="${this._handleChange}" ?checked="${this.selectedValue === '3'}">
                         <label for="forget">Forget home network setting, always use "Access Point" mode</label>
                     </div>
                     <br/>
@@ -88,15 +93,17 @@ class WifiPanel extends LitElement {
                     </div>
                     <div id="credentials" ?hidden="${this.selectedValue === '2' || this.selectedValue === '3'}">
                         <div class="autocomplete mui-textfield" style="position:relative;">
+                            <!-- FEATURE:NOT IS_8285 -->
                             <div style="display: ${this.showLoader ? 'block' : 'none'};" class="loader"></div>
+                            <!-- /FEATURE:NOT IS_8285 -->
                             <input id="ssid" name="network" type="text" placeholder="SSID" autocomplete="off"
-                                .value="${elrsState.options['wifi-ssid']}"
+                                value="${elrsState.options['wifi-ssid']}"
                             />
                             <label for="ssid">WiFi SSID</label>
                         </div>
                         <div class="mui-textfield">
                             <input id="pwd" size='64' name='password' type=${this.passwordVisible ? 'text' : 'password'}
-                                .value="${elrsState.options['wifi-password']}"
+                                value="${elrsState.options['wifi-password']}"
                             />
                             <label for="pwd">WiFi password</label>
                             <span
@@ -136,6 +143,10 @@ class WifiPanel extends LitElement {
     _setupNetwork(event) {
         event.preventDefault()
         const self = this
+        if ((this.selectedValue === '0' || this.selectedValue === '1') && !this.network.value.trim()) {
+            errorAlert('WiFi SSID Required', 'Please enter a WiFi SSID.')
+            return
+        }
         switch (this.selectedValue) {
             case '0':
                 postWithFeedback('Set Home Network', 'An error occurred setting the home network', '/sethome?save', function () {
@@ -175,6 +186,7 @@ class WifiPanel extends LitElement {
     }
 
     _getNetworks() {
+        // FEATURE:NOT IS_8285
         const self = this
         const xmlhttp = new XMLHttpRequest()
         xmlhttp.onload = function () {
@@ -197,6 +209,7 @@ class WifiPanel extends LitElement {
         }
         xmlhttp.open('GET', 'networks.json', true)
         xmlhttp.send()
+        // /FEATURE:NOT IS_8285
     }
 
     checkChanged() {
@@ -204,8 +217,8 @@ class WifiPanel extends LitElement {
         const currentNetwork = this.network?.value ?? elrsState.options['wifi-ssid']
         const currentPassword = this.password?.value ?? elrsState.options['wifi-password']
         changed |= this.wifiOnInterval !== elrsState.options['wifi-on-interval']
-        changed |= currentNetwork !== elrsState.options['wifi-ssid']
-        changed |= currentPassword !== elrsState.options['wifi-password']
+        changed |= !_smartEqual(currentNetwork, elrsState.options['wifi-ssid'])
+        changed |= !_smartEqual(currentPassword, elrsState.options['wifi-password'])
         return !!changed
     }
 }

@@ -1,3 +1,4 @@
+// FEATURE:NOT IS_8285
 export function autocomplete(inp, arr) {
     /* the autocomplete function takes two arguments,
     the text field element and an array of possible autocompleted values: */
@@ -100,3 +101,4 @@ export function autocomplete(inp, arr) {
         closeAllLists(e.target);
     });
 }
+// /FEATURE:NOT IS_8285

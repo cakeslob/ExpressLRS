@@ -660,6 +660,7 @@ static void UpdateConfiguration(AsyncWebServerRequest *request, JsonVariant &jso
 }
 #endif
 
+#ifdef PLATFORM_ESP32
 static void WebUpdateSendNetworks(AsyncWebServerRequest *request)
 {
   int numNetworks = WiFi.scanComplete();
@@ -694,6 +695,7 @@ static void WebUpdateSendNetworks(AsyncWebServerRequest *request)
     request->send(204, "application/json", "[]");
   }
 }
+#endif
 
 static void sendResponse(AsyncWebServerRequest *request, const String &msg, WiFiMode_t mode) {
   AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", msg);
@@ -1272,7 +1274,9 @@ static void startServices()
   {
       server.on(asset.path, WebUpdateSendContent);
   }
+  #ifdef PLATFORM_ESP32
   server.on("/networks.json", WebUpdateSendNetworks);
+  #endif
   server.on("/sethome", WebUpdateSetHome);
   server.on("/forget", WebUpdateForget);
   server.on("/connect", WebUpdateConnect);
