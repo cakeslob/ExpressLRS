@@ -418,6 +418,7 @@ static void GetConfiguration(AsyncWebServerRequest *request)
     settings["lua_name"] = device_name;
     settings["uidtype"] = GetConfigUidType(json);
     settings["ssid"] = station_ssid;
+    settings["ap-ssid"] = makeUniqueSsid();
     settings["mode"] = wifiMode == WIFI_STA ? "STA" : "AP";
     settings["custom_hardware"] = hardware_flag(HARDWARE_customised);
     settings["target"] = &target_name[4];

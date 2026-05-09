@@ -62,7 +62,7 @@ class WifiPanel extends LitElement {
                 <p>
                     Here you can join a network, and save it as your Home network. When you enable WiFi in range of your
                     Home network, ExpressLRS will automatically connect to it. In Access Point (AP) mode, the network
-                    name is ExpressLRS TX or ExpressLRS RX with password "expresslrs".
+                    name is "${elrsState.settings['ap-ssid'] ?? 'ELRS-XX-XXXX'}" with password "expresslrs".
                 </p>
                 <form id="sethome" class="mui-form">
                     <div class="mui-radio">
