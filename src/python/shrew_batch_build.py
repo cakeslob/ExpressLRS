@@ -13,10 +13,12 @@ BUILD_TARGETS = [
     #["Unified_ESP32S3_2400_TX", ["t12-1w"]]
 ]
 
+import argparse
 import gzip
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 from datetime import datetime
@@ -27,6 +29,7 @@ from UnifiedConfiguration import doConfiguration, findFirmwareEnd
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent
+HTML_DIR = PROJECT_DIR / "html"
 BUILD_DIR = PROJECT_DIR / ".pio" / "build"
 RESULTS_DIR = PROJECT_DIR / "batch_build_results"
 USER_DEFINES = PROJECT_DIR / "user_defines.txt"
@@ -55,6 +58,21 @@ def platformio_executable():
             return str(candidate)
 
     fail("could not find PlatformIO executable; install it or add `pio` to PATH")
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Build Shrew ExpressLRS firmware batch artifacts.")
+    parser.add_argument(
+        "--build-web",
+        action="store_true",
+        help="Run npm run build:all in the automatically detected html directory before firmware builds.",
+    )
+    parser.add_argument(
+        "--build-web-wsl",
+        action="store_true",
+        help="Run the optional web build through WSL. Implies --build-web.",
+    )
+    return parser.parse_args()
 
 
 def validate_user_defines():
@@ -169,6 +187,40 @@ def build_target(target, built_targets):
     built_targets.add(target)
 
 
+def find_html_dir():
+    if not HTML_DIR.is_dir():
+        fail(f"html directory not found at {HTML_DIR}")
+    if not (HTML_DIR / "package.json").is_file():
+        fail(f"package.json not found in html directory at {HTML_DIR}")
+    return HTML_DIR
+
+
+def wsl_path(path):
+    resolved = path.resolve()
+    drive = resolved.drive.rstrip(":")
+    if drive:
+        rest = resolved.relative_to(resolved.anchor).as_posix()
+        return f"/mnt/{drive.lower()}/{rest}"
+
+    try:
+        return subprocess.check_output(["wsl", "wslpath", "-a", str(resolved)], text=True).strip()
+    except (FileNotFoundError, subprocess.CalledProcessError) as exc:
+        fail(f"unable to convert html path for WSL: {exc}")
+
+
+def build_web_headers(use_wsl):
+    html_dir = find_html_dir()
+    print(f"Building web UI headers in {html_dir}" + (" via WSL" if use_wsl else ""))
+
+    if use_wsl:
+        command = f"cd {shlex.quote(wsl_path(html_dir))} && npm run build:all"
+        subprocess.run(["wsl", "bash", "-lc", command], check=True)
+        return
+
+    npm = "npm.cmd" if os.name == "nt" else "npm"
+    subprocess.run([npm, "run", "build:all"], cwd=html_dir, check=True)
+
+
 def hardware_names(hardware):
     if hardware is None:
         return [None]
@@ -250,8 +302,11 @@ def copy_target_result(target, hardware_name):
 
 
 def main():
+    args = parse_args()
     os.chdir(PROJECT_DIR)
     validate_user_defines()
+    if args.build_web or args.build_web_wsl:
+        build_web_headers(args.build_web_wsl)
     RUN_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     write_readme()
     built_targets = set()

@@ -590,7 +590,7 @@ void ota_cntNewVersionPkts()
             // reset the search scan timer
             RFmodeLastCycled = millis();
             // regenerate the hop table with the correct seed
-            FHSSrandomiseFHSSsequence(uidMacSeedGet());
+            FHSSrandomiseFHSSsequence(OtaGetUidSeed());
             // reinitialize all radio parameters
             SetRFLinkRate(ExpressLRS_nextAirRateIndex, false);
             Radio.RXnb();
