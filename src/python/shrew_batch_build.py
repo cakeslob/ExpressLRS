@@ -63,6 +63,11 @@ def platformio_executable():
 def parse_args():
     parser = argparse.ArgumentParser(description="Build Shrew ExpressLRS firmware batch artifacts.")
     parser.add_argument(
+        "--clean",
+        action="store_true",
+        help="Run `pio run -t clean` for each target before building it.",
+    )
+    parser.add_argument(
         "--build-web",
         action="store_true",
         help="Run npm run build:all in the automatically detected html directory before firmware builds.",
@@ -160,7 +165,7 @@ def configure_firmware(firmware, target, hardware_name):
         doConfiguration(firmware_file, defines, config, target, hardware_name, None)
 
 
-def build_target(target, built_targets):
+def build_target(target, built_targets, clean):
     if target in built_targets:
         return
 
@@ -171,7 +176,11 @@ def build_target(target, built_targets):
     target_dir.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env["ELRS_BATCH_BUILD"] = "1"
-    subprocess.run([platformio_executable(), "run", "-e", target], cwd=PROJECT_DIR, env=env, stdin=subprocess.DEVNULL, check=True)
+    pio = platformio_executable()
+    if clean:
+        print(f"Cleaning {target}...")
+        subprocess.run([pio, "run", "-e", target, "-t", "clean"], cwd=PROJECT_DIR, env=env, stdin=subprocess.DEVNULL, check=True)
+    subprocess.run([pio, "run", "-e", target], cwd=PROJECT_DIR, env=env, stdin=subprocess.DEVNULL, check=True)
     built_targets.add(target)
 
 
@@ -300,7 +309,7 @@ def main():
     built_targets = set()
 
     for target, hardware in BUILD_TARGETS:
-        build_target(target, built_targets)
+        build_target(target, built_targets, args.clean)
         for hardware_name in hardware_names(hardware):
             copy_target_result(target, hardware_name)
 
