@@ -1,14 +1,14 @@
 BUILD_TARGETS = [
     ["Unified_ShrewForXR2_2400_RX_via_UART", None],
-    #["Unified_ShrewForRP4TD_2400_RX_via_UART", None],
+    ["Unified_ShrewForRP4TD_2400_RX_via_UART", None],
     ["Unified_ShrewForRP4TD_VESC_2400_RX_via_UART", None],
-    #["Unified_ShrewForER4_ESP8285_2400_RX_via_WIFI", None],
+    ["Unified_ShrewForER4_ESP8285_2400_RX_via_WIFI", None],
     ["Unified_ShrewForER4_VESC_ESP8285_2400_RX_via_WIFI", None],
     ["Unified_ESP32C3_LR1121_RX_via_WIFI", ["xr1", "xr2", "xr3"]],
     ["Unified_ESP32_LR1121_RX_via_WIFI", ["xr4"]],
     ["Unified_ESP8285_2400_RX_via_WIFI", ["er3", "er4", "er5", "er5c-i", "er5-v2", "rp1", "rp2"]],
     ["Unified_ESP32_2400_RX_via_WIFI", ["er6", "er8", "rp4", "rp4m"]],
-    ["Unified_ESP32_2400_TX_via_WIFI", ["mt12", "boxer", "zorro", "pocket", "tx16s", "tx12", "ranger", "ranger-micro", "ranger-nano", "t8l"]],
+    ["Unified_ESP32_2400_TX_via_WIFI", ["mt12", "boxer", "zorro", "pocket", "tx16s", "tx12", "ranger", "ranger-micro", "ranger-nano"]],
     ["Unified_ESP32_LR1121_TX_via_WIFI", ["nomad", "gx12", "tx15"]],
     #["Unified_ESP32S3_2400_TX", ["t12-1w"]]
 ]
@@ -145,18 +145,6 @@ def find_hardware_config(target, hardware_name):
     return config
 
 
-def module_type(target):
-    return "tx" if "_TX_" in target else "rx"
-
-
-def frequency(target):
-    if "_2400_" in target:
-        return "2400"
-    if "_900_" in target:
-        return "900"
-    return "dual"
-
-
 def preserve_defines(firmware_file):
     end = findFirmwareEnd(firmware_file)
     firmware_file.seek(end + 128 + 16, 0)
@@ -169,7 +157,7 @@ def configure_firmware(firmware, target, hardware_name):
 
     with firmware.open("r+b") as firmware_file:
         defines = preserve_defines(firmware_file)
-        doConfiguration(firmware_file, defines, config, module_type(target), frequency(target), "", None, None)
+        doConfiguration(firmware_file, defines, config, target, hardware_name, None)
 
 
 def build_target(target, built_targets):
