@@ -1,7 +1,7 @@
 import {html, LitElement} from "lit"
 import {customElement, query, state} from "lit/decorators.js"
 import {elrsState} from "../utils/state.js"
-import {errorAlert, postWithFeedback} from "../utils/feedback.js"
+import {postWithFeedback, showAlert} from "../utils/feedback.js"
 // FEATURE:NOT IS_8285
 import {autocomplete} from "../utils/autocomplete.js"
 // /FEATURE:NOT IS_8285
@@ -17,6 +17,8 @@ class WifiPanel extends LitElement {
     @state() accessor selectedValue = elrsState.settings.mode !== 'STA' ? '3' : '0'
     @state() accessor showLoader = true
     @state() accessor wifiOnInterval
+    @state() accessor wifiSsid = ''
+    @state() accessor wifiPassword = ''
     @state() accessor passwordVisible = false
 
     running = false
@@ -28,6 +30,8 @@ class WifiPanel extends LitElement {
 
     createRenderRoot() {
         this.wifiOnInterval = elrsState.options['wifi-on-interval'] === undefined ? 60 : elrsState.options['wifi-on-interval']
+        this.wifiSsid = elrsState.options['wifi-ssid'] ?? ''
+        this.wifiPassword = elrsState.options['wifi-password'] ?? ''
         return this
     }
 
@@ -97,13 +101,15 @@ class WifiPanel extends LitElement {
                             <div style="display: ${this.showLoader ? 'block' : 'none'};" class="loader"></div>
                             <!-- /FEATURE:NOT IS_8285 -->
                             <input id="ssid" name="network" type="text" placeholder="SSID" autocomplete="off"
-                                value="${elrsState.options['wifi-ssid']}"
+                                .value="${this.wifiSsid}"
+                                @input="${(e) => this.wifiSsid = e.target.value}"
                             />
                             <label for="ssid">WiFi SSID</label>
                         </div>
                         <div class="mui-textfield">
                             <input id="pwd" size='64' name='password' type=${this.passwordVisible ? 'text' : 'password'}
-                                value="${elrsState.options['wifi-password']}"
+                                .value="${this.wifiPassword}"
+                                @input="${(e) => this.wifiPassword = e.target.value}"
                             />
                             <label for="pwd">WiFi password</label>
                             <span
@@ -143,8 +149,8 @@ class WifiPanel extends LitElement {
     _setupNetwork(event) {
         event.preventDefault()
         const self = this
-        if ((this.selectedValue === '0' || this.selectedValue === '1') && !this.network.value.trim()) {
-            errorAlert('WiFi SSID Required', 'Please enter a WiFi SSID.')
+        if ((this.selectedValue === '0' || this.selectedValue === '1') && !this.wifiSsid.trim()) {
+            showAlert('error', 'WiFi SSID Required', 'Please enter a WiFi SSID.')
             return
         }
         switch (this.selectedValue) {
@@ -154,8 +160,8 @@ class WifiPanel extends LitElement {
                 }, function () {
                     elrsState.options = {
                         ...elrsState.options,
-                        'wifi-ssid': self.network.value,
-                        'wifi-password': self.password.value,
+                        'wifi-ssid': self.wifiSsid,
+                        'wifi-password': self.wifiPassword,
                         'wifi-on-interval': self.wifiOnInterval,
                         customised: true
                     }
@@ -214,8 +220,8 @@ class WifiPanel extends LitElement {
 
     checkChanged() {
         let changed = false
-        const currentNetwork = this.network?.value ?? elrsState.options['wifi-ssid']
-        const currentPassword = this.password?.value ?? elrsState.options['wifi-password']
+        const currentNetwork = this.wifiSsid
+        const currentPassword = this.wifiPassword
         changed |= this.wifiOnInterval !== elrsState.options['wifi-on-interval']
         changed |= !_smartEqual(currentNetwork, elrsState.options['wifi-ssid'])
         changed |= !_smartEqual(currentPassword, elrsState.options['wifi-password'])
