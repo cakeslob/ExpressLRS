@@ -1137,6 +1137,8 @@ static size_t getFirmwareChunk(uint8_t *data, size_t len, size_t pos)
       file2.close();
     }
   }
+#else
+  UNUSED(sketchSize);
 #endif
 
   // If using local stack buffer, move the 4 bytes into the passed buffer
