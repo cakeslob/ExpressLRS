@@ -9,6 +9,7 @@ A few changes:
 
  * wifi-panel should disallow users to set a blank SSID if a home network is specified
  * wifi-panel should allow the user to navigate away cleanly if home SSID is missing from JSON
+ * wifi-panel SSID scanning feature for ESP8 has been removed
  * continuous-wave panel is removed to save space
  * `mui.js` is a minimal shell that only implements the overlay functionality and nothing else
 
