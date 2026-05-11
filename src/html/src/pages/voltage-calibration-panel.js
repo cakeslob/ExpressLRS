@@ -1,14 +1,16 @@
+// FEATURE:NOT IS_8285
 import {html, LitElement} from "lit"
 import {customElement, state} from "lit/decorators.js"
 import {post, showAlert, saveJSONWithReboot} from "../utils/feedback.js"
 import {loadHardware, setHardwareState} from "../utils/state.js"
+// /FEATURE:NOT IS_8285
 
 // FEATURE:IS_8285
-const VOLTAGE_SOURCE_DEFS = [{id: 'vbat', label: 'VBat'}]
-const CALIBRATION_ATTENUATIONS = [-1]
-const ADC_MAX_VALUE = 1023
-const ADC_SATURATION_MARGIN = 6
-const ADC_MIN_SPAN = 16
+// const VOLTAGE_SOURCE_DEFS = [{id: 'vbat', label: 'VBat'}]
+// const CALIBRATION_ATTENUATIONS = [-1]
+// const ADC_MAX_VALUE = 1023
+// const ADC_SATURATION_MARGIN = 6
+// const ADC_MIN_SPAN = 16
 // /FEATURE:IS_8285
 // FEATURE:NOT IS_8285
 const VOLTAGE_SOURCE_DEFS = [
@@ -22,6 +24,8 @@ const ADC_MAX_VALUE = 4095
 const ADC_SATURATION_MARGIN = 24
 const ADC_MIN_SPAN = 64
 // /FEATURE:NOT IS_8285
+
+// FEATURE:NOT IS_8285
 const SAMPLE_REQUEST_TIMEOUT_MS = 500
 const SAMPLE_FAILURE_ALERT_THRESHOLD = 5
 const STEP_HIGH = 0
@@ -682,3 +686,5 @@ class VoltageCalibrationPanel extends LitElement {
         )
     }
 }
+
+// /FEATURE:NOT IS_8285

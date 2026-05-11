@@ -305,7 +305,7 @@ static int8_t wifi_GetClientRssi()
   return 0;
 }
 
-#if defined(TARGET_RX)
+#if defined(TARGET_RX) && defined(PLATFORM_ESP32)
 static uint8_t getDefinedVoltageSourceCount()
 {
     uint8_t count = 0;
@@ -529,6 +529,8 @@ static void GetConfiguration(AsyncWebServerRequest *request)
 #endif
 #if defined(TARGET_RX)
     settings["module-type"] = "RX";
+#endif
+#if defined(TARGET_RX) && defined(PLATFORM_ESP32)
     settings["voltage_source_count"] = getDefinedVoltageSourceCount();
 #endif
 #if defined(RADIO_SX128X)
@@ -1409,7 +1411,7 @@ static void startServices()
 
   server.addHandler(new AsyncCallbackJsonWebHandler("/config", UpdateConfiguration));
   server.addHandler(new AsyncCallbackJsonWebHandler("/options.json", UpdateSettings));
-  #if defined(TARGET_RX)
+  #if defined(TARGET_RX) && defined(PLATFORM_ESP32)
     server.addHandler(new AsyncCallbackJsonWebHandler("/voltage-sample", SampleVoltageSources));
   #endif
   #if defined(TARGET_TX)
